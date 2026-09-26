@@ -74,7 +74,15 @@ export function resolveAdminWriteMode(
   return value === "allowlisted" || value === "provider_probe_only" ? value : "deny_all";
 }
 
-export function isAdminOperationAllowed(writeMode: AdminWriteMode, action: string): boolean {
+export function isAdminOperationAllowed(
+  writeMode: AdminWriteMode,
+  action: string,
+  allowR3UserPurge = false,
+): boolean {
+  // R3 user purge is double-gated: explicit env flag AND full allowlisted mode.
+  if (action === "admin_purge_user") {
+    return allowR3UserPurge && writeMode === "allowlisted";
+  }
   return writeMode === "allowlisted" ||
     (writeMode === "provider_probe_only" && action === "provider_probe");
 }

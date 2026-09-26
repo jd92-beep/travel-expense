@@ -67,7 +67,7 @@ function TripDropdown({
         <ChevronDown size={18} className="text-[var(--theme-accent)] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </button>
       {open && (
-        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-stone-200/50 shadow-2xl p-2 z-50 flex flex-col gap-1 text-[#2A2119]`}>
+        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-[var(--theme-card)] backdrop-blur-md rounded-2xl border border-[var(--theme-border)] shadow-2xl p-2 z-50 flex flex-col gap-1 text-[var(--theme-text)]`}>
           <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
             {label}
           </div>
@@ -79,8 +79,8 @@ function TripDropdown({
                   key={t.id}
                   className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
                     isActive
-                      ? activeItemClassName || 'bg-blue-50 text-blue-900 font-bold'
-                      : itemClassName || 'hover:bg-slate-50 text-slate-700 bg-transparent'
+                      ? activeItemClassName || 'bg-[var(--theme-surface)] text-[var(--theme-text)] font-bold'
+                      : itemClassName || 'hover:bg-[var(--theme-surface)] text-[var(--theme-text)] bg-transparent'
                   }`}
                   onClick={() => { setOpen(false); onSelect(t.id); }}
                 >
@@ -226,6 +226,7 @@ export function Shell({
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [fxTier, setFxTier] = useState(getEffectsTier);
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const raf = useRef<number | null>(null);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
   const prefersReducedMotion = useReducedMotion();
@@ -434,6 +435,24 @@ export function Shell({
         query.removeEventListener('change', handlePerformanceAndEffects);
       }
       window.removeEventListener('resize', handlePerformanceAndEffects);
+    };
+  }, []);
+
+  useEffect(() => {
+    // iOS Safari keyboard covers the fixed dock. visualViewport shrinks while the
+    // layout viewport stays the same — hide the dock so forms stay reachable.
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const update = () => {
+      const shrink = window.innerHeight - vv.height;
+      setKeyboardOpen(shrink > 120);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
     };
   }, []);
 
@@ -754,7 +773,7 @@ export function Shell({
       <main className="content">{children}</main>
 
       {/* Fixed bottom tab bar — never scrolls away */}
-      <div className="fixed-tab-bar">
+      <div className={`fixed-tab-bar${keyboardOpen ? ' is-keyboard-open' : ''}`}>
         <FloatingDock
           desktopClassName="app-floating-dock-desktop"
           mobileClassName="app-floating-dock-mobile"

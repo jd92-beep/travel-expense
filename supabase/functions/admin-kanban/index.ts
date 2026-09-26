@@ -22,6 +22,7 @@ import { fetchNoRedirect } from "./safe_fetch.ts";
 import { brokerHealthSucceeded } from "./provider_status.ts";
 import { aggregateProviderRows, normalizeOverviewStatusStrip } from "./system_status.ts";
 import { runtimePolicyFor } from "./runtime_policy.ts";
+import { EDGE_SOURCE_SHA } from "./source_provenance.ts";
 
 export const config = { verify_jwt: false };
 
@@ -268,7 +269,8 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
     expectedFrontendSha !== observedFrontendSha
   ) drift.push("ADMIN_FRONTEND_GIT_SHA_MISMATCH");
   const expectedEdgeSha = Deno.env.get("ADMIN_EXPECTED_EDGE_SOURCE_SHA") || "";
-  const observedEdgeSha = Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown";
+  // Prefer deploy-time baked SHA; env secret is a fallback for older deploys.
+  const observedEdgeSha = EDGE_SOURCE_SHA || Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown";
   if (expectedEdgeSha && observedEdgeSha !== "unknown" && expectedEdgeSha !== observedEdgeSha) {
     drift.push("ADMIN_EDGE_SOURCE_SHA_MISMATCH");
   }
@@ -323,7 +325,10 @@ async function adminRuntimeRead(supabase: SupabaseClientAny) {
         compactVersion: latestVersion("compact"),
         androidVersion: latestVersion("android"),
       },
-      runtimePolicy: runtimePolicyFor(Deno.env.get("ADMIN_WRITE_MODE")),
+      runtimePolicy: runtimePolicyFor(
+        Deno.env.get("ADMIN_WRITE_MODE"),
+        Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+      ),
       drift,
     },
     sources: {
@@ -592,7 +597,13 @@ Deno.serve(async (req) => {
       const action = body && typeof body === "object" && "action" in body
         ? String(body.action)
         : "";
-      if (!isAdminOperationAllowed(requestDecision.writeMode, action)) {
+      if (
+        !isAdminOperationAllowed(
+          requestDecision.writeMode,
+          action,
+          Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+        )
+      ) {
         throw new AdminOperationError(
           "WRITES_DISABLED",
           "Admin action is disabled during maintenance",
@@ -617,7 +628,13 @@ Deno.serve(async (req) => {
     );
     if (req.method === "POST" && operationCommitRoute) {
       const operation = await getAdminOperation(operationContext, operationCommitRoute[1]);
-      if (!isAdminOperationAllowed(requestDecision.writeMode, operation.action)) {
+      if (
+        !isAdminOperationAllowed(
+          requestDecision.writeMode,
+          operation.action,
+          Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+        )
+      ) {
         throw new AdminOperationError(
           "WRITES_DISABLED",
           "Admin action is disabled during maintenance",

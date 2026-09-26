@@ -5,11 +5,14 @@
       "id": "kimi",
       "label": "Kimi",
       "models": [
-        { "id": "kimi/kimi-code", "label": "Kimi (kimi-code)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
-        { "id": "kimi/kimi-8k", "label": "Kimi (kimi-8k)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
-        { "id": "kimi/kimi-32k", "label": "Kimi (kimi-32k)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
-        { "id": "kimi/kimi-k2.6", "label": "Kimi (kimi-k2.6)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
-        { "id": "kimi/kimi-for-coding", "label": "Kimi (kimi-for-coding)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] }
+        { "id": "kimi/kimi-k3", "label": "Kimi K3", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-k2.7", "label": "Kimi K2.7", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-k2.8-preview", "label": "Kimi K2.8 Preview", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-for-coding", "label": "Kimi for Coding", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["compact", "android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-code", "label": "Kimi (kimi-code)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-8k", "label": "Kimi (kimi-8k)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-32k", "label": "Kimi (kimi-32k)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["android", "broker", "admin-bff", "admin-edge"] },
+        { "id": "kimi/kimi-k2.6", "label": "Kimi (kimi-k2.6)", "tasks": ["scan", "voice", "email", "trip-update", "test"], "defaultFor": [], "surfaces": ["android", "broker", "admin-bff", "admin-edge"] }
       ]
     },
     {

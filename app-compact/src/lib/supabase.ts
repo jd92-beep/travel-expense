@@ -256,11 +256,12 @@ function jsonMatches(left: unknown, right: unknown): boolean {
 }
 
 function cleanInviteRole(value: unknown): Exclude<TripMemberRole, 'owner' | 'admin'> {
-  return value === 'viewer' ? 'viewer' : 'editor';
+  return value === 'editor' ? 'editor' : 'viewer';
 }
 
 function cleanMemberRole(value: unknown): TripMemberRole {
-  return value === 'owner' || value === 'admin' || value === 'viewer' ? value : 'editor';
+  // Unknown/missing role must not grant write UI — default to viewer, not editor.
+  return value === 'owner' || value === 'admin' || value === 'editor' ? value : 'viewer';
 }
 
 function canManageSharing(role?: TripMemberRole): boolean {
@@ -447,6 +448,7 @@ export function buildAppSettings(state: AppState) {
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
     googleBackupModel: state.googleBackupModel,
+    hiddenAiModels: state.hiddenAiModels || [],
     themePreference: state.themePreference,
     credentialBrokerUrl: state.credentialBrokerUrl,
     personalNotionConnected: state.personalNotionConnected === true,
@@ -477,6 +479,7 @@ export function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState
     emailModel: typeof payload.emailModel === 'string' ? payload.emailModel : undefined,
     tripUpdateModel: typeof payload.tripUpdateModel === 'string' ? payload.tripUpdateModel : undefined,
     googleBackupModel: typeof payload.googleBackupModel === 'string' ? payload.googleBackupModel : undefined,
+    hiddenAiModels: Array.isArray(payload.hiddenAiModels) ? payload.hiddenAiModels.filter((item): item is string => typeof item === 'string') : undefined,
     themePreference: parseThemePreference(payload.themePreference),
     credentialBrokerUrl: typeof payload.credentialBrokerUrl === 'string' ? payload.credentialBrokerUrl : undefined,
     personalNotionConnected: typeof payload.personalNotionConnected === 'boolean' ? payload.personalNotionConnected : undefined,
@@ -626,12 +629,12 @@ function rowToReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId
   return rowToReceiptForTrip(row, state, trip, localId, currentUserId);
 }
 
-function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>, currentUserId?: string): Receipt | null {
+function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>, currentUserId?: string, ownerDisplayName?: string): Receipt | null {
   const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
-  return rowToReceiptForTrip(row, state, trip, undefined, currentUserId);
+  return rowToReceiptForTrip(row, state, trip, undefined, currentUserId, ownerDisplayName);
 }
 
-function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string): Receipt {
+function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string, ownerDisplayName?: string): Receipt {
   const ledgerSyncStatus = ledgerSyncStatusForRow(row);
   const recordKind = row.record_kind === 'settlement' || String(row.category || '').toLowerCase() === 'settlement'
     ? 'settlement'
@@ -641,7 +644,7 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     id: localId || row.id,
     supabaseId: row.id,
     ownerId: row.owner_id,
-    createdByLabel: row.owner_id === currentUserId ? 'You' : 'Trip member',
+    createdByLabel: row.owner_id === currentUserId ? 'You' : (ownerDisplayName || 'Trip member'),
     ledgerSyncStatus,
     tripId: trip.id,
     store: row.store,
@@ -720,7 +723,10 @@ export async function currentSupabaseAccessToken(): Promise<string> {
     const raw = localStorage.getItem('travel-expense:supabase-auth:v1');
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.access_token) return String(parsed.access_token);
+      // Skip expired cached tokens so broker/AI calls don't send a stale JWT.
+      const expiresAt = Number(parsed?.expires_at || 0) * 1000;
+      const stillValid = !expiresAt || expiresAt > Date.now() + 30_000;
+      if (parsed?.access_token && stillValid) return String(parsed.access_token);
     }
   } catch {
     // Ignore
@@ -1645,7 +1651,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   }
   const receipts = activeReceiptRows
     .map((row) => {
-      const receipt = rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id);
+      const receipt = rowToPulledReceipt(row, state, tripBySupabaseId, session.user.id, profileNames.get(row.owner_id));
       if (!receipt) return null;
       const storagePath = photoMap.get(row.id);
       if (storagePath) {

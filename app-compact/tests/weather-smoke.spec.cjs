@@ -899,7 +899,8 @@ test('City and country names resolve a weather target when itinerary has no coor
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#weather`);
   await expect(page.getByText('Paris').first()).toBeVisible();
-  await expect(page.getByText('Day 1 · Open-Meteo')).toBeVisible();
+  // Official MET Norway or Open-Meteo model fallback (ICON / Météo-France / default) are all valid.
+  await expect(page.getByText(/Day 1 · (MET Norway official|Open-Meteo|ICON\/DWD|Météo-France|UK Met Office)/)).toBeVisible();
   await expect(page.getByText('21°C').first()).toBeVisible();
   expect(forecastUrls.length).toBeGreaterThan(0);
   expect(forecastUrls.every((url) => !url.includes('undefined'))).toBe(true);

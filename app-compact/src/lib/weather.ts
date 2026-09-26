@@ -68,7 +68,7 @@ type WeatherFetchResult = {
   fallbackReason?: string;
 };
 
-export type OfficialWeatherProviderId = 'jma' | 'hko' | 'nea-sg' | 'nws-us' | 'msc-ca';
+export type OfficialWeatherProviderId = 'jma' | 'hko' | 'nea-sg' | 'nws-us' | 'msc-ca' | 'met-no';
 
 export type OfficialWeatherContext = {
   country?: string;
@@ -131,6 +131,7 @@ const OFFICIAL_PROVIDER_SOURCE: Record<OfficialWeatherProviderId, string> = {
   'nea-sg': 'NEA official',
   'nws-us': 'NWS official',
   'msc-ca': 'MSC official',
+  'met-no': 'MET Norway official',
 };
 
 export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: OfficialWeatherContext = {}): OfficialWeatherProviderId | null {
@@ -141,6 +142,10 @@ export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: Off
     if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(country)) return 'nea-sg';
     if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(country)) return 'nws-us';
     if (/Canada|CA\b|加拿大/i.test(country)) return 'msc-ca';
+    if (/UK|United Kingdom|England|Scotland|Wales|N\.?Ireland|英國|英国|London/i.test(country)) return 'met-no';
+    if (/Norway|Sweden|Finland|Denmark|Iceland|挪威|瑞典|芬蘭|芬兰|丹麥|丹麦|冰島/i.test(country)) return 'met-no';
+    if (/Germany|France|Netherlands|Belgium|Switzerland|Austria|Italy|Spain|Portugal|Europe|歐洲|欧洲|德國|法国|荷蘭/i.test(country)) return 'met-no';
+    // Korea/Taiwan/Australia stay on Open-Meteo models (kma_seamless / cma / etc.) — no CORS-safe official JSON.
     return null;
   }
   const hay = [context.region, context.city, coord.label, coord.query].map((part) => String(part || '')).join(' ');
@@ -149,6 +154,7 @@ export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: Off
   if (/Singapore|SG|新加坡|星加坡|Singapura/i.test(hay)) return 'nea-sg';
   if (/United States|USA|U\.S\.|US\b|美國|美国/i.test(hay)) return 'nws-us';
   if (/Canada|CA\b|加拿大/i.test(hay)) return 'msc-ca';
+  if (/倫敦|伦敦|London|UK|英國|英国|Oslo|Stockholm|Copenhagen|Reykjavik|Berlin|Paris|Amsterdam/i.test(hay)) return 'met-no';
   // Geo bounding boxes — HK must be checked before JMA since HK lat ~22 is outside JMA's 24-46 box anyway
   if (coord.lat >= 22.15 && coord.lat <= 22.56 && coord.lon >= 113.82 && coord.lon <= 114.44) return 'hko';
   if (coord.lat >= 24 && coord.lat <= 46 && coord.lon >= 122 && coord.lon <= 146) return 'jma';
@@ -157,6 +163,8 @@ export function resolveOfficialWeatherProvider(coord: WeatherCoord, context: Off
   // before NWS and swallowed the northern CONUS (Seattle/Chicago/Boston → msc-ca, always failing).
   if (coord.lat >= 49 && coord.lat <= 84 && coord.lon >= -141 && coord.lon <= -52) return 'msc-ca';
   if (coord.lat >= 18 && coord.lat <= 72 && coord.lon >= -170 && coord.lon <= -60) return 'nws-us';
+  // Nordics / UK / Western Europe
+  if (coord.lat >= 35 && coord.lat <= 72 && coord.lon >= -11 && coord.lon <= 32) return 'met-no';
   return null;
 }
 
@@ -602,7 +610,7 @@ function currentYmdInTimezone(timezone: string): string {
 
 function liveSlotIndexForDate(targetDate: string, timezone: string): number {
   const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).formatToParts(now);
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23' }).formatToParts(now);
   const part = (type: string) => parts.find((item) => item.type === type)?.value || '';
   const today = `${part('year')}-${part('month')}-${part('day')}`;
   if (today !== targetDate) return -1;
@@ -995,6 +1003,97 @@ async function fetchHkoOfficialWeather(coord: WeatherCoord, timezone: string, ta
   return { data, source: 'HKO official', provider: 'HKO official', cached: false, fetchedAt: Date.now() };
 }
 
+/** MET Norway Locationforecast 2.0 (yr.no) — free, CORS-friendly, required unique User-Agent. */
+function metNoSymbolToWeatherCode(symbol: string): number {
+  const s = String(symbol || '').toLowerCase();
+  if (/thunder/.test(s)) return 95;
+  if (/heavyrain|rain$|lightrainshowers|rainshowers/.test(s)) return /light/.test(s) ? 61 : /heavy/.test(s) ? 65 : 63;
+  if (/sleet/.test(s)) return 66;
+  if (/lightsnow|snowshowers|snow$|heavysnow/.test(s)) return /light/.test(s) ? 71 : /heavy/.test(s) ? 75 : 73;
+  if (/fog/.test(s)) return 45;
+  if (/cloudy$/.test(s) && !/partly|fair/.test(s)) return 3;
+  if (/partlycloudy/.test(s)) return 2;
+  if (/fair|clearsky/.test(s)) return /night/.test(s) ? 0 : 1;
+  if (/drizzle/.test(s)) return 51;
+  return 2;
+}
+
+async function fetchMetNoOfficialWeather(coord: WeatherCoord, timezone: string, targetDate?: string): Promise<WeatherFetchResult> {
+  if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lon)) throw new Error('MET Norway needs coordinates');
+  const url = `https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${coord.lat.toFixed(4)}&lon=${coord.lon.toFixed(4)}`;
+  const raw = await fetchJson(url) as {
+    properties?: {
+      timeseries?: Array<{
+        time?: string;
+        data?: {
+          instant?: { details?: Record<string, number> };
+          next_1_hours?: { summary?: { symbol_code?: string }; details?: Record<string, number> };
+          next_6_hours?: { summary?: { symbol_code?: string }; details?: Record<string, number> };
+        };
+      }>;
+    };
+  };
+  const series = raw?.properties?.timeseries;
+  if (!Array.isArray(series) || !series.length) throw new Error('MET Norway returned no timeseries');
+
+  const time: string[] = [];
+  const temperature_2m: number[] = [];
+  const apparent_temperature: number[] = [];
+  const weather_code: number[] = [];
+  const precipitation: number[] = [];
+  const relative_humidity_2m: number[] = [];
+  const wind_speed_10m: number[] = [];
+  const wind_direction_10m: number[] = [];
+  const cloud_cover: number[] = [];
+
+  for (const entry of series) {
+    const iso = String(entry?.time || '');
+    if (!iso) continue;
+    // Compact API returns ~48–60 hourly points starting now.
+    time.push(iso.slice(0, 16)); // YYYY-MM-DDTHH:mm → keep as-is for slotsForDate which expects T HH:00
+    const instant = entry.data?.instant?.details || {};
+    temperature_2m.push(Number(instant.air_temperature));
+    apparent_temperature.push(Number(instant.air_temperature ?? instant.dew_point ?? instant.air_temperature));
+    relative_humidity_2m.push(Number(instant.relative_humidity ?? 0));
+    wind_speed_10m.push(Number(instant.wind_speed ?? 0));
+    wind_direction_10m.push(Number(instant.wind_from_direction ?? 0));
+    cloud_cover.push(Number(instant.cloud_area_fraction ?? 0));
+    const symbol = entry.data?.next_1_hours?.summary?.symbol_code || entry.data?.next_6_hours?.summary?.symbol_code || 'cloudy';
+    weather_code.push(metNoSymbolToWeatherCode(symbol));
+    precipitation.push(Number(entry.data?.next_1_hours?.details?.precipitation_amount ?? 0));
+  }
+
+  // Normalize times to Open-Meteo style YYYY-MM-DDTHH:00 for slotsForDate.
+  const normalizedTime = time.map((iso) => {
+    const m = iso.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
+    return m ? `${m[1]}T${m[2]}:00` : iso;
+  });
+
+  const data: WeatherData = {
+    hourly: {
+      time: normalizedTime,
+      temperature_2m,
+      apparent_temperature,
+      weather_code,
+      precipitation,
+      relative_humidity_2m,
+      wind_speed_10m,
+      wind_direction_10m,
+      cloud_cover,
+    },
+    current: {
+      temperature_2m: temperature_2m[0],
+      weather_code: weather_code[0],
+    },
+  };
+
+  if (targetDate && !weatherDataIncludesDate(data, targetDate)) {
+    throw new Error('MET Norway forecast does not cover target date');
+  }
+  if (!hasMeaningfulWeatherData(data)) throw new Error('MET Norway official returned no matching weather values');
+  return { data, source: 'MET Norway official', provider: 'MET Norway official', cached: false, fetchedAt: Date.now() };
+}
+
 function officialProviderSource(provider: OfficialWeatherProviderId): string {
   return OFFICIAL_PROVIDER_SOURCE[provider];
 }
@@ -1005,6 +1104,7 @@ async function fetchOfficialWeather(provider: OfficialWeatherProviderId, coord: 
   if (provider === 'nea-sg') return fetchSingaporeOfficialWeather(coord, timezone, targetDate);
   if (provider === 'nws-us') return fetchNwsOfficialWeather(coord, targetDate);
   if (provider === 'msc-ca') return fetchMscOfficialWeather(coord, timezone, targetDate);
+  if (provider === 'met-no') return fetchMetNoOfficialWeather(coord, timezone, targetDate);
   throw new Error(`Unsupported official provider: ${provider}`);
 }
 
@@ -1150,8 +1250,22 @@ async function fetchFallbackWeather(coord: WeatherCoord, safeTimezone: string, o
     'uv_index',
   ].join(',');
   const base = `https://api.open-meteo.com/v1/forecast?latitude=${coord.lat}&longitude=${coord.lon}&hourly=${hourly}&current=temperature_2m,weather_code&timezone=${encodeURIComponent(safeTimezone)}&forecast_days=7`;
+  // Regional high-quality models via Open-Meteo (no API key, CORS-safe).
+  const modelLadder: Array<{ model?: string; source: string }> = [];
+  if (officialProvider === 'jma') modelLadder.push({ model: 'jma_seamless', source: 'JMA' });
+  if (officialProvider === 'met-no') {
+    modelLadder.push({ model: 'icon_seamless', source: 'ICON/DWD' });
+    modelLadder.push({ model: 'meteofrance_seamless', source: 'Météo-France' });
+    modelLadder.push({ model: 'ukmo_seamless', source: 'UK Met Office' });
+  }
+  if (/Korea|KR|韓國|韩国|Seoul/i.test(String(coord.label || '') + String(coord.query || ''))) {
+    modelLadder.push({ model: 'kma_seamless', source: 'KMA' });
+  }
   const candidates = [
-    ...(officialProvider === 'jma' ? [{ url: `${base}&models=jma_seamless`, source: 'JMA' }] : []),
+    ...modelLadder.map((entry) => ({
+      url: entry.model ? `${base}&models=${entry.model}` : base,
+      source: entry.source,
+    })),
     { url: base, source: 'Open-Meteo' },
   ];
   let lastError: unknown;

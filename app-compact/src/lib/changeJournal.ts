@@ -55,7 +55,14 @@ export function enqueueChange(
 ): SyncQueueItem[] {
   const now = Date.now();
   const previous = (queue || []).find((item) => queueKey(item) === queueKey(change));
-  const terminal = previous?.status === 'error' || previous?.status === 'failed';
+  const wasTerminal = previous?.status === 'error' || previous?.status === 'failed';
+  // A newer local edit supersedes a terminal failure (including 40001). Re-queue it so the
+  // user's latest payload can retry; without a strictly newer payload.updatedAt the
+  // terminal error (conflict evidence) stays visible.
+  const previousPayloadUpdatedAt = Number(previous?.payload?.updatedAt) || 0;
+  const nextPayloadUpdatedAt = Number(change.payload?.updatedAt) || 0;
+  const requeueAfterEdit = wasTerminal && nextPayloadUpdatedAt > previousPayloadUpdatedAt;
+  const keepTerminal = wasTerminal && !requeueAfterEdit;
   const updatedAt = Math.max(now, (previous?.updatedAt || 0) + 1);
   const next: SyncQueueItem = {
     ...previous,
@@ -63,9 +70,9 @@ export function enqueueChange(
     id: previous?.id || `sync_${now}_${crypto.randomUUID()}`,
     idempotencyKey: previous?.idempotencyKey
       || `${change.type}:${change.entityId}:${change.op}:${now}`,
-    status: terminal ? previous.status : 'queued',
-    attempts: terminal ? previous.attempts : 0,
-    error: terminal ? previous.error : change.error,
+    status: keepTerminal ? previous.status : 'queued',
+    attempts: keepTerminal ? previous.attempts : 0,
+    error: keepTerminal ? previous.error : change.error,
     createdAt: previous?.createdAt || now,
     updatedAt,
     payload: { ...previous?.payload, ...definedPayload(change.payload) },

@@ -1,0 +1,73 @@
+/* Native clip-path replacement for the purged `augmented-ui` dependency.
+   Same attribute selectors, so zero TSX changes. Implements exactly the
+   augmentation vocabulary this app uses — `tl-clip br-clip` (+ `border`) —
+   and keeps reading the `--aug-*` custom properties the components already
+   set (--aug-tl1/--aug-br1 corner size, --aug-border-all width,
+   --aug-border-bg paint), so per-component overrides in components.css
+   (sidebar-foot 10px, dialogs 12px, everything else the 15px default with a
+   currentColor gradient ring) keep working unchanged.
+
+   Visual parity notes (measured from the live augmented-ui build before the
+   purge):
+   - Host clip: chamfered top-left + bottom-right corners; the element's own
+     background paints the full clipped shape.
+   - Border variant: a ::after ring painted with --aug-border-bg between the
+     outer box and the same shape inset by the border width — the same
+     two-loop clip-path trick augmented-ui used (outer loop counter-clockwise,
+     inner loop clockwise, so nonzero winding leaves the interior a hole).
+     ::after is inset:0 (padding box), pointer-events:none, no z-index, and
+     the host clip-path trims the ring flush with the chamfered contour.
+   - Border variant also becomes the containing block (position:relative);
+     clip-only hosts stay static, matching augmented-ui's computed output. */
+
+[data-augmented-ui~="tl-clip"][data-augmented-ui~="br-clip"] {
+  --chamfer-tl: var(--aug-tl1, 15px);
+  --chamfer-br: var(--aug-br1, 15px);
+  /* Polygon traces the same outline augmented-ui generated (measured from the
+     live build): the straight edges run 1px OUTSIDE the box (-1px / 100%+1px)
+     so the border ring's outer hairline bleeds a subpixel past the border box
+     exactly as before. The duplicate/degenerate points augmented-ui emitted
+     don't affect the fill and are dropped. */
+  clip-path: polygon(
+    -1px var(--chamfer-tl),
+    0 var(--chamfer-tl),
+    var(--chamfer-tl) 0,
+    var(--chamfer-tl) -1px,
+    calc(100% + 1px) -1px,
+    calc(100% + 1px) calc(100% - var(--chamfer-br)),
+    100% calc(100% - var(--chamfer-br)),
+    calc(100% - var(--chamfer-br)) 100%,
+    calc(100% - var(--chamfer-br)) calc(100% + 1px),
+    -1px calc(100% + 1px)
+  );
+}
+
+[data-augmented-ui~="tl-clip"][data-augmented-ui~="br-clip"][data-augmented-ui~="border"] {
+  --chamfer-border: var(--aug-border-all, 4px);
+  position: relative;
+}
+
+[data-augmented-ui~="tl-clip"][data-augmented-ui~="br-clip"][data-augmented-ui~="border"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--aug-border-bg, currentColor);
+  clip-path: polygon(
+    /* inner loop (clockwise, y-down): the host shape inset by the border width —
+       the hole. Inner TL cut endpoints sit at (b, tl + b) / (tl + b, b), the
+       same coordinates augmented-ui's border math produced. */
+    var(--chamfer-border) calc(var(--chamfer-tl) + var(--chamfer-border)),
+    calc(var(--chamfer-tl) + var(--chamfer-border)) var(--chamfer-border),
+    calc(100% - var(--chamfer-border)) var(--chamfer-border),
+    calc(100% - var(--chamfer-border)) calc(100% - var(--chamfer-br) - var(--chamfer-border)),
+    calc(100% - var(--chamfer-br) - var(--chamfer-border)) calc(100% - var(--chamfer-border)),
+    var(--chamfer-border) calc(100% - var(--chamfer-border)),
+    /* outer loop (counter-clockwise): the full box, expanded 1px so the ring
+       antialiases the same way at the edges */
+    -1px calc(100% + 1px),
+    calc(100% + 1px) calc(100% + 1px),
+    calc(100% + 1px) -1px,
+    -1px -1px
+  );
+}

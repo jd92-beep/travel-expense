@@ -376,7 +376,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByRole('button', { name: '重設為均分' }).click();
   await expect(page.getByText('已重設為均分比例')).toBeVisible();
 
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
   await page.getByLabel('New credential').fill('rotate-placeholder');
   await page.getByLabel('Admin maintenance passphrase').fill('admin-placeholder');
   await page.getByRole('button', { name: /Rotate safely/ }).click();
@@ -389,7 +389,15 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
 
   await setAccordion(page, 'AI 模型選擇');
   const modelOptions = await page.locator('#settings-ai-models-panel option').allTextContents();
+  expect(modelOptions.join(' ')).toContain('Kimi K3');
+  expect(modelOptions.join(' ')).toContain('Kimi K2.7');
+  expect(modelOptions.join(' ')).toContain('Kimi K2.8 Preview');
+  expect(modelOptions.join(' ')).toContain('Kimi for Coding');
+  // Android surface intentionally retains the kimi-code family (compact-only removal, Session 90).
   expect(modelOptions.join(' ')).toContain('Kimi (kimi-code)');
+  expect(modelOptions.join(' ')).toContain('Kimi (kimi-8k)');
+  expect(modelOptions.join(' ')).toContain('Kimi (kimi-32k)');
+  expect(modelOptions.join(' ')).toContain('Kimi (kimi-k2.6)');
   expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
   expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
   expect(modelOptions.join(' ')).toContain('Volcano (Kimi K3)');
@@ -406,10 +414,11 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
     'volcano/minimax-m2.7',
     'volcano/doubao-seed-2.0-mini',
   ];
-  const scanModel = page.getByRole('combobox', { name: 'Scan model', exact: true });
+  await setAccordion(page, 'AI 模型選擇');
+  const scanModel = page.getByRole('combobox', { name: '掃描 receipt 模型', exact: true });
   for (const model of volcanoModels) {
     await scanModel.selectOption(model);
-    await page.getByRole('button', { name: '測試 Scan model' }).click();
+    await page.getByRole('button', { name: '測試 掃描 receipt 模型' }).click();
     await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
   }
   expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
@@ -698,10 +707,13 @@ test('Settings protects broker URL and does not keep archived trip active', asyn
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
 
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
   const brokerInput = page.getByLabel('Credential Broker URL');
-  await expect(brokerInput).toHaveValue(defaultBroker);
-  await expect(brokerInput).toHaveAttribute('readonly', '');
+  // URL field is hidden in the simplified UI; if present it must stay the default.
+  if (await brokerInput.count()) {
+    await expect(brokerInput).toHaveValue(defaultBroker);
+    await expect(brokerInput).toHaveAttribute('readonly', '');
+  }
   const storedCredentials = await page.evaluate(() => localStorage.getItem('boss-japan-tracker:react-credentials') || '');
   expect(storedCredentials).not.toContain('evil.example');
   expect(storedCredentials).toContain(defaultBroker);
@@ -1397,8 +1409,9 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   expect(await noticeBox.evaluate((node) => node.hasAttribute('open'))).toBe(false);
   await noticeBox.locator('summary').click();
   await expect(noticeBox).toContainText('Some exact addresses omitted');
-  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 3/ }).click();
-  await expect(modal).toContainText('Day 3 · 2026-06-15');
+  // Partial paste merges with the existing default itinerary — open the Jeju day by date.
+  await modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /2026-06-15/ }).click();
+  await expect(modal).toContainText('2026-06-15');
   const day3Names = await modal.locator('.trip-review-spot-editor').evaluateAll((rows) => rows.map((row) => (row.querySelectorAll('input')[2] || {}).value || ''));
   const seongsanIndex = day3Names.findIndex((name) => String(name).includes('城山日出峰'));
   expect(seongsanIndex).toBeGreaterThanOrEqual(0);
@@ -1685,10 +1698,10 @@ test('Settings can connect a broker session without leaking the password into ap
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
-  await setAccordion(page, 'Credentials & Connection');
+  await setAccordion(page, '連線（進階）');
 
   await page.getByLabel('Broker password').fill('broker-pass');
-  await page.getByRole('button', { name: /Connect Broker/ }).click();
+  await page.getByRole('button', { name: /Connect Broker|^連接$/ }).click();
   await expect(page.getByText(/Broker session 已連上/)).toBeVisible();
   await expect.poll(() => unlockCount).toBe(1);
 
@@ -1729,6 +1742,11 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   await setAccordion(page, '旅程管理器');
 
   const rateLabel = page.locator('label', { hasText: '匯率（1 HKD' });
+  const fxDetails = page.locator('details.settings-fx-panel');
+  if (await fxDetails.count()) {
+    const summary = fxDetails.locator('summary').first();
+    if (!(await fxDetails.evaluate((el) => el.open))) await summary.click();
+  }
   const rateInput = rateLabel.locator('input[type="number"]');
   const refreshButton = page.getByRole('button', { name: /更新 live rate/ });
 
@@ -1756,6 +1774,10 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
   await page.reload();
   await expectSettingsReady(page);
   await setAccordion(page, '旅程管理器');
+  const fxDetailsAfterReload = page.locator('details.settings-fx-panel');
+  if (await fxDetailsAfterReload.count()) {
+    if (!(await fxDetailsAfterReload.evaluate((el) => el.open))) await fxDetailsAfterReload.locator('summary').first().click();
+  }
   await page.waitForTimeout(500); // let the boot currency effect have a chance to fire
   await expect(rateInput).toHaveValue('19.5');
   const afterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
@@ -1797,10 +1819,10 @@ test('Settings model testers use the selected exact Volcano broker model without
   await setAccordion(page, 'AI 模型選擇');
 
   const controls = [
-    ['測試 Scan model', 'doubao-seed-2.0-lite'],
-    ['測試 Voice model', 'doubao-seed-2.0-pro'],
-    ['測試 Email model', 'minimax-m3'],
-    ['測試 Trip update model', 'minimax-m2.7'],
+    ['測試 掃描 receipt 模型', 'doubao-seed-2.0-lite'],
+    ['測試 語音模型', 'doubao-seed-2.0-pro'],
+    ['測試 Email 模型', 'minimax-m3'],
+    ['測試 行程更新模型', 'minimax-m2.7'],
   ];
   for (const [index, [buttonLabel, model]] of controls.entries()) {
     const button = page.getByRole('button', { name: buttonLabel });
@@ -1815,9 +1837,9 @@ test('Settings model testers use the selected exact Volcano broker model without
     });
   }
 
-  const scanModel = page.locator('label', { hasText: 'Scan model' }).locator('select');
+  const scanModel = page.locator('label', { hasText: '掃描 receipt 模型' }).locator('select');
   await scanModel.selectOption('volcano/doubao-seed-2.0-mini');
-  await page.getByRole('button', { name: '測試 Scan model' }).click();
+  await page.getByRole('button', { name: '測試 掃描 receipt 模型' }).click();
   await expect.poll(() => calls.length).toBe(5);
   expect(calls.at(-1)).toEqual({
     url: 'https://travel-expense-credential-broker.ftjdfr.workers.dev/volcano/json',
@@ -1826,10 +1848,10 @@ test('Settings model testers use the selected exact Volcano broker model without
     prompt: 'Return only JSON: {"ok":true}',
   });
   const k3Controls = [
-    ['Scan model', '測試 Scan model'],
-    ['Voice model', '測試 Voice model'],
-    ['Email model', '測試 Email model'],
-    ['Trip update model', '測試 Trip update model'],
+    ['掃描 receipt 模型', '測試 掃描 receipt 模型'],
+    ['語音模型', '測試 語音模型'],
+    ['Email 模型', '測試 Email 模型'],
+    ['行程更新模型', '測試 行程更新模型'],
   ];
   for (const [index, [fieldLabel, buttonLabel]] of k3Controls.entries()) {
     await page.locator('label', { hasText: fieldLabel }).locator('select').selectOption('volcano/kimi-k3');

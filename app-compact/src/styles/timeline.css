@@ -1029,8 +1029,9 @@
   }
 
   .timeline-screen .timeline-day {
-    content-visibility: visible !important;
-    contain-intrinsic-size: auto !important;
+    /* Auto skip offscreen days without the 80px glass-card estimate that caused jump-scroll. */
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
     contain: layout paint;
   }
 

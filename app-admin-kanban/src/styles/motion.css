@@ -1,3 +1,47 @@
+/* ── BlurFade entrance (ex-framer-motion): enter-only y (+blur on `full`), staggered by
+   callers via --blur-fade-delay. Deliberately NO opacity in the keyframes — these fire on a
+   page's first paint and a11y scans sampling the DOM right after load must never catch text
+   mid-fade (axe reports partial opacity as a color-contrast failure). Tier gating via the
+   html[data-fx-tier] attribute that lib/fxAttr.ts stamps; `lite` gets no animation at all,
+   so the base rule is `animation: none`. */
+.blur-fade { animation: none; }
+html[data-fx-tier="balanced"] .blur-fade {
+  animation: blur-fade-rise var(--dur-2) var(--ease-out) backwards;
+  animation-delay: var(--blur-fade-delay, 0s);
+}
+html[data-fx-tier="full"] .blur-fade {
+  animation: blur-fade-rise-blur var(--dur-2) var(--ease-out) backwards;
+  animation-delay: var(--blur-fade-delay, 0s);
+}
+@keyframes blur-fade-rise {
+  from { transform: translateY(6px); }
+  to { transform: translateY(0); }
+}
+@keyframes blur-fade-rise-blur {
+  from { transform: translateY(6px); filter: blur(3px); }
+  to { transform: translateY(0); filter: blur(0); }
+}
+
+/* ── RouteTransition entrance (ex-framer-motion): enter-only, keyed remount per navigation,
+   and only on navigations — RouteTransition.tsx renders a bare fragment for the shell's
+   initial pathname, so this animation can never run on first load (when a11y/overflow audits
+   sample the DOM). Opacity is safe to animate here for exactly that reason. */
+.route-transition { animation: none; }
+html[data-fx-tier="balanced"] .route-transition {
+  animation: route-enter-rise .24s var(--ease-out) backwards;
+}
+html[data-fx-tier="full"] .route-transition {
+  animation: route-enter-rise-blur .24s var(--ease-out) backwards;
+}
+@keyframes route-enter-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes route-enter-rise-blur {
+  from { opacity: 0; transform: translateY(10px); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
 .shimmer-bar {
   background: var(--elevated) linear-gradient(100deg, transparent 30%, rgba(37, 225, 237, .14) 50%, transparent 70%);
   background-size: 200% 100%;
@@ -42,6 +86,15 @@ dialog.mobile-drawer[open] { opacity: 1; transform: translateY(0) scale(1); tran
 dialog.mobile-drawer::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
 @starting-style {
   dialog.mobile-drawer[open]::backdrop { opacity: 0; }
+}
+
+dialog.confirm-dialog[open] { opacity: 1; transform: translateY(0) scale(1); transition: opacity var(--dur-2) var(--ease-out), transform var(--dur-2) var(--ease-out); }
+@starting-style {
+  dialog.confirm-dialog[open] { opacity: 0; transform: translateY(8px) scale(.985); }
+}
+dialog.confirm-dialog::backdrop { background: rgba(6, 8, 11, .6); backdrop-filter: blur(2px); transition: opacity var(--dur-2); }
+@starting-style {
+  dialog.confirm-dialog[open]::backdrop { opacity: 0; }
 }
 
 /* Overview: healthy status units get a soft breathing glow — tier-full only. Uses

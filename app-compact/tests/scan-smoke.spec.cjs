@@ -67,10 +67,11 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
   await expect(page.locator('.scan-card-copy').first()).toHaveText(['相機', 'Camera'].join(''));
   await expect(page.locator('.scan-card-copy').nth(1)).toHaveText(['相簿', 'Gallery'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(2)).toHaveText(['手動記帳', 'Manual Entry'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(3)).toHaveText(['語音', 'Voice'].join(''));
-  await expect(page.locator('.scan-card-copy').nth(4)).toHaveText(['Email', 'Email'].join(''));
-  await expect(page.getByRole('button', { name: /匯率 Exchange Rate/ })).toBeVisible();
+  // Secondary modes live under 更多方式 (open by default; users can collapse).
+  await expect(page.locator('.scan-card-copy').nth(2)).toHaveText('手動記帳');
+  await expect(page.locator('.scan-card-copy').nth(3)).toHaveText('語音記帳');
+  await expect(page.locator('.scan-card-copy').nth(4)).toHaveText('貼 Email');
+  await expect(page.getByRole('button', { name: '匯率' })).toBeVisible();
   await expect(page.locator('.scan-hero-card')).not.toContainText('智能辨識');
   await expect(page.locator('.scan-hero-card')).not.toContainText('從手機相簿選取');
   await expect(page.locator('.scan-function-art')).toHaveCount(6);
@@ -179,20 +180,21 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
     mimeType: 'image/jpeg',
     buffer: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
   });
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
   await expect(page.getByLabel('Batch recovery summary')).toContainText('1 需補資料');
   await page.getByRole('button', { name: '只選完成' }).click();
   await expect(page.getByRole('button', { name: /全部儲存/ })).toContainText('(0)');
   await page.getByRole('button', { name: '取消' }).click();
   await page.getByPlaceholder('貼 booking confirmation / email 文字').fill('2026-05-08 at M5 Email Lunch 888 yen booking REF55555');
   await page.getByRole('button', { name: '解析文字' }).click();
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
-  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 selected');
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
+  await expect(page.getByLabel('Batch recovery summary')).toContainText('1 已選');
   await expect(page.getByLabel('Batch recovery summary')).toContainText('0 需補資料');
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
-  await page.getByRole('button', { name: /匯率 Exchange Rate/ }).click();
+  await page.locator('details.scan-more-ways').evaluate((el) => { el.open = true; });
+  await page.getByRole('button', { name: '匯率' }).click();
   const fxDialog = page.getByRole('dialog', { name: '即時匯率' });
   await expect(fxDialog).toBeVisible();
   await fxDialog.locator('input').first().fill('2000');

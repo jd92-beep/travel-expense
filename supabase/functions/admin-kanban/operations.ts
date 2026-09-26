@@ -91,7 +91,8 @@ type PreviewInput = {
     | "itinerary_restore"
     | "member_add"
     | "member_role"
-    | "member_remove";
+    | "member_remove"
+    | "admin_purge_user";
   idempotencyKey: string;
   payload: Record<string, unknown>;
   targetId: string;
@@ -115,6 +116,7 @@ const ACTIONS = new Set([
   "member_add",
   "member_role",
   "member_remove",
+  "admin_purge_user",
 ]);
 const R2_ACTIONS = new Set([
   "receipt_amend",
@@ -126,6 +128,8 @@ const R2_ACTIONS = new Set([
   "member_add",
   "member_role",
   "member_remove",
+  // Same step-up kernel as R2; separately gated by ADMIN_ALLOW_R3_USER_PURGE.
+  "admin_purge_user",
 ]);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/;
@@ -1112,6 +1116,96 @@ async function providerPreview(context: OperationContext, input: PreviewInput) {
   };
 }
 
+async function archiveNotionPagesForPurge(
+  context: OperationContext,
+  targetId: string,
+): Promise<{ attempted: number; archived: number; failed: number; skipped: number }> {
+  const pages = rpcResult<Array<{ page_id: string; database_id: string | null }>>(
+    await context.client.rpc("admin_purge_user_notion_pages", { p_target: targetId }),
+    "Notion page inventory could not be built",
+  ) || [];
+  if (!pages.length) return { attempted: 0, archived: 0, failed: 0, skipped: 0 };
+  const endpoint = new URL("/notion/request", `${context.brokerUrl.replace(/\/+$/, "")}/`);
+  let archived = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const row of pages) {
+    const pageId = String(row.page_id || "");
+    if (!UUID_RE.test(pageId)) {
+      skipped += 1;
+      continue;
+    }
+    const databaseId = String(row.database_id || "").trim();
+    if (!databaseId) {
+      // Personal Notion proxy requires a registered database id.
+      skipped += 1;
+      continue;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Origin: "https://travel-expense-admin-kanban.vercel.app",
+          "X-Admin-Internal": context.brokerKey,
+          "X-Admin-Request-Id": context.requestId,
+        },
+        body: JSON.stringify({
+          method: "PATCH",
+          path: `/pages/${pageId}`,
+          body: { archived: true },
+          databaseId,
+          internalUserId: targetId,
+        }),
+        redirect: "manual",
+        signal: controller.signal,
+      });
+      if (response.ok) archived += 1;
+      else failed += 1;
+    } catch {
+      failed += 1;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return { attempted: pages.length, archived, failed, skipped };
+}
+
+async function adminPurgeUserPreview(context: OperationContext, input: PreviewInput) {
+  exactKeys(input.payload, new Set([]));
+  if (!UUID_RE.test(input.targetId)) {
+    throw new AdminOperationError("VALIDATION_FAILED", "Purge target is invalid", 400);
+  }
+  if (input.targetId === context.actor) {
+    throw new AdminOperationError("VALIDATION_FAILED", "Admin cannot purge their own account", 400);
+  }
+  const manifest = rpcResult<Record<string, unknown>>(
+    await context.client.rpc("admin_purge_user_manifest", { p_target: input.targetId }),
+    "Purge manifest could not be built",
+  );
+  const manifestHash = await sha256Hex(canonicalJson(manifest));
+  const storagePaths = Array.isArray(manifest?.storagePaths) ? manifest.storagePaths : [];
+  const notionPages = Array.isArray(manifest?.notionPageIds) ? manifest.notionPageIds : [];
+  return {
+    payload: { manifestHash },
+    preview: {
+      title: "永久刪除用戶資料",
+      consequence: "刪除 Auth 帳戶、Supabase 資料列與 receipt-photos 物件。Notion 頁面需另行清理。",
+      affectedCount: Number(manifest?.receipts || 0) + Number(manifest?.trips || 0) +
+        storagePaths.length,
+      before: manifest,
+      rollbackBoundary: "此操作不可復原；請先確認 manifest 內容。",
+      notionPagesRequireManualCleanup: notionPages.length,
+      storageObjectCount: storagePaths.length,
+    },
+    targetRef: input.targetId,
+    targetType: "account",
+    targetVersion: null,
+  };
+}
+
 async function supportPreview(context: OperationContext, input: PreviewInput) {
   exactKeys(input.payload, new Set(["includeJobs", "tripId", "userId"]));
   const userId = input.payload.userId === undefined ? null : String(input.payload.userId);
@@ -1212,8 +1306,11 @@ export async function previewAdminOperation(context: OperationContext, body: unk
   let resolved;
   if (input.action === "provider_probe") resolved = await providerPreview(context, input);
   else if (input.action === "support_bundle") resolved = await supportPreview(context, input);
-  else if (input.action === "run_integrity_scan") resolved = await integrityPreview(context, input);
-  else if (["receipt_amend", "receipt_trash", "receipt_restore"].includes(input.action)) {
+  else if (input.action === "admin_purge_user") {
+    resolved = await adminPurgeUserPreview(context, input);
+  } else if (input.action === "run_integrity_scan") {
+    resolved = await integrityPreview(context, input);
+  } else if (["receipt_amend", "receipt_trash", "receipt_restore"].includes(input.action)) {
     resolved = await receiptR2Preview(context, input);
   } else if (input.action === "trip_amend") resolved = await tripR2Preview(context, input);
   else if (["itinerary_amend", "itinerary_restore"].includes(input.action)) {
@@ -1585,6 +1682,33 @@ export async function commitAdminOperation(
         generated.persistedResult,
       );
       return { operation, bundle: generated.bundle, reused: false };
+    }
+    if (started.action === "admin_purge_user") {
+      const targetId = String(started.targetRef || "");
+      if (!UUID_RE.test(targetId)) {
+        throw new AdminOperationError("VALIDATION_FAILED", "Purge target is invalid", 400);
+      }
+      const manifestHash = String(
+        (started.payload && typeof started.payload === "object"
+          ? (started.payload as { manifestHash?: unknown }).manifestHash
+          : "") || "",
+      );
+      if (!/^[0-9a-f]{64}$/i.test(manifestHash)) {
+        throw new AdminOperationError("VALIDATION_FAILED", "Purge manifest hash is invalid", 400);
+      }
+      const notionArchive = await archiveNotionPagesForPurge(context, targetId);
+      const purge = rpcResult<Record<string, unknown>>(
+        await context.client.rpc("admin_purge_user", {
+          p_target: targetId,
+          p_expected_manifest_hash: manifestHash,
+        }),
+        "User purge failed",
+      );
+      const operation = await finishExternal(context, operationId, "completed", {
+        ...purge,
+        notionArchive,
+      });
+      return { operation, reused: false };
     }
     throw new AdminOperationError("OPERATION_UNKNOWN", "Operation action is not implemented", 409);
   } catch (error) {

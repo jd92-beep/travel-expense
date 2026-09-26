@@ -18,6 +18,15 @@ export function hasUserScopedNotionDatabase(state: AppState): boolean {
   return !!db && db !== DEFAULT_NOTION_DB;
 }
 
+// Accepts a raw 32-char Notion database ID or a full/partial Notion URL
+// (https://www.notion.so/<name>-<id>?...) and returns the 32-char ID, or null when unparseable.
+export function extractNotionDatabaseId(input: string): string | null {
+  const value = String(input || '').trim();
+  if (!value) return null;
+  const match = value.match(/[0-9a-f]{32}/i);
+  return match ? match[0] : null;
+}
+
 export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): boolean {
   if (isBoss(userEmail)) {
     return true;

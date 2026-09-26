@@ -119,7 +119,19 @@ export const Particles: React.FC<ParticlesProps> = ({
       }, 200)
     }
 
+    const handleVisibility = () => {
+      if (document.hidden) {
+        if (rafID.current != null) {
+          window.cancelAnimationFrame(rafID.current)
+          rafID.current = null
+        }
+      } else if (rafID.current == null) {
+        animateRef.current()
+      }
+    }
+
     window.addEventListener("resize", handleResize)
+    document.addEventListener("visibilitychange", handleVisibility)
 
     return () => {
       if (rafID.current != null) {
@@ -129,6 +141,7 @@ export const Particles: React.FC<ParticlesProps> = ({
         clearTimeout(resizeTimeout.current)
       }
       window.removeEventListener("resize", handleResize)
+      document.removeEventListener("visibilitychange", handleVisibility)
     }
   }, [color])
 
@@ -255,6 +268,11 @@ export const Particles: React.FC<ParticlesProps> = ({
   }
 
   const animate = () => {
+    // Stop the rAF loop while the tab is hidden; visibilitychange restarts it.
+    if (typeof document !== 'undefined' && document.hidden) {
+      rafID.current = null
+      return
+    }
     clearContext()
     circles.current.forEach((circle: Circle, i: number) => {
       // Handle the alpha value

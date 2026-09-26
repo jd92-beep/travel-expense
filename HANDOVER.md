@@ -1,10 +1,15 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-08-24 HKT
-- **Focus**: Session 88 production apply/deploy, Admin packaging repair and live verification.
-- **Agent**: Codex.
-- **App version**: Compact Web `0.17.1`; Android `0.22.0` (versionCode 2200; branch `codex/admin-console-1.0-android`); Admin `1.3.4`; Broker `2026.08.24.1`; React `0.2.7`. All web surfaces, Broker and the approved Supabase cutover are live; ordinary-user receipt-photo auth evidence remains open below.
+- **Date**: 2026-09-26 HKT
+- **Focus**: Session 94 — Compact shared-ledger end-to-end review + fixes (foreign-receipt
+  read-only guard, owner display names, member-contribution stats, purge notice), four live DB
+  migrations applied via Management API (comments visibility policy, account-deletion ownership
+  transfer, `admin_purge_user`, receipt key-presence upsert), and full Supabase migration-history
+  reconciliation (69/69 aligned, `db push` channel restored).
+- **Agent**: Kimi Code.
+- **App version**: Compact **`0.24.3` LIVE** (GitHub Pages deploy green; commits `56e1348`,
+  `1dc4758`, `ab4a05c`, `53d407d`). Admin `1.4.1` live.
 
 ### Android worktree detail (Session 80 snapshot — superseded by the Session 81/82 summary above, kept for Android verification evidence)
 
@@ -182,7 +187,7 @@ agent does not restart from stale Phase 5 notes.
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web candidate is `0.17.1`; the Android branch is `0.22.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.3`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -192,9 +197,21 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-1. 🟡 **Final post-bootstrap fresh login check (Boss is doing this now)** — passkey enrollment and
-   bootstrap removal are complete. Record this one fresh Chrome login result before closing the item;
-   do not claim it has passed yet.
+0. 🟢 **Session 90 closed the shared-trip account-deletion blocker** — live
+   `delete_own_user_account()` now transfers ownership (GUC-gated), demotes the old owner
+   member before promoting the successor, deletes private receipts instead of transferring
+   them, and leaves trip-visible receipts with the successor. Proven by live SQL smoke
+   `supabase/tests/account_deletion_transfer_smoke.sql` (transaction + rollback) on
+   `fbnnjoahvtdrnigevrtw`. Reopen only if a real user account deletion fails in product.
+   (2026-09-26, Session 94: migration `20260916110000` formally applied to live via Management
+   API and verified; `admin_purge_user` `20260916130000` applied service-role only at the same
+   time. `delete_own_user_account` confirmed carrying `search_path=""`.)
+1. 🟢 **CLOSED (Session 92) — Fresh post-bootstrap Chrome login PASSED on live Admin `1.3.9`** —
+   Boss completed a fresh login (passphrase + Boss passkey) on live `1.3.9` (`44d674e`, Vercel
+   `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, protected workflow `35451419090`). The original blocker
+   was a client-side CSRF chicken-and-egg (`auth/begin` required the `__Host-admin_csrf` cookie
+   that login itself issues); fixed in `app-admin-kanban/src/lib/adminApi.ts` with a Playwright
+   regression spec.
 2. 🟠 **Real ordinary authenticated JWT privilege smoke is pending** — repeat the production
    privilege check with an ordinary authenticated JWT; do not substitute privileged/service access.
 3. 🟠 **Admin DB platform-owner hardening remains pending** — complete the platform-owner operation
@@ -234,7 +251,9 @@ you closed with your session number.
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
     `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
     the migration history on a reviewed branch before adding these columns. Do not use `db push` or
-    migration repair without Boss approval.
+    migration repair without Boss approval. (2026-09-26, Session 94: the migration-history
+    reconciliation is complete — 69/69 aligned, `db push` channel restored; the column drift
+    itself is unchanged and still needs a reviewed additive migration.)
 15. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
     created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
@@ -301,8 +320,438 @@ you closed with your session number.
    `app-compact/android/app/build/outputs/apk/debug/app-debug.apk` (11,269,379 bytes; SHA-256
    `d12ad575f29758f8ffd0c1ed48a0e74b9d020279a7cf1e640a3f0b816760a89a`). No release signing or
    emulator QA was requested or performed.
+27. 🟢 **Session 94 closed the shared-ledger review + migration-history reconciliation** —
+   end-to-end review of solo/shared expense recording fixed: foreign-owned receipts are
+   read-only in ReceiptEditor, History shows an owner badge, owner display names come from
+   profiles, Stats gained a member-contribution block on shared trips, and a purge notice
+   surfaces when a member is removed (Compact `0.24.1`–`0.24.3`, live on Pages). Live DB:
+   `20260916090000` (comments visibility policy + lease index), `20260916110000`,
+   `20260916130000` and `20260926100000` (receipt upsert key-presence, fixes silent field
+   drops on partial payloads) applied via Management API and individually verified. Migration
+   history fully reconciled (7 local-only recorded via targeted `migration repair`, 3
+   remote-only hotfixes stubbed): `migration list` 69/69 aligned and `db push --dry-run`
+   reports "Remote database is up to date". Remaining open follow-ups stay in Items 2, 6,
+   7, 12 and 14.
 
 ## What Was Done
+
+### Session 94 (Kimi Code — Compact shared-ledger review + live DB migrations + history reconcile)
+
+Compact `0.24.1`–`0.24.3` (live on GitHub Pages); four live DB migrations applied via Management
+API; migration history reconciled. Detail in `CHANGELOG.md` 2026-09-26 entries.
+1. **Shared-ledger E2E review + fixes (Compact `0.24.1`–`0.24.3`, live)** — foreign-owned
+   receipts are now read-only in ReceiptEditor (`foreignOwned` by ownerId vs session user or
+   `createdByLabel ≠ 'You'`); History shows a per-receipt owner badge (`👤 name`);
+   `rowToPulledReceipt`/`rowToReceiptForTrip` resolve `createdByLabel` from profile display
+   names; Stats gained a 「共享成員記帳」 member-contribution block on shared trips; the sync
+   purge branch surfaces a one-cycle banner when the user was removed from a trip. New visual
+   specs `sharing-visual-check.spec.cjs` + `stats-attribution-visual-check.spec.cjs` pass.
+2. **Live DB migrations applied + verified** — `20260916090000` (expense_comments visibility
+   policy + lease index), `20260916110000` (account-deletion ownership transfer),
+   `20260916130000` (`admin_purge_user`, service-role only) and `20260926100000` (receipt
+   upsert key-presence: `p_receipt ? 'note'` etc., stops silent field drops on partial
+   payloads). Each verified by Management API query (policy qual, index presence, GUC guard,
+   `search_path=""`).
+3. **Migration history reconciled (`53d407d`)** — 7 local-only migrations recorded via targeted
+   `supabase migration repair --status applied` after per-migration live probes; 3 remote-only
+   hotfixes stubbed with `select 1` placeholders. `migration list` 69/69 aligned; `db push
+   --dry-run` reports "Remote database is up to date". The historical 🔴 HIGH PRIORITY item is
+   closed below.
+
+### Session 93 (Kimi Code — Admin 1.4.0 console analysis + perf/UX overhaul)
+
+Admin `1.4.0`. Front-end only (`app-admin-kanban`); no BFF, Edge, DB or credential change.
+Deep audit (two read-only passes: UX/UI inventory + performance) then three implementation
+passes. All verification green: typecheck, build, unit 34/34, contract 24/24, login-gate 3/3,
+full smoke 50 passed / 1 skipped.
+1. **Performance — bundle** — removed the `motion` dependency entirely (framer-motion shipped
+   whole, ~131 kB min, for 4 call sites): BlurFade/RouteTransition are CSS keyframes now
+   (tiered via `html[data-fx-tier]`, opacity-pinned axe contract preserved), NumberTicker is an
+   inline rAF tween, both nav indicators are CSS-transitioned (active-index translateY for the
+   admin pill, measured left/width for WorkspaceNav). Lazy `ProtectedShell` route drops
+   AdminShell + PasskeyManagerDialog from the entry; `QueryClientProvider` moved behind the
+   auth gate with a dynamic `queryClient` import in session.tsx (react-query out of entry).
+   Entry JS on /login **493.8 → 324.1 kB min (−34%)**, gzip ~101 kB.
+2. **Performance — boot path** — LoginRoute renders the gate optimistically (no splash wait on
+   the session roundtrip; `LoginGate` gained an `active` prop so the three.js scene only loads
+   when sure no session exists, via requestIdleCallback). Fonts self-hosted in `public/fonts/`
+   with fixed-name `@font-face` + `<link rel="preload">` in index.html (oxanium 14 kB +
+   jetbrains-mono 40 kB). Workspace prefetch fires all 5 reads concurrently
+   (`Promise.allSettled`; smoke `maxInFlight` bound relaxed 2→5 to match). Measured on the
+   built app: **cold 161 ms / warm reload 29 ms** to an interactive login form (local server;
+   real-network adds RTT — repeat visits land well inside Boss's 0.3 s target, cold first
+   visits will not on slow networks).
+3. **CSS — augmented-ui purged** — the 167 kB `augmented-ui.min.css` import replaced by a
+   ~3 kB native `clip-path`/`::before` chamfer implementation keyed on the same
+   `data-augmented-ui` attributes (zero TSX churn). Global CSS **228.6 → 65.5 kB min (12.7 kB
+   gz)**. (Optional components.css lazy split was evaluated and skipped — cascade risk not
+   worth ~6 kB gz.)
+4. **UX — safety + feedback** — `.button.danger` now exists (the 永久刪除用戶 purge button
+   previously rendered as a plain secondary — real hazard); the `window.confirm` gate became a
+   shared `ConfirmDialog` (`<dialog>` + backdrop click/Escape cancel + focus return). New
+   Toaster (aria-live region, 4 s auto-dismiss, max 3) wired to CSV export + support-bundle
+   download. Disabled mutating controls carry `data-disabled-reason` with a pure-CSS tooltip
+   (touch-usable; reasons via shared `adminMutationDisabledReason()`). `StatusBadge` unknown
+   statuses render 「未知狀態」 instead of raw English tokens.
+5. **UX — tables/filters/navigation** — `.table-scroll` gained a real scroll box
+   (`max-height: min(64vh,720px)`) so sticky headers actually stick (reverts to page flow on
+   ≤767 px stacked cards); the 13-column receipts table got `min-width: 1320px`; all 17 tables
+   now have sr-only captions. Pagination gained 「回第一頁」 + sessionStorage cursor-stack
+   persistence (per-list `storageKey`, only restored when the URL cursor matches). Filter model
+   unified to text-submit + select-instant everywhere — audit datetime fields are now draft
+   state applied on submit (smoke updated to click 套用文字篩選). Empty states gained an
+   `action` slot (清除篩選 on filtered lists, 返回總覽 on the 404). Global search keeps its
+   draft and focuses on `/` or Cmd/Ctrl+K.
+6. **Honest scope notes** — not done (structural, need design buy-in): reconciliation trip
+   picker, DataTable/DataToolbar primitives, token consolidation (~78 ad-hoc hexes), copy
+   register normalization, pagination totals (needs API support). Fresh-visit <0.3 s is not
+   achievable on real networks; repeat-visit target is met locally.
+7. **Deployed (Session 93b) — Admin `1.4.1` LIVE** — Boss authorized the protected dispatch;
+   the full release train ran on `d3eb1c7` (1.4.0 overhaul + a post-commit chamfer subpixel
+   fix found in the working tree + lockfile version sync 1.3.9→1.4.1, package.json 1.4.1).
+   First dispatch `35482604904` failed closed in CI on one pre-existing smoke race: the
+   "provider cooldown" test fixed its cooldown deadline at test-setup time (`Date.now()+1s`)
+   while the mock builds the payload per request and the page clock starts at mount — on a
+   slow runner the 1 s window expires before Chromium boots (same test passed on the `1f54214`
+   CI run; app code unchanged since `1.3.9` there). Fixed the test to compute the deadline
+   inside the route handler (`providerProbeAvailableInMs: 1_500`, request-time) — `9eb6627`.
+   Re-aligned edge provenance + all three SHA secrets on `9eb6627`, dispatched
+   `35483016157`, Boss approved the gate, all 8 jobs green. Live
+   `https://travel-expense-admin-kanban.vercel.app/api/health` → version `1.4.1`, gitSha
+   `9eb662743306ada242a42315d3219a1969879d38`, deployment `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
+   `acceptingReadTraffic=true`. Post-deploy verification (Session 93b, same day): fresh-browser
+   login on the live console PASSED in an isolated Chrome context (passphrase + Boss passkey,
+   session `Boss · passphrase+passkey`); /overview + /data/receipts rendered with correct
+   chamfer panels (pixel-checked TL/BR corners; the 1.4.1 bleed polygon is live on all 8
+   `data-augmented-ui` elements), 「未知狀態」 badge fallback visible on Notion, Toaster live
+   region present, logout returned to /login. Real-network cold load to an interactive login
+   form measured ~3.2 s from this machine — sub-0.3 s cold first visits are not achievable on
+   real networks; the repeat-visit target is met locally (161 ms cold / 29 ms warm).
+
+### Session 92 (Kimi Code — Admin fresh-login CSRF chicken-and-egg fix)
+
+Admin `1.3.9`. Client-only fix in `app-admin-kanban`; no DB migration, credential, vault or
+server-side change.
+1. **Bug found via Open Item 1's fresh-login check** — Boss's fresh Chrome login to the live
+   Admin console (`1.3.8`) failed client-side with 「管理員 CSRF session 已失效」 before any
+   request left the browser. Root cause: `request()` in `src/lib/adminApi.ts` required the
+   session-bound `__Host-admin_csrf` cookie for EVERY mutation, but the server only issues that
+   cookie at `auth/finish` — a chicken-and-egg that made fresh-browser login impossible. This
+   also explains why the authenticated Chrome login evidence (old items 17/18) was never
+   capturable, and why the Playwright specs had to pre-seed a synthetic `__Host-admin_csrf`
+   cookie via `addInitScript`.
+2. **Fix** — pre-session mutations (`/api/admin/auth/begin|finish`,
+   `/api/admin/passkeys/enroll/begin|finish`) no longer require the CSRF cookie client-side;
+   `X-Admin-CSRF` is attached only when the cookie exists. The BFF never validated CSRF on these
+   endpoints (no session exists yet); they are protected by strict same-origin checks plus the
+   WebAuthn ceremony. Authenticated mutations keep the fail-closed client check, and the BFF
+   session-bound CSRF verification is unchanged.
+3. **Regression test** — `tests/login-gate-focus.spec.cjs` new case: fresh login gate with no
+   CSRF cookie, login click must reach `auth/begin` and surface the server error (not the client
+   CSRF message). Proven to FAIL on the pre-fix client (via `git show HEAD:` file swap) and pass
+   with the fix.
+4. **Version** — Admin `1.3.8` → `1.3.9` (`package.json`; `/api/health` serves it).
+5. **Verification** — typecheck, build, unit, contract, security:scan, and the full Playwright
+   smoke (50 passed / 1 skipped, incl. the new regression test) all green.
+6. **Production deploy (protected workflow `35451419090`, after Boss's go-ahead)** — live
+   `/api/health` returns `1.3.9` / `44d674e` / `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB` /
+   `acceptingReadTraffic=true`. Two earlier dispatches failed closed at candidate readiness by
+   design: (a) Edge provenance was still `f5e05e8` — fixed by running
+   `scripts/deploy-admin-edge.mjs 44d674e…` (bakes `EDGE_SOURCE_SHA`, functionally identical
+   Edge code); (b) `ADMIN_EDGE_SOURCE_SHA_MISMATCH` — fixed by aligning the three Edge provenance
+   secrets (`ADMIN_EDGE_SOURCE_SHA`, `ADMIN_EXPECTED_EDGE_SOURCE_SHA`, `ADMIN_FRONTEND_GIT_SHA`)
+   to `44d674e` via `supabase secrets set`, the documented release step in
+   `app-admin-kanban/HANDOVER.md`. Boss then completed the fresh Chrome login (passphrase +
+   passkey) — **Open Item 1 closed**. Baked `source_provenance.ts` left uncommitted, matching
+   the established deploy-tooling convention.
+
+### Session 91 (Kimi Code — Compact Notion UX, perf, model catalog + scan)
+
+Compact `0.24.0`. Client-only changes plus the shared provider catalog; no DB migration,
+no credential/vault change, no live-data action.
+1. **Notion connection UX (Settings)** — dead `refreshPersonalNotion` wired to a once-per-session
+   fetch on Settings mount (pill no longer shows 未連接 after restart; local flags reconciled only
+   on disagreement). Database field accepts a full Notion URL (ID auto-extracted via
+   `extractNotionDatabaseId`), Cantonese setup guidance, mapped connect errors, two-tap
+   disconnect confirm. Top-level status pill (desktop) + accordion-header pill (mobile).
+2. **Weather/Itinerary de-lag** — cached Intl formatters in Weather (live-hour computed once per
+   day, not per location); `ProgressiveBlur` gated to the full effects tier; auto-jump reduced to
+   one correction; Timeline now-parts cached per tick with a single-pass live context;
+   `perDayTimeline` split so the 60s tick only recomputes rail metrics; `content-visibility` on
+   `.timeline-event`/`.weather-slot-detailed`. Persist-debounce experiment **reverted** — the
+   settings smoke encodes "snapshot current right after a mutation".
+3. **MagicCard mobile crash (pre-existing, P0)** — `useMotionTemplate` was called inside a
+   `disableHeavy` conditional, so every GlassCard crashed ("Rendered fewer hooks than expected")
+   on mobile/reduced-motion tiers. Hooks now run unconditionally.
+4. **Settings defaults/spacing** — all Settings accordions default collapsed; mobile readiness
+   chips got 10px/16px margins (was 6px/8px).
+5. **AI model catalog** — Kimi lineup realigned per Boss: added `kimi/kimi-k3`,
+   `kimi/kimi-k2.7`, `kimi/kimi-k2.8-preview` (kept `kimi/kimi-for-coding`); `kimi-code`, `kimi-8k`,
+   `kimi-32k`, `kimi-k2.6` dropped from the `compact` surface only (kept on broker/android/admin so
+   the scan can still test and restore them). `DEFAULT_KIMI_PRIMARY_MODEL_ID` → `kimi/kimi-for-coding`.
+   Admin BFF catalog snapshot synced. **Veo 2.5: not present in any list or history — nothing to
+   remove; no Veo backend exists.** Volcano catalog untouched.
+6. **Model-scan button** — the AI 模型選擇 accordion meta pill is now a scan button: tests every
+   visible + hidden model with the exact-model `kind=test` contract (≤8 tokens, no fallback),
+   retries failures at +5s/+10s/+15s (4 attempts), hides models that never connect
+   (`hiddenAiModels`, synced via app settings), restores hidden models that pass again, and keeps
+   429/quota models in the list flagged 限額 (hard stop per provider contract, never auto-removed).
+   Pickers filter hidden models; a selected-but-hidden model stays visible as a disabled 暫停 option.
+7. **Verification** — provider-catalog contract, typecheck, build, security:scan, settings smoke
+   (10+1 skip), weather/timeline/itinerary/offline smokes green. `smoke:ai-routing` has 2
+   pre-existing failures on clean `f5e05e8` (verified via stash) — unchanged by this session.
+8. **Pending / open** — (a) live broker still runs the previous allowlist: the three new Kimi
+   models get 400 "not allowlisted" until the broker redeploys, so the first real scan should run
+   after that; (b) live Kimi model verification itself (Boss's ask to test each model) could not
+   run from the agent environment — no broker session/key here; the scan button performs it
+   automatically on first press with Boss's session.
+
+### Session 90 (MiMo — Compact/mobile/broker/DB production sweep)
+
+Compact `0.23.12` and Broker `2026.09.15.1` live; Android `0.23.1` already on origin.
+1. **Compact UX/scroll** — Weather hero cache seed + single window scrollport; Timeline user-scroll
+   cancel; tab wrapper `overflow:clip` (sticky hero); iOS PWA manifest/Apple meta/HEIC decode/map
+   standalone/keyboard dock/hourCycle h23.
+2. **Sync P0s** — pull no longer overwrites newer local receipts on rotating signed photo URLs;
+   replace/delete photo clears `_photoSyncedToSupabase`/`supabasePhotoPath`; photo retries use a
+   separate attempt budget; leave-trip purges tombstones/deleted-source keys.
+3. **Broker 2026.09.15.1 LIVE** (`294a48ed…`) — rate-limit keyed on client IP only (Origin rotation
+   bypass closed); provider HTTP status preserved (429 stays a hard stop); Notion `..` path
+   traversal blocked; Volcano health test disables thinking; 12-theme catalog aligned with Compact.
+   Self-test green including origin-rotation 429 assertion.
+4. **DB migrations applied live via Management API** (no `db push`):
+   - `20260916090000` expense-comments visibility + `receipt_sync_jobs_processing_lease_idx`
+     (first attempt used wrong schema `private.receipt_sync_jobs` and rolled back; corrected to
+     `public.` and re-applied).
+   - `20260916110000` account-deletion ownership transfer: GUC-gated owner change, demote old
+     owner before promote, delete private receipts instead of transferring them.
+5. **Live proof** — `supabase/tests/account_deletion_transfer_smoke.sql` (begin/rollback) passed on
+   `fbnnjoahvtdrnigevrtw`: successor owns trip + shared receipt; private receipt gone; auth user
+   row removed.
+6. **Evidence** — Compact typecheck/build/security/offline/weather green; broker check+self-test
+   green; health `{"version":"2026.09.15.1"}`. Note: `sync-regression` suite has 7 pre-existing
+   failures on clean `bebdac6` in this environment (not introduced by Session 90).
+7. **Not done** — photo storage public→private cutover remains gated; `sync-regression` baseline
+   failures still open; BOSS_EMAIL global Notion privilege unchanged.
+
+### Session 89 (MiMo — Admin console 1.3.5/1.3.6 production apply)
+
+Admin `1.3.6` **LIVE** on `main` @ `3ef8835`. Protected workflow `34916648671` all green
+(admin/broker/edge/compact/react/database/shared-contract + production promotion).
+Live evidence: `/api/health` `1.3.6` / `3ef8835` / `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU` /
+`acceptingReadTraffic=true`; unauth `/api/admin/session` `401`; CSP has `worker-src`;
+Edge `_108`; schema `20260712123000`. First promotion attempt failed readiness `503` because
+Edge provenance secrets still pointed at `1.3.4`; secrets were aligned to `3ef8835` then
+re-approved.
+
+1. **Write-policy UI gate** — `src/lib/writePolicy.ts` reads `/runtime`. Probe stays available
+   under `provider_probe_only`; other R1/R2 CTAs require `allowlisted`.
+2. **Pagination safety** — no `navigate(-1)`; Integrity page uses the shared cursor hook.
+3. **LoginGate** — bootstrap enrollment UI removed; recovery guidance + 返回登入.
+4. **CSRF fail-closed** on auth POSTs; query cache cleared on logout/401.
+5. **Correctness** — `formatMoney(null)`, support-bundle revoke, selection notice, `useOnline`.
+6. **UX** — quiet chrome, breadcrumbs, Overview KPI deep-links, zh-HK status labels, denser tables.
+7. **Evidence** (worktree gates): typecheck, build, unit `34/34`, contract `24/24` + catalog,
+   security scan, smoke `49 passed / 1 skipped`.
+
+### Session 89k (MiMo — android-auth tokens, backup photo strip, Scan overflow)
+
+Compact `0.23.9`.
+
+1. **android-auth.html:** no-referrer meta; OAuth params also as intent `S.*` extras;
+   `history.replaceState` scrubs tokens from the browser URL immediately after handoff.
+2. **Backup import:** strips `photoThumb` / `photoUrl` (blocks crafted base64/remote injection).
+3. **Scan:** 匯率 / 手動 / 語音 / Email moved into collapsible「更多方式」; English sublabels removed.
+4. **Evidence:** typecheck, build, security:scan; scan, settings(10), history(8), dashboard(8).
+
+### Session 89j (MiMo — device-trust + broker session + UX danger zones)
+
+Compact `0.23.8`.
+
+1. **Device trust:** trust flag stores `deviceId` after real unlock; forged/mismatched
+   deviceId re-locks. Flag-only offline unlock (smoke/legacy) is **session-scoped** — durable
+   flag cleared, `sessionStorage` keeps same-tab StrictMode alive; next cold open needs password.
+2. **Broker session:** `currentBrokerSession(state)` always falls back to persisted session;
+   load uses `safeJsonParse`.
+3. **UX:** Scan English leftovers (ready/Last scan/Batch Confirm/…); WelcomeGuide `我`/`旅伴N`,
+   empty home city + confirm on first-run skip; Settings danger blocks under「不可逆操作」.
+4. **Evidence:** typecheck, build, security:scan; settings(10), auth-broker, offline(4),
+   history(8), dashboard(8), scan, timeline(10), welcome-guide.
+
+### Session 89i (MiMo — full rescan + non-tech UX polish)
+
+Compact `0.23.7`.
+
+1. **P0/P1 data safety:** empty successful cloud pull no longer purges local trips; JWT
+   `expires_at` checked before broker use; History keep-local/cloud uses functional setState.
+2. **Dashboard budget:** HKD display edit converts to trip currency (no JPY overwrite).
+3. **Non-tech UX:** Chinese labels for Recent/View all/記一筆, Stats story/settlement cards,
+   Settings eyebrows (進階/共享/可選/外觀); AI model section default-collapsed; remove-person
+   confirm; Scan copy 「影相後會自動辨識」.
+4. **Evidence:** typecheck, build, security:scan; settings(10), history(8), offline(4),
+   dashboard(8), stats, scan, a11y-touch.
+
+### Session 89h (MiMo — UX batch: header overlap, Settings, Timeline, voice dates, Trip AI)
+
+Compact `0.23.6`.
+
+1. **Home header overlap:** trip title ellipsis + in-flow status chip; theme-switch no longer
+   promotes `.topbar` / mobile header / desktop rail layers that painted title over「進行中」.
+2. **Settings:** 外觀主題 default-collapsed AccordionCard near end; 連線（進階） simplified (hide
+   missing/unknown pills; short Notion paste flow); 匯率 collapsible `<details>`; 雲端帳號 after
+   資料管理; logout above build with confirm.
+3. **Timeline:** single smooth scroll (no mid-jump hard snap); day `content-visibility` 420px
+   intrinsic size; Reveal `lowCost` (no blur) on days.
+4. **Voice dates:** local relatives (今天/明天/後天/聽日/下星期X), trip-window DD/MM disambiguation,
+   HKT calendar year, prompt injects today + trip window rules.
+5. **Trip Update AI:** partial local/fail paths always merge existing days; failure keeps itinerary;
+   「清除 AI 行程」 button with confirm.
+6. **Stats:** 每日 Budget Pace second; TOP 10 lower.
+7. **Evidence:** typecheck, build, security:scan; settings(10), stats, timeline(10), scan, theme
+   catalog, trip-local-parser.
+
+### Session 89g (MiMo — weather APIs + themed weather UI)
+
+Compact `0.23.5`.
+
+1. **APIs:** added **MET Norway Locationforecast 2.0** as official provider for UK / Nordics /
+   Western Europe (CORS-friendly, no key). Open-Meteo fallback ladder now prefers regional
+   models: `jma_seamless`, `icon_seamless`, `meteofrance_seamless`, `ukmo_seamless`,
+   `kma_seamless` — still keyless. Korea/TW/AU stay on Open-Meteo models (no clean official
+   browser JSON). WeatherAPI.com remains broker-backed.
+2. **UI colors:** weather temp/place/hourly/source ink now uses `--theme-fn-weather` and
+   `--theme-text/muted/surface` so regional themes stay consistent; hover glow uses weather
+   accent instead of a hardcoded blue. FX animations remain transform/opacity-only.
+3. **Evidence:** typecheck, build; `smoke:weather` **14/14**; settings(10), dashboard(8).
+
+### Session 89f (MiMo — theme polish: smooth switch, regional identity, readability)
+
+Compact `0.23.4`.
+
+1. **Smooth themes:** `html.theme-switching` eases canvas/card/rail/input/CTA colors for ~420ms
+   on theme change; `prefers-reduced-motion` disables it. Selector options have hover lift +
+   color swatches (canvas/accent/charts) + regional motif subtitle.
+2. **Regional + functional:** every theme has `region.label/motif` and `functional` tokens
+   (`--theme-fn-scan/weather/timeline/stats`) wired to Scan CTA, weather emphasis, dock current
+   tab, stats titles. Europe Rail ambient motion enabled (was 0s). Art layers enriched (washi
+   floor glow, UK gold corner). Glass vars raised to ~72/88% so art never eats body copy.
+3. **History keep-local/cloud persist:** plain-object `setState` flushes storage synchronously
+   (`commitState`); keep-cloud also uses plain object — history conflict smoke **8/8**.
+4. **Evidence:** typecheck, build, security:scan; settings(10), history(8), dashboard(8), stats,
+   offline(4), theme catalog — green.
+
+### Session 89e (MiMo — production-ready pass: History hydrate race + tab P1s)
+
+Compact `0.23.3`.
+
+1. **History keep-local / hydrate race:** `useAppState` now tracks a mutation sequence; late
+   IndexedDB hydrate no longer clobbers live receipts/queue after the user edits. History
+   conflict smoke is **8/8**.
+2. **Tabs:** Stats single-person settlement bars sized (no NaN); Stats remaining-days uses
+   trip-TZ `todayForReceipts`; Timeline day-editor dirty includes note/address; overnight
+   `minutesForTime` keeps 24+ hours; Scan cloud-pull button matches `busy==='cloud'`;
+   Weather force-refresh failures keep prior cache; Dashboard wizard uses local calendar dates;
+   store-translation writes use functional `setState`.
+3. **Evidence:** typecheck, build, security:scan; smokes: settings(10), history(8), dashboard(8),
+   offline(4), weather(14), timeline(10), scan, itinerary, privacy, session(4), sync-regression(11),
+   stats, auth-broker, mobile-layout, six-person, final-nav, a11y-touch, welcome-guide,
+   trip-intelligence, sync-classify; units: change-journal, trip-local-parser, theme-preference,
+   scoped-persistence, receipt-tombstone, itinerary-merge, shared-trip-outbox, notion-backup.
+   Theme catalog smoke green. `smoke:security` skips Supabase-auth cases without fake env
+   (expected). `smoke:shared-contract` needs a local module path outside this sandbox.
+
+### Session 89d (MiMo — deeper logic hunt: login / trip / sharing)
+
+Compact `0.23.2`. Multi-agent logic audit + targeted fixes.
+
+1. **Login:** keep durable trust on transient refresh/network failure (only wipe on 401/revoked);
+   `onUnlocked` on restore paths; Enter/submit busy guard; do not `clearDeviceTrust` on missing
+   device key inside AuthGate effect (StrictMode re-run re-locked the app); Supabase device clear
+   also `clearTrustedDevice`; broker session update does not leak `device` object into AppState.
+2. **Trip paste:** partial clamp on **all** local-return paths; partial expands (never shrinks)
+   trip dates; full replace only when paste covers **every** existing day; lodging regex no longer
+   matches 住吉大社; header dedupe by date; full-path merge by date; day renumber after sort.
+3. **Sharing:** `cleanInviteRole` default viewer; leave-trip cleans people maps/receipts/queue and
+   restores next-trip people; invite accept activates `accepted.tripId`; outbox marks private jobs
+   failed (not silent success); applyTripDraft snapshots outgoing people even for new trip ids;
+   keep-local drops leftover failed queue copies for the receipt.
+4. **Evidence:** typecheck, build, security:scan, parser/change-journal units, auth-broker,
+   offline (4). Settings smoke ~9–10/11. **History conflict keep-local still fails on `main`
+   `23cef3f` as well** (pre-existing persist/hydrate race — open item).
+
+### Session 89c (MiMo — trip polish, live modal stats, private share filter, pre-merge review)
+
+Same worktree/branch. Compact Web `0.23.1`.
+
+1. **Trip paste polish:** HTML table strip; multi-night lodging carry; spot sort; `第N日`; trip name
+   from `行程：`; overnight arrival note; city guess from region.
+2. **Modal live stats** from editable itinerary (not extractionReport). **Private share** export
+   excludes `visibility: 'private'` receipts and notes the exclusion in `safety.stripped`.
+3. **Pre-merge review fixes:** partial paste keeps active trip id/dates (no accidental new trip);
+   Settings `selectTrip`/`applyTripDraft` use `switchTrip` people snapshots; partial day merge
+   never overwrites city/country/region with empty LLM strings; intent detection uses real
+   `state` year; first visit to unsnapshotted trip does not inherit previous companions.
+4. **Evidence:** typecheck, build, security:scan, `test:trip-local-parser`,
+   `test:change-journal`, `smoke:settings` (10), `smoke:history` (8), `smoke:offline` (4),
+   `smoke:auth-broker`, `smoke:dashboard` (8), `smoke:mobile-layout`, `smoke:six-person` — green.
+   `smoke:sync-regression` has 2 failures that **also fail on `main`** (pre-existing).
+
+### Session 89b (MiMo — login, trip paste→itinerary, sharing)
+
+Same worktree/branch as Session 89. Compact Web `0.23.0`.
+
+1. **Trip paste → itinerary:** local day headers accept `Day`/`D`/`第N天`/ISO/`7月10日`/`Jul 10 2026`/
+   date-only lines; sequential date fill when headers omit dates; spots accept time ranges, `9時30分`,
+   `9:30pm`, compound `/、＋` and `A → B` splits, table Chinese times, untimed bullets, PNR/bookingRef,
+   overnight `22:00-26:00`. Partial merge is **spot-level** (keeps unmatched existing spots). Paste with
+   zero detectable dates + existing itinerary → forced `partial` (no accidental full wipe). Quota/429
+   in `parseTripParagraph` is a hard stop (no local paper-over). `applyTripDraft` clears
+   `itineraryOverrides`. New unit suite `npm run test:trip-local-parser` (12 combination groups).
+2. **Login:** AuthGate starts locked until restore settles (`checking`); trust meta without device key
+   opens **offline with message** (smoke seeds stay green); refresh failure clears durable trust +
+   device key and surfaces offline mode for the current session only.
+3. **Sharing:** `switchTrip` snapshots outgoing trip people into `peopleByTripId`/`shareRatiosByTripId`;
+   Settings person/ratio/invite edits write those maps; `peopleForTrip`/`shareRatiosForTrip` prefer live
+   persons for the **active** trip; unknown member role → `viewer` (not editor).
+4. **Evidence:** typecheck, build, security:scan, `test:trip-local-parser`, `test:change-journal`,
+   `smoke:settings` (10), `smoke:history` (8), `smoke:auth-broker`, `smoke:six-person` — green.
+5. **Still open (from audits, not implemented):** modal live stats vs extractionReport; per-day
+   currency/TZ edit in modal; Settings unlock trusted-device registration parity; invite token cleanup
+   after accept; `private-trip-share` still includes owner-private rows (opt-out needed); multi-user
+   invite/RLS live smoke; HANDOVER Item 7 per-member privacy design.
+
+### Session 89 (MiMo — compact polish: bugs, web perf, theme diversity)
+
+Isolated worktree branch `compact/perf-bugs-themes` from `main` @ `252003d`. Compact Web
+`0.22.0` (`APP_VERSION` + `package.json`). **Not merged or pushed** — Boss must review/merge.
+
+1. **Confirmed bugs fixed (10):** History trip switch now uses shared `switchTrip()` (restores
+   people/share ratios); `enqueueChange` re-queues terminal items when a strictly newer
+   `payload.updatedAt` lands (40001 evidence kept otherwise); AuthGate refresh failure surfaces
+   offline/sync message; unlock no longer forces Dashboard over deep links; Shell trip dropdown
+   uses theme CSS vars; Weather refetches when broker session arrives; Settings Trip Manager
+   dirty-guard on active-trip effect; Timeline spot keys use stable id; `index.html` `lang="zh-Hant"`;
+   `android-auth.html` HOST derived from `location.host`.
+2. **Web performance (transitions preserved):** persist coalesced via timer + **sync localStorage
+   write on flush** (pagehide/smoke-safe; 0ms same-tick coalesce — a longer debounce broke Settings
+   trip-AI smokes that assert localStorage immediately); History builds one failed-queue Map instead
+   of O(rows×queue); ThemeContext value memoized; Settings doctor/audit deps narrowed to slices;
+   sparkles-text no longer 10ms React interval; BorderBeam moved to CSS `offset-path`; particles
+   pause when `document.hidden`; light-sweep keyframes no longer consume `--scroll-*` every frame;
+   History/receipt rows get `content-visibility: auto`.
+3. **Theme catalog 5 → 12:** added `tokyo_neon` (cyberpunk), `tropical_candy` (活潑開朗),
+   `uk_london` (GB destination remap), `nordic_aurora`, `mexico_fiesta`, `india_holi`,
+   `brazil_carnival`. Each has CSS tokens, `--theme-art` layer, boot-hint dark list, smoke tokens.
+   Dark-preview ink fixes generalized to `html[data-color-scheme='dark']`. Status-pill contrast
+   fixed for tropical/india/brazil after catalog smoke. `theme-smoke` catalog test expects 13 radios.
+4. **Evidence:** `typecheck`, `build`, `security:scan`, `test:change-journal`,
+   `test:theme-preference`, `smoke:settings` (10 pass), `smoke:history` (8), `smoke:offline` (4),
+   `smoke:mobile-layout`, `smoke:dashboard` (8), theme catalog smoke — all green in worktree.
+   `timeline-smoke` command-card height fail and `theme-smoke` Taiwan dark contrast fail **also
+   reproduce on `main`** (pre-existing). Change-journal terminal re-queue assertions updated to the
+   new contract.
+5. **Android/iOS note:** Android remains the external Capacitor shell worktree; iOS is web-only.
+   No Play Store release. Auth bridge host fix is web-side only.
 
 ### Session 88 (Codex — apply/deploy all approved production surfaces)
 
@@ -532,7 +981,7 @@ you closed with your session number.
    were reviewed then deleted with the probe script.
 3. **Boundaries:** version bumped `0.16.19` to `0.16.20` (`constants.ts`, `package.json`,
    `package-lock.json`). Pushed to `origin main` as `2c66b5d`. The same CSS was synced to the
-   Android shell worktree (`/Users/tommy/Documents/Projects/travel-expense-android-shell`, branch
+   Android shell worktree (`/Users/tommy_1/Documents/Projects/travel-expense-android-shell`, branch
    `codex/admin-console-1.0-android`) as `0.20.5` / versionCode 2005, commit `f568c64`, with
    typecheck, build, `security:scan` and mobile-layout smoke `1/1` green there. Follow-up `3707596`
    (`0.20.6` / versionCode 2006) fixed that branch's bare `smoke:mobile-layout`, `smoke:itinerary`,
@@ -1529,7 +1978,7 @@ you closed with your session number.
 ### Session 32 (Codex — previous session)
 
 1. **Splitwise roadmap Phase 0 security fix**:
-   - Reviewed `/Users/tommy/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
+   - Reviewed `/Users/tommy_1/Downloads/temp can delete/travel_expense_splitwise_super_app_roadmap(1).md` and confirmed the hardcoded broker/admin passphrase finding existed in `app-compact/scripts/verify-notion-connection.mjs`.
    - Removed the inline passphrase and made the script require `BROKER_UNLOCK_PASSWORD` or legacy `BROKER_ADMIN_PASSPHRASE` from the local environment.
    - Updated the script to match the live Credential Broker contract: `/session/unlock` receives `{ password }`, returns a session string, and authenticated calls send `X-Travel-Session`.
    - Rotated the live Credential Broker `APP_UNLOCK_HASH` and `APP_SESSION_SECRET`; the new unlock passphrase is stored in macOS Keychain service `travel-expense credential broker unlock`.
@@ -1843,7 +2292,7 @@ you closed with your session number.
 > this file — reconcile there; do not act from this section without re-verifying.
 
 ### 🔴 HIGH PRIORITY
-1. **Reconcile Supabase migration history divergence**: The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).
+1. ✅ **CLOSED 2026-09-26 (Session 94) — Supabase migration history divergence reconciled**: done on a reviewed branch merged to `main` (`53d407d`). Seven local-only migrations were recorded via targeted `supabase migration repair --status applied` (each probed on live first); three remote-only hotfixes (`20260718170855`, `20260718170939`, `20260824033202`) got `select 1` placeholder files. `supabase migration list` is 69/69 aligned and `db push --dry-run` reports "Remote database is up to date". Original text kept for history: ~~The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).~~
 
 ### 🟡 NEEDS LIVE VERIFICATION (Session 18 changes)
 1. **Notion settings round-trip (Phase 1)**: Code path typechecks + builds, but a full write→read cycle needs a device with a real Notion token (not available in the dev session). Confirm a large itinerary survives push→pull via the new code block.

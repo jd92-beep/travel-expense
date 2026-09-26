@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip, stampReceiptForTrip } from '../domain/trip/normalize';
-import { categoryById, computeSettlements, createSettlementReceipt, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, isSettlementReceipt, todayYmd } from '../lib/domain';
+import { categoryById, computeSettlements, createSettlementReceipt, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, isSettlementReceipt, todayForReceipts, todayYmd } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
@@ -62,8 +62,28 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
   const analysisTotal = analysisReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
-  const maxPersonTotal = Math.max(1, ...persons.map((_, i) => settlement.sharedByPayer[i] + settlement.privateByOwner[i]));
+  const maxPersonTotal = Math.max(1, ...persons.map((_, i) => (settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)));
   const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
+  // Shared-trip attribution: which app member recorded/paid how much. Keyed by ownerId so
+  // 'You' vs each trip-mate is explicit; receipts without an owner (pre-sharing locals)
+  // group under 本機紀錄 so the bar set still sums to the visible total.
+  const memberContributions = useMemo(() => {
+    if (!trip.sharing?.isShared) return [];
+    const byOwner = new Map<string, { label: string; count: number; total: number }>();
+    for (const r of scopedState.receipts) {
+      const key = r.ownerId || 'local';
+      const label = r.ownerId
+        ? (r.createdByLabel === 'You' ? '你' : (r.createdByLabel || '旅伴'))
+        : '本機紀錄';
+      const entry = byOwner.get(key) || { label, count: 0, total: 0 };
+      entry.count += 1;
+      entry.total += getReceiptTripAmount(r, state, resolvedTripCurrency);
+      byOwner.set(key, entry);
+    }
+    return [...byOwner.values()].sort((a, b) => b.total - a.total);
+  }, [trip.sharing?.isShared, scopedState.receipts, state, resolvedTripCurrency]);
+  const maxMemberTotal = Math.max(1, ...memberContributions.map((entry) => entry.total));
+  const MEMBER_COLORS = ['#1E4D6B', '#8B4A6B', '#2D6E48', '#9A6A1B', '#5b4a68', '#C23B5E'];
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
     .slice()
@@ -111,9 +131,17 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
       .then((result) => {
         if (!result || !Object.keys(result).length) return;
         const now = Date.now();
-        const patch = { ...(state.storeTranslations || {}) };
-        for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
-        updateState({ storeTranslations: patch });
+        if (setState) {
+          setState((prev) => {
+            const patch = { ...(prev.storeTranslations || {}) };
+            for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
+            return { ...prev, storeTranslations: patch };
+          });
+        } else {
+          const patch = { ...(state.storeTranslations || {}) };
+          for (const [name, translated] of Object.entries(result)) patch[name] = { t: translated, at: now };
+          updateState({ storeTranslations: patch });
+        }
       })
       .catch(() => {})
       .finally(() => {
@@ -139,6 +167,7 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
     itinerary,
     resolvedTripCurrency,
     toHkd,
+    today: todayForReceipts(state, itinerary),
   });
 
   return (
@@ -155,26 +184,13 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
       </GlassCard>
 
       <DataPanel
-        className="top-expenses-panel"
-        icon={<Trophy size={19} />}
-        title="TOP 10 支出"
-        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+        className="trend-panel preview-daily-pace"
+        icon={<TrendingUp size={19} />}
+        title="每日 Budget Pace"
+        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
       >
-        {topReceipts.length ? topReceipts.map((r, idx) => {
-          const cat = categoryById(r.category);
-          const display = topStoreDisplay[idx];
-          const showTranslation = !!display?.translated && display.translated !== display.original;
-          return (
-            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
-              <b>{idx + 1}</b>
-              <span>
-                <VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {display?.original ?? displayStore(r)}
-                {showTranslation && <span className="rank-store-translation">{display!.translated}</span>}
-              </span>
-              <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
-            </motion.div>
-          );
-        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
+        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
+        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
 
       <section className="stats-story-grid" aria-label="Budget story cards">
@@ -192,16 +208,6 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
           </motion.article>
         ))}
       </section>
-
-      <DataPanel
-        className="trend-panel preview-daily-pace"
-        icon={<TrendingUp size={19} />}
-        title="每日 Budget Pace"
-        status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
-      >
-        {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
-        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
-      </DataPanel>
 
       <DataPanel
         className="settlement-card"
@@ -326,13 +332,28 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
         )}
       </DataPanel>
 
-      <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全 receipts</StatusPill>}>
+      <DataPanel className="payer-panel" icon={<WalletCards size={19} />} title="付款人" status={<StatusPill tone="neutral">全部紀錄</StatusPill>}>
         {persons.map((p, i) => (
-          <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={settlement.sharedByPayer[i] + settlement.privateByOwner[i]} max={maxPersonTotal} state={scopedState} color={p.color} />
+          <Bar key={p.id} label={p.name} leading={<AvatarBadge person={p} size="sm" />} value={(settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)} max={maxPersonTotal} state={scopedState} color={p.color} />
         ))}
         {settlement.crossPrivate.length > 0 && (
           <div className="mini-list">
             {settlement.crossPrivate.map((cp) => <span key={cp.id}>代付：{cp.payer.name} 代 {cp.beneficiary.name} 付 {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(cp.amount)} · {cp.store}</span>)}
+          </div>
+        )}
+        {memberContributions.length > 0 && (
+          <div className="member-contrib-block" aria-label="共享成員記帳歸屬">
+            <span className="member-contrib-title">共享成員記帳</span>
+            {memberContributions.map((entry, idx) => (
+              <Bar
+                key={entry.label}
+                label={`${entry.label} · ${entry.count} 筆`}
+                value={entry.total}
+                max={maxMemberTotal}
+                state={scopedState}
+                color={MEMBER_COLORS[idx % MEMBER_COLORS.length]}
+              />
+            ))}
           </div>
         )}
       </DataPanel>
@@ -343,6 +364,29 @@ export function Stats({ state, setState, updateState, onTab, upsertReceipt, dele
 
       <DataPanel className="payment-panel" icon={<BarChart3 size={19} />} title="支付方式" status={<StatusPill tone="neutral">{payTotals.length} 種方式</StatusPill>}>
         {payTotals.length ? payTotals.map((p) => <Bar key={p.id} label={p.name} value={p.total} state={{ ...scopedState, receipts: analysisReceipts }} color={p.color} />) : <EmptyState title="未有紀錄" description="現金、信用卡、PayPay、Suica 會分開統計。" />}
+      </DataPanel>
+
+      <DataPanel
+        className="top-expenses-panel"
+        icon={<Trophy size={19} />}
+        title="TOP 10 支出"
+        status={<TopTenToggle includeBigItems={state.top10IncludeBigItems} onChange={(value) => updateState({ top10IncludeBigItems: value })} />}
+      >
+        {topReceipts.length ? topReceipts.map((r, idx) => {
+          const cat = categoryById(r.category);
+          const display = topStoreDisplay[idx];
+          const showTranslation = !!display?.translated && display.translated !== display.original;
+          return (
+            <motion.div className="rank-row rank-modern" key={r.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22, delay: idx * 0.015 }}>
+              <b>{idx + 1}</b>
+              <span>
+                <VisualIcon id={categoryIconId(r.category)} label={cat.name} size="sm" /> {display?.original ?? displayStore(r)}
+                {showTranslation && <span className="rank-store-translation">{display!.translated}</span>}
+              </span>
+              <strong>{formatCurrencyAmount(r.total, r.currency || resolvedTripCurrency)}</strong>
+            </motion.div>
+          );
+        }) : <EmptyState title="未有紀錄" description="支出紀錄會按金額由高至低排列。" />}
       </DataPanel>
 
       <GlassCard className="stats-controls stats-glass" tone="control">
@@ -639,11 +683,12 @@ function buildBudgetStoryCards({
   itinerary,
   resolvedTripCurrency,
   toHkd,
-}: BudgetStoryInput) {
+  today,
+}: BudgetStoryInput & { today?: string }) {
   const safeBudget = Math.max(0, budget);
   const usedPercent = safeBudget > 0 ? Math.round(analysisTotal / safeBudget * 100) : 0;
   const remaining = Math.max(0, safeBudget - analysisTotal);
-  const remainingDays = remainingTripDays(tripDayCount, trend, itinerary);
+  const remainingDays = remainingTripDays(tripDayCount, trend, itinerary, today);
   const remainingPerDay = Math.round(remaining / remainingDays);
 
   const formatTrip = (amt: number) => `${resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}${fmt(amt)}`;
@@ -652,14 +697,14 @@ function buildBudgetStoryCards({
   return [
     {
       id: 'used-percent',
-      label: 'Used percent',
+      label: '已用比例',
       value: safeBudget > 0 ? `${usedPercent}%` : '未設定',
       detail: safeBudget <= 0 ? '先到 Settings 加預算' : usedPercent >= 100 ? `超出 ${formatTrip(analysisTotal - safeBudget)}` : `尚餘 ${formatTrip(remaining)} · ${formatHkd(remaining)}`,
       tone: usedPercent >= 100 ? 'danger' : usedPercent >= 80 ? 'warning' : 'ok',
     },
     {
       id: 'remaining-day',
-      label: 'Remaining / day',
+      label: '剩餘／每日',
       value: formatTrip(remainingPerDay),
       detail: `${remainingDays} 日口徑 · 等值 ${formatHkd(remainingPerDay)}`,
       tone: remainingPerDay <= 0 && safeBudget > 0 ? 'danger' : remainingPerDay < Math.max(1, budget / tripDayCount * 0.35) ? 'warning' : 'ok',
@@ -682,21 +727,21 @@ function buildSettlementActionPlan(
   return [
     {
       id: 'next-transfer',
-      label: 'Next action',
+      label: '下一步',
       value: firstTransfer ? `${firstTransfer.from.name} → ${firstTransfer.to.name}` : '已平衡',
       detail: firstTransfer ? `${formatTrip(firstTransfer.amount)} · ${formatHkd(firstTransfer.amount)}` : '暫時不用轉帳',
       tone: firstTransfer ? 'danger' : 'ok',
     },
     {
       id: 'transfer-total',
-      label: 'Total to settle',
+      label: '待結算',
       value: formatHkd(transferTotal),
       detail: `${settlement.transfers.length} 筆轉帳 · ${receiverCount || 0} 位收款人`,
       tone: transferTotal > 0 ? 'warning' : 'ok',
     },
     {
       id: 'private-repay',
-      label: 'Private repay',
+      label: '私人代付',
       value: formatTrip(crossPrivateTotal),
       detail: settlement.crossPrivate.length ? `${settlement.crossPrivate.length} 筆私人代付已納入結算` : '未有私人代付',
       tone: settlement.crossPrivate.length ? 'warning' : 'ok',
@@ -704,8 +749,7 @@ function buildSettlementActionPlan(
   ] as const;
 }
 
-function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>) {
-  const today = todayYmd();
+function remainingTripDays(tripDayCount: number, trend: Array<[string, number]>, itinerary: ReturnType<typeof getItinerary>, today = new Date().toISOString().slice(0, 10)) {
   const dates = (itinerary.length ? itinerary.map((day) => day.date) : trend.map(([date]) => date)).filter(Boolean).sort();
   if (!dates.length) return Math.max(1, tripDayCount);
   const elapsed = today < dates[0]

@@ -114,6 +114,12 @@ export async function drainSharedTripOutbox(
         } else {
           const receipt = await adapters.supabase.loadReceipt(job);
           if (receipt) {
+            // Private owner-only rows are not mirrored; finish as failed so the worker can cancel.
+            if (receipt.visibility === 'private') {
+              await adapters.supabase.finish(job.id, 'failed', 'Private receipts are not mirrored to Notion');
+              failed += 1;
+              continue;
+            }
             const photoThumb = receipt.photoThumb
               || await adapters.supabase.loadPhoto(job.receiptId).catch(() => null);
             await adapters.notion.upsert(notionState, {

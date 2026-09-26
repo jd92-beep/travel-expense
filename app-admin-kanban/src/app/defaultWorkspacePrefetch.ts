@@ -63,7 +63,8 @@ const DEFAULT_WORKSPACE_READS = [
 
 export async function prefetchDefaultWorkspaceReads(currentPathname: string) {
   const reads = DEFAULT_WORKSPACE_READS.filter(({ route }) => route !== currentPathname);
-  for (let index = 0; index < reads.length; index += 2) {
-    await Promise.allSettled(reads.slice(index, index + 2).map(({ prefetch }) => prefetch()));
-  }
+  // All reads fire at once instead of serialized two-at-a-time rounds — each prefetchQuery
+  // already catches and caches its own failure, and allSettled guarantees one rejected read
+  // can never block or fail the rest of the batch.
+  await Promise.allSettled(reads.map(({ prefetch }) => prefetch()));
 }

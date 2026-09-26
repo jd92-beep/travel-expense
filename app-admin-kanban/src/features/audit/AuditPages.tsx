@@ -33,9 +33,29 @@ function localInputToIso(value: string) {
 
 export function AuditPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "audit");
   const [defaultStartAt] = useState(defaultAuditStartAt);
   const allTime = searchParams.get("range") === "all";
+  const [draftAction, setDraftAction] = useState(searchParams.get("action") || "");
+  const [draftTargetId, setDraftTargetId] = useState(searchParams.get("targetId") || "");
+  const [draftTargetType, setDraftTargetType] = useState(searchParams.get("targetType") || "");
+  const [draftRequestId, setDraftRequestId] = useState(searchParams.get("requestId") || "");
+  const [draftStartAt, setDraftStartAt] = useState(() =>
+    isoToLocalInput(searchParams.get("startAt") || defaultStartAt)
+  );
+  const [draftEndAt, setDraftEndAt] = useState(() =>
+    isoToLocalInput(searchParams.get("endAt") || "")
+  );
+  useEffect(() => {
+    setDraftAction(searchParams.get("action") || "");
+    setDraftTargetId(searchParams.get("targetId") || "");
+    setDraftTargetType(searchParams.get("targetType") || "");
+    setDraftRequestId(searchParams.get("requestId") || "");
+    setDraftStartAt(allTime
+      ? ""
+      : isoToLocalInput(searchParams.get("startAt") || defaultStartAt));
+    setDraftEndAt(isoToLocalInput(searchParams.get("endAt") || ""));
+  }, [searchParams]);
   const values = queryFromSearchParams(searchParams, [
     "action",
     "targetId",
@@ -72,6 +92,24 @@ export function AuditPage() {
     if (key === "startAt" || key === "endAt") next.delete("range");
     setSearchParams(next);
   };
+  const applyTextFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("cursor");
+    const pairs: Array<[string, string]> = [
+      ["action", draftAction.trim()],
+      ["targetId", draftTargetId.trim()],
+      ["targetType", draftTargetType.trim()],
+      ["requestId", draftRequestId.trim()],
+      ["startAt", draftStartAt ? localInputToIso(draftStartAt) : ""],
+      ["endAt", draftEndAt ? localInputToIso(draftEndAt) : ""],
+    ];
+    for (const [key, value] of pairs) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    next.delete("range");
+    setSearchParams(next);
+  };
   const setRange = (range: "24h" | "all") => {
     const next = new URLSearchParams(searchParams);
     next.delete("cursor");
@@ -85,6 +123,14 @@ export function AuditPage() {
     }
     setSearchParams(next);
   };
+  const hasActiveFilters = Boolean(
+    searchParams.get("action") || searchParams.get("targetId") ||
+      searchParams.get("targetType") || searchParams.get("requestId") ||
+      searchParams.get("result") || searchParams.get("risk") ||
+      searchParams.get("endAt") || allTime ||
+      (searchParams.get("startAt") &&
+        searchParams.get("startAt") !== defaultStartAt),
+  );
   return (
     <div className="workspace-stack">
       <PageHeader
@@ -103,12 +149,18 @@ export function AuditPage() {
           </button>
         }
       />
-      <div className="filter-bar">
+      <form
+        className="filter-bar"
+        onSubmit={(event) => {
+          event.preventDefault();
+          applyTextFilters();
+        }}
+      >
         <input
           aria-label="Action"
           placeholder="Action"
-          value={searchParams.get("action") || ""}
-          onChange={(event) => setFilter("action", event.target.value)}
+          value={draftAction}
+          onChange={(event) => setDraftAction(event.target.value)}
         />
         <select
           aria-label="Result"
@@ -132,38 +184,51 @@ export function AuditPage() {
         <input
           aria-label="Target UUID"
           placeholder="Target UUID"
-          value={searchParams.get("targetId") || ""}
-          onChange={(event) => setFilter("targetId", event.target.value)}
+          value={draftTargetId}
+          onChange={(event) => setDraftTargetId(event.target.value)}
         />
         <input
           aria-label="Target type"
           placeholder="Target type"
-          value={searchParams.get("targetType") || ""}
-          onChange={(event) => setFilter("targetType", event.target.value)}
+          value={draftTargetType}
+          onChange={(event) => setDraftTargetType(event.target.value)}
         />
         <input
           aria-label="開始日期"
           type="datetime-local"
-          value={allTime ? "" : isoToLocalInput(searchParams.get("startAt") || defaultStartAt)}
-          onChange={(event) =>
-            setFilter("startAt", localInputToIso(event.target.value))}
+          value={allTime ? "" : draftStartAt}
+          onChange={(event) => setDraftStartAt(event.target.value)}
         />
         <input
           aria-label="結束日期"
           type="datetime-local"
-          value={isoToLocalInput(searchParams.get("endAt") || "")}
-          onChange={(event) =>
-            setFilter("endAt", localInputToIso(event.target.value))}
+          value={draftEndAt}
+          onChange={(event) => setDraftEndAt(event.target.value)}
         />
         <input
           aria-label="Request ID"
           placeholder="Request ID"
-          value={searchParams.get("requestId") || ""}
-          onChange={(event) => setFilter("requestId", event.target.value)}
+          value={draftRequestId}
+          onChange={(event) => setDraftRequestId(event.target.value)}
         />
-        <button className="button secondary" type="button" aria-pressed={!allTime} onClick={() => setRange("24h")}>24 小時</button>
-        <button className="button secondary" type="button" aria-pressed={allTime} onClick={() => setRange("all")}>全部時間</button>
-      </div>
+        <button className="button secondary" type="submit">套用文字篩選</button>
+        <div className="filter-range" role="radiogroup" aria-label="時間範圍">
+          <button
+            className="button secondary"
+            type="button"
+            role="radio"
+            aria-checked={!allTime}
+            onClick={() => setRange("24h")}
+          >24 小時</button>
+          <button
+            className="button secondary"
+            type="button"
+            role="radio"
+            aria-checked={allTime}
+            onClick={() => setRange("all")}
+          >全部時間</button>
+        </div>
+      </form>
       {query.isLoading
         ? <LoadingState label="載入審計紀錄" />
         : query.isError || !query.data
@@ -191,6 +256,7 @@ export function AuditPage() {
                     aria-label="審計資料表"
                   >
                     <table>
+                      <caption className="sr-only">審計事件清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">時間</th>
@@ -245,7 +311,22 @@ export function AuditPage() {
                     </table>
                   </div>
                 )
-                : <EmptyState title="沒有符合條件的審計事件" />}
+                : (
+                  <EmptyState
+                    title="沒有符合條件的審計事件"
+                    action={hasActiveFilters
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
+                  />
+                )}
             </section>
             <Pagination
               hasCursor={cursorPager.hasCursor}
@@ -253,6 +334,7 @@ export function AuditPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}

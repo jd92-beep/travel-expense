@@ -103,12 +103,15 @@ export function Reveal({
   children,
   className,
   delay = 0,
+  lowCost = false,
 }: {
   children: ReactNode;
   className?: string;
   delay?: number;
+  /** Skip blur filter — compositor-cheap for long lists (Timeline days). */
+  lowCost?: boolean;
 }) {
-  return <BlurFade className={className} delay={delay} inView>{children}</BlurFade>;
+  return <BlurFade className={className} delay={delay} blur={lowCost ? '0px' : '6px'} inView>{children}</BlurFade>;
 }
 
 export function ActionRippleButton({

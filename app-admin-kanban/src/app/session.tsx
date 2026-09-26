@@ -16,6 +16,15 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+// Dynamic import: session.tsx is on the entry (login) path, so it must not statically pull
+// @tanstack/react-query into the entry chunk — the cached-query drop happens on the same
+// dynamic chunk the protected branch already loads.
+function dropCachedAdminQueries() {
+  void import("./queryClient").then((m) => {
+    m.queryClient.removeQueries({ queryKey: ["admin"] });
+  });
+}
+
 export function AdminSessionProvider(
   { children }: { children: React.ReactNode },
 ) {
@@ -53,6 +62,7 @@ export function AdminSessionProvider(
 
   useEffect(() => {
     const unauthorized = () => {
+      dropCachedAdminQueries();
       setSessionError(null);
       setSession(null);
     };
@@ -73,6 +83,7 @@ export function AdminSessionProvider(
       try {
         await logoutAdmin();
         clearSession();
+        dropCachedAdminQueries();
         setSessionError(null);
         setSession(null);
         setLogoutError(null);

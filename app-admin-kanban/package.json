@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-admin-kanban",
   "private": true,
-  "version": "1.3.4",
+  "version": "1.4.1",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -12,7 +12,7 @@
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
     "security:scan": "node scripts/security-scan.mjs",
     "test:unit": "node --test tests/server/health.test.js tests/server/readiness.test.js tests/server/cookies.test.js tests/server/crypto.test.js tests/server/passkeys.test.js tests/server/session.test.js tests/server/webauthn.test.js tests/server/vercel-function-count.test.js tests/server/vercel-protected-request.test.js tests/server/deploy-production.test.js",
-    "test:contract": "node --test tests/server/edge.test.js tests/server/gateway-routes.test.js tests/admin-routes.test.js tests/admin-bff-integration.test.js",
+    "test:contract": "node --test tests/server/edge.test.js tests/server/gateway-routes.test.js tests/admin-routes.test.js tests/admin-bff-integration.test.js && node ../scripts/provider-catalog-contract.test.mjs",
     "smoke": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line",
     "smoke:mobile": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep mobile",
     "smoke:a11y": "playwright test --config playwright.config.cjs --workers=1 --browser=chromium --reporter=line --grep axe",
@@ -25,9 +25,7 @@
     "@simplewebauthn/server": "^13.3.0",
     "@tanstack/react-query": "^5.101.2",
     "@vitejs/plugin-react": "^6.0.1",
-    "augmented-ui": "^2.0.0",
     "lucide-react": "^1.14.0",
-    "motion": "^12.42.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router": "^8.3.0",

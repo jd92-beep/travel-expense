@@ -36,13 +36,17 @@ import {
   formatMoney,
   FreshnessBanner,
   adminMetaAllowsMutation,
+  adminMutationDisabledReason,
   LoadingState,
   PageHeader,
   Pagination,
   StatusBadge,
   useCursorPagination,
+  useOnline,
   WorkspaceNav,
+  Breadcrumbs,
 } from "../../../components/primitives/ConsolePrimitives";
+import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
   { to: "/data/accounts", label: "帳戶" },
@@ -52,7 +56,7 @@ const DATA_NAV = [
 
 export function TripsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "trips");
   const queryText = searchParams.get("q") || "";
   const [draft, setDraft] = useState(queryText);
   useEffect(() => setDraft(queryText), [queryText]);
@@ -244,6 +248,17 @@ export function TripsPage() {
                     title={searchParams.toString()
                       ? "沒有符合篩選條件的行程"
                       : "目前沒有行程"}
+                    action={searchParams.toString()
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
                   />
                 )}
             </section>
@@ -253,6 +268,7 @@ export function TripsPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -379,6 +395,8 @@ export function TripDetailPage() {
   const [memberEmail, setMemberEmail] = useState("");
   const [memberRole, setMemberRole] = useState("editor");
   const [memberRoles, setMemberRoles] = useState<Record<string, string>>({});
+  const online = useOnline();
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "trip", tripId],
     queryFn: ({ signal }) =>
@@ -417,13 +435,25 @@ export function TripDetailPage() {
   }
   const trip = query.data.data;
   const auditEvents: Array<AuditRow | TripAuditRow> = auditQuery.data?.data.items || [];
-  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online)
+    && writePolicy.canMutateCanonical;
+  const mutateReason = adminMutationDisabledReason({
+    meta: query.data.meta,
+    fetching: query.isFetching,
+    online,
+    canWrite: writePolicy.canMutateCanonical,
+    policyLabel: writePolicy.policyLabel,
+  });
   const patch = draft ? tripAmendPatch(trip.overview, draft) : {};
   return (
     <div className="workspace-stack">
-      <Link className="back-link" to="/data/trips">
-        <ArrowLeft size={16} />返回行程
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: "資料", to: "/data/accounts" },
+          { label: "行程", to: "/data/trips" },
+          { label: trip.overview.name },
+        ]}
+      />
       <PageHeader
         title={trip.overview.name}
         description={`${trip.overview.destination_summary || "未有目的地"} · ${
@@ -435,6 +465,7 @@ export function TripDetailPage() {
               className="button secondary"
               type="button"
               disabled={!canMutate}
+              data-disabled-reason={mutateReason}
               onClick={() => {
                 setDraft(tripDraft(trip.overview));
                 setEditing((value) => !value);
@@ -558,6 +589,11 @@ export function TripDetailPage() {
                 className="button primary"
                 type="submit"
                 disabled={!canMutate || Object.keys(patch).length === 0}
+                data-disabled-reason={!canMutate
+                  ? mutateReason
+                  : Object.keys(patch).length === 0
+                  ? "沒有欄位變更"
+                  : undefined}
               >
                 <Save size={16} />預覽修改
               </button>
@@ -626,7 +662,12 @@ export function TripDetailPage() {
                 <option value="viewer">Viewer</option>
               </select>
             </label>
-            <button className="button secondary" type="submit" disabled={!canMutate}>
+            <button
+              className="button secondary"
+              type="submit"
+              disabled={!canMutate}
+              data-disabled-reason={mutateReason}
+            >
               <UserPlus size={16} />加入
             </button>
           </form>
@@ -637,6 +678,7 @@ export function TripDetailPage() {
             aria-label="行程成員資料表"
           >
             <table>
+              <caption className="sr-only">行程成員清單</caption>
               <thead>
                 <tr>
                   <th scope="col">身份</th>
@@ -682,6 +724,11 @@ export function TripDetailPage() {
                             title={member.status === "removed" ? "重新啟用成員" : "套用角色"}
                             aria-label={member.status === "removed" ? "重新啟用成員" : "套用角色"}
                             disabled={!canMutate || (member.status === "active" && selectedRole === member.role)}
+                            data-disabled-reason={!canMutate
+                              ? mutateReason
+                              : member.status === "active" && selectedRole === member.role
+                              ? "角色未有變更"
+                              : undefined}
                             onClick={() =>
                               operationFlow.begin({
                                 action: "member_role",
@@ -697,6 +744,11 @@ export function TripDetailPage() {
                             title="移除成員"
                             aria-label="移除成員"
                             disabled={!canMutate || member.status === "removed"}
+                            data-disabled-reason={!canMutate
+                              ? mutateReason
+                              : member.status === "removed"
+                              ? "成員已移除"
+                              : undefined}
                             onClick={() =>
                               operationFlow.begin({
                                 action: "member_remove",
@@ -785,6 +837,7 @@ export function TripDetailPage() {
               aria-label="行程最近收據資料表"
             >
               <table>
+                <caption className="sr-only">行程最近收據清單</caption>
                 <thead>
                   <tr>
                     <th scope="col">收據</th>
@@ -847,6 +900,7 @@ export function TripDetailPage() {
                 aria-label="行程邀請資料表"
               >
                 <table>
+                  <caption className="sr-only">行程邀請清單</caption>
                   <thead>
                     <tr>
                       <th scope="col">身份</th>
@@ -972,6 +1026,8 @@ export function ItineraryPage() {
   const [draftEnd, setDraftEnd] = useState("");
   const [draftDays, setDraftDays] = useState<ItineraryDay[]>([]);
   const [explicitlyRemovedDates, setExplicitlyRemovedDates] = useState<string[]>([]);
+  const online = useOnline();
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "trip", tripId, "itinerary"],
     queryFn: ({ signal }) =>
@@ -1010,7 +1066,15 @@ export function ItineraryPage() {
     );
   }
   const itinerary = query.data.data;
-  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching);
+  const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online)
+    && writePolicy.canMutateCanonical;
+  const mutateReason = adminMutationDisabledReason({
+    meta: query.data.meta,
+    fetching: query.isFetching,
+    online,
+    canWrite: writePolicy.canMutateCanonical,
+    policyLabel: writePolicy.policyLabel,
+  });
   const rangeDates = inclusiveCalendarDates(draftStart, draftEnd);
   const visibleDraftDays = daysForRange(draftStart, draftEnd, draftDays);
   const rangeDateSet = new Set(rangeDates);
@@ -1024,6 +1088,16 @@ export function ItineraryPage() {
     JSON.stringify(normalizedDraft) !== JSON.stringify(normalizeItineraryDays(itinerary.days));
   const canRestore = canMutate && Boolean(versionsQuery.data) &&
     adminMetaAllowsMutation(versionsQuery.data?.meta || query.data.meta, versionsQuery.isFetching);
+  const restoreReason = canRestore
+    ? undefined
+    : !versionsQuery.data
+    ? "版本資料載入中"
+    : mutateReason || adminMutationDisabledReason({
+      meta: versionsQuery.data.meta,
+      fetching: versionsQuery.isFetching,
+      online: true,
+      canWrite: true,
+    });
 
   function updateDraftDay(date: string, update: (day: ItineraryDay) => ItineraryDay) {
     setDraftDays((current) => {
@@ -1049,6 +1123,7 @@ export function ItineraryPage() {
             className="button secondary"
             type="button"
             disabled={!canMutate}
+            data-disabled-reason={mutateReason}
             onClick={() => {
               setDraftStart(itinerary.startDate);
               setDraftEnd(itinerary.endDate);
@@ -1301,6 +1376,13 @@ export function ItineraryPage() {
                   !canMutate || !changed || rangeDates.length === 0 ||
                   blockedDays.length > 0 || invalidSpot
                 }
+                data-disabled-reason={!canMutate
+                  ? mutateReason
+                  : !changed
+                  ? "沒有變更"
+                  : rangeDates.length === 0 || blockedDays.length > 0 || invalidSpot
+                  ? "請先解決上方警告"
+                  : undefined}
               >
                 <Save size={16} />預覽完整行程
               </button>
@@ -1440,6 +1522,7 @@ export function ItineraryPage() {
                             title={`還原 v${version.version}`}
                             aria-label={`還原行程版本 ${version.version}`}
                             disabled={!canRestore}
+                            data-disabled-reason={restoreReason}
                             onClick={() =>
                               operationFlow.begin({
                                 action: "itinerary_restore",

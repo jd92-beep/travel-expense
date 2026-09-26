@@ -225,6 +225,8 @@ export function useSyncEngine(
         if (candidate.id !== item.entityId) return candidate;
         const queueUpdatedAt = Number(item.payload?.updatedAt || trip.updatedAt || trip.createdAt || 0);
         const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || Date.now());
+        // Mid-flight trip edit: keep local newer content; only adopt cloud identity.
+        // Next local edit re-queues a fresh payload (same contract as before).
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
@@ -283,10 +285,12 @@ export function useSyncEngine(
           const { publicUrl, storagePath } = await uploadReceiptPhoto(supabaseSession, receiptUuid, receipt.photoThumb, 'image/jpeg', receipt.supabasePhotoPath);
           synced = { ...synced, photoUrl: publicUrl, supabasePhotoPath: storagePath, _photoSyncedToSupabase: true, _photoSyncAttempts: 0 };
         } catch (photoErr) {
-          const attempts = item.attempts + 1;
+          // Photo failures use their own attempt budget so a couple of receipt-push
+          // retries do not permanently mark the photo as terminal.
+          const attempts = Number(receipt._photoSyncAttempts || 0) + 1;
           synced = { ...synced, _photoSyncedToSupabase: false, _photoSyncAttempts: attempts };
           photoError = redactError(photoErr);
-          console.warn(`[SyncEngine] Supabase photo upload failed (attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
+          console.warn(`[SyncEngine] Supabase photo upload failed (photo attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
       if (hasNotionSync && !sharedLedger) {
@@ -581,11 +585,16 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
-      const cloudPullAuthoritative = cloudPullOk;
+      // An empty trip list from a successful pull is ambiguous (cold start / RLS glitch).
+      // Only treat the pull as authoritative when the server actually returned trips.
+      const cloudPullAuthoritative = cloudPullOk && (supabaseData.trips?.length || 0) > 0;
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
       let computedPending = 0;
+      // One-sync-cycle banner when this pull purged trips (membership revoked / trip deleted),
+      // so the removal is visible instead of silently dropping shared records.
+      let purgeNotice = '';
       if (aliveRef.current) {
         setState((current) => {
           const mergedBase = mergePulledData(current, receipts, trips, supabaseData.tombstones);
@@ -688,6 +697,7 @@ export function useSyncEngine(
                   && !(item.payload?.tripId && purgedTripIds.has(item.payload.tripId))),
               };
               console.warn('[SyncEngine] purged revoked/deleted trips from local cache:', [...purgedTripIds]);
+              purgeNotice = `你已被移出或旅程已刪除（${purgedTripIds.size} 個），相關共享紀錄已從本機移除。`;
             }
           }
           // Server truth beats the local flag: if this pull shows no storage photo for a
@@ -800,9 +810,9 @@ export function useSyncEngine(
             syncQueue: freshQueue,
             // Transient-only pull failures don't earn the red banner: stay 'queued'/'idle' and let
             // the retry loop heal it. lastSyncedAt already isn't advanced on any error (nextSyncedAt).
-            globalSyncStatus: hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced')),
+            globalSyncStatus: purgeNotice ? 'error' : (hardPullError || failedItem ? 'error' : (computedPending ? 'queued' : (pullErrors.length ? 'idle' : 'synced'))),
             lastSyncedAt: nextSyncedAt,
-            syncError: hardPullError ? pullErrors.join(' | ') : failedItem?.error || '',
+            syncError: purgeNotice || (hardPullError ? pullErrors.join(' | ') : failedItem?.error || ''),
           };
         });
       }

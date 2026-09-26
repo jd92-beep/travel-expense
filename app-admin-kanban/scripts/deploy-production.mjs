@@ -234,7 +234,21 @@ try {
   ], archiveAppDir), 'Vercel deployment');
   const candidateUrl = deploymentUrlFrom(deployment);
 
-  await verifyCandidate(candidateUrl, gitSha, packageJson.version, 'candidate');
+  // Edge isolates can briefly keep the previous ADMIN_*_SHA after a secret update.
+  // Retry candidate readiness a few times before failing the promotion.
+  let candidateVerified = null;
+  let lastCandidateError = null;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    try {
+      candidateVerified = await verifyCandidate(candidateUrl, gitSha, packageJson.version, 'candidate');
+      break;
+    } catch (error) {
+      lastCandidateError = error;
+      console.error(`candidate readiness attempt ${attempt}/5 failed: ${error?.message || error}`);
+      if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 8000));
+    }
+  }
+  if (!candidateVerified) throw lastCandidateError;
   run('npx', [...vercelArgs, 'promote', candidateUrl, '--yes'], archiveAppDir);
   const verified = await retryPromotedReadiness(
     () => verifyCandidate(productionUrl, gitSha, packageJson.version, 'promoted'),

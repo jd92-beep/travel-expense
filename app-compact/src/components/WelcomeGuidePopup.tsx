@@ -82,7 +82,7 @@ const stepperBtnStyle = (disabled: boolean): CSSProperties => ({
 
 function makeGuidePersons(count: number, current: Array<{ name: string; ratio: string }> = []) {
   return Array.from({ length: Math.max(1, Math.min(8, count)) }, (_, idx) => ({
-    name: current[idx]?.name || `User ${idx + 1}`,
+    name: current[idx]?.name || (idx === 0 ? '我' : `旅伴 ${idx + 1}`),
     ratio: current[idx]?.ratio || '1',
   }));
 }
@@ -99,12 +99,18 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
   const modalRef = useRef<HTMLDivElement>(null);
   const prevFocusRef = useRef<HTMLElement | null>(null);
   const onDismissRef = useRef(onDismiss);
+  const hasExistingTripsRef = useRef(hasExistingTrips);
+  hasExistingTripsRef.current = hasExistingTrips;
   onDismissRef.current = onDismiss;
   useEffect(() => {
     prevFocusRef.current = document.activeElement as HTMLElement;
     modalRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onDismissRef.current(); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!hasExistingTripsRef.current && !window.confirm('未建立旅程就離開？之後可以喺設定重新開啟指南。')) return;
+        onDismissRef.current();
+      }
       if (e.key === 'Tab' && modalRef.current) {
         const focusable = modalRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
         if (!focusable.length) return;
@@ -135,7 +141,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
     return makeGuidePersons(1);
   });
   const [tripStyle, setTripStyle] = useState<(typeof TRIP_STYLE_OPTIONS)[number]['value']>('balanced');
-  const [homeCity, setHomeCity] = useState('Hong Kong');
+  const [homeCity, setHomeCity] = useState('');
   const [weatherPreference, setWeatherPreference] = useState<(typeof WEATHER_PREFERENCE_OPTIONS)[number]['value']>('balanced');
   const [sharingInvites, setSharingInvites] = useState<TripSharingInviteDraft[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
@@ -283,7 +289,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
         ...trip.intelligence,
         primaryCurrency: currency,
         tripStyle,
-        homeCity: homeCity.trim() || 'Hong Kong',
+        homeCity: homeCity.trim() || '香港',
         weatherPreference,
         source,
         updatedAt: now,
@@ -322,7 +328,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
         intelligence: {
           primaryCurrency: currency,
           tripStyle,
-          homeCity: homeCity.trim() || 'Hong Kong',
+          homeCity: homeCity.trim() || '香港',
           weatherPreference,
           source: 'manual',
         },
@@ -596,7 +602,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
                 value={homeCity}
                 onChange={(e) => setHomeCity(e.target.value)}
                 type="text"
-                placeholder="Hong Kong"
+                placeholder="你的城市"
                 style={{ padding: '9px 10px', border: '1px solid rgba(139, 115, 85, 0.25)', borderRadius: '10px', fontSize: '13px', outline: 'none', background: 'white' }}
               />
             </label>
@@ -873,7 +879,10 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
         {/* Actions / Dismiss Button */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(139, 115, 85, 0.08)' }}>
           <button
-            onClick={onDismiss}
+            onClick={() => {
+              if (!hasExistingTrips && !window.confirm('未建立旅程就離開？之後可以喺設定重新開啟指南。')) return;
+              onDismiss();
+            }}
             type="button"
             style={{
               border: 0,

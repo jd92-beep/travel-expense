@@ -29,6 +29,7 @@ import { clearIndexedState } from './storage/indexedDb';
 import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
 import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
+import { clearTrustedDevice } from './security/trustedDevice';
 import { clearThemeHint, TripThemeProvider } from './theme/tripTheme';
 
 // Trigger Vercel build
@@ -103,7 +104,7 @@ export function App() {
   const isCloudSyncActive = hasSupabaseSession(effectiveSupabaseSession);
   const userEmail = effectiveSupabaseSession?.user?.email || null;
   const storageScope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : 'local';
-  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
+  const { state, setState, updateState, upsertReceipt, deleteReceipt, resetLocal, flushPersist, isStorageReady } = useAppState(isCloudSyncActive, storageScope, userEmail);
   // Stable ref so the mount-once native deep-link effect doesn't re-run when updateState's identity
   // changes on login (storageScope flip) — re-running would re-drain the single-use PKCE launch URL.
   const updateStateRef = useRef(updateState);
@@ -370,6 +371,7 @@ export function App() {
     await clearIndexedState(scope);
     clearCredentialSession();
     await clearDeviceTrust();
+    await clearTrustedDevice();
     clearThemeHint();
   };
 
@@ -386,12 +388,16 @@ export function App() {
     }
     inviteInFlight.current.add(token);
     acceptSupabaseTripInvite(effectiveSupabaseSession, token)
-      .then(async () => {
+      .then(async (accepted) => {
         try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
         // Mark accepted only on success — a failed attempt must stay retryable.
         setAcceptedInviteToken(token);
         window.history.replaceState(null, '', '#settings');
         setTab('settings');
+        // Activate the accepted trip before pull so first visit shows the right people/itinerary.
+        if (accepted?.tripId) {
+          updateState({ activeTripId: accepted.tripId });
+        }
         await pull();
       })
       .catch((inviteError) => {
@@ -588,7 +594,7 @@ export function App() {
     }
   }, [supabaseAuth.session, state.personalNotionConnected, state.notionDb, state.autoSync, userEmail, updateState]);
 
-  const changeTab = (next: TabId) => {
+  const changeTab = useCallback((next: TabId) => {
     const normalized = safeTabId(next);
     const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
     const nextIndex = TAB_MANIFEST.findIndex((t) => t.id === normalized);
@@ -601,7 +607,7 @@ export function App() {
     if (typeof window !== 'undefined' && window.location.hash !== hash) {
       window.history.pushState(null, '', hash);
     }
-  };
+  }, [safeTab, updateState]);
 
   const editingRef = useRef(editing);
   editingRef.current = editing;
@@ -699,9 +705,13 @@ export function App() {
     setState((prev) => mergePulledData(prev, receipts, trips));
   };
 
-  const handleSyncRetry = () => {
+  const handleSyncRetry = useCallback(() => {
     syncEngine.retryFailedItems();
-  };
+  }, [syncEngine]);
+
+  const handleOpenNewTripWizard = useCallback(() => {
+    setIsNewTripWizardOpen(true);
+  }, []);
 
   const fxTier = useEffectsTier();
 
@@ -752,7 +762,7 @@ export function App() {
           </span>
         </div>
       )}
-      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={() => setIsNewTripWizardOpen(true)}>
+      <Shell active={safeTab} onTab={changeTab} syncState={syncEngine.engineState} onRetryFailed={handleSyncRetry} state={state} setState={setState} updateState={updateState} onPull={syncEngine.pull} onOpenNewTripWizard={handleOpenNewTripWizard}>
         {(() => {
               // Single source of truth for tab content — previously duplicated verbatim in the
               // animated and non-animated branches, which invited drift.
@@ -786,6 +796,7 @@ export function App() {
                         upsertReceipt(next);
                       }}
                       onPull={syncEngine.pull}
+                      onFlushPersist={flushPersist}
                       cloudSyncAvailable={isCloudSyncActive}
                     />
                   )}
@@ -833,6 +844,7 @@ export function App() {
         <ReceiptEditor
           state={state}
           receipt={editing}
+          currentUserId={effectiveSupabaseSession?.user?.id || ''}
           onCancel={() => setEditing(undefined)}
           onSave={(receipt) => {
             const stamped = stampReceiptForTrip(state, receipt);
@@ -918,9 +930,15 @@ export function App() {
   return (
     <TripThemeProvider state={state} ready={isStorageReady}><AuthGate
       credentialBrokerUrl={state.credentialBrokerUrl}
-      onBrokerSession={(session) => updateState(session)}
+      onBrokerSession={(session) => updateState({
+        credentialSession: session.credentialSession,
+        credentialSessionExpiresAt: session.credentialSessionExpiresAt,
+      })}
       onUnlocked={() => {
-        changeTab('dashboard');
+        // Preserve deep links; only force dashboard when no tab hash is present.
+        if (typeof window === 'undefined' || !window.location.hash || window.location.hash === '#') {
+          changeTab('dashboard');
+        }
       }}
       onOfflineMode={(message) => updateState({ syncError: message })}
     >

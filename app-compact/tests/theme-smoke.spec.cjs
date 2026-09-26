@@ -2,6 +2,12 @@ const { test, expect } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
+async function openThemeAccordion(page) {
+  const trigger = page.locator('[aria-controls="settings-theme-panel"]');
+  await expect(trigger).toBeVisible({ timeout: 15_000 });
+  if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.click();
+}
+
 const exactThemeTokens = {
   japan_washi: {
     scheme: 'light', canvas: '#F5F0E8', canvasMid: '#F0EBDF', canvasEnd: '#E8E2D4', surface: '#FAF7F0', card: '#FFFDF7', text: '#2A2119', muted: '#7A7068', focus: '#1E4D6B', accent: '#C23B5E', onAccent: '#FFFFFF', info: '#1E4D6B', success: '#2D6E48', warning: '#7A5800', danger: '#A82C4C', chart1: '#1E4D6B', chart2: '#C23B5E', chart3: '#D4A843', chart4: '#2D6E48',
@@ -17,6 +23,27 @@ const exactThemeTokens = {
   },
   global_journal: {
     scheme: 'light', canvas: '#F1F0E9', canvasMid: '#E7EAE4', canvasEnd: '#DCE5DE', surface: '#F9F8F1', card: '#FFFDF8', text: '#28251F', muted: '#656D67', focus: '#345C7C', accent: '#BF5048', onAccent: '#FFFFFF', info: '#345C7C', success: '#3F6A4B', warning: '#725600', danger: '#9F4038', chart1: '#345C7C', chart2: '#C4584E', chart3: '#D1A54D', chart4: '#517A5B',
+  },
+  tokyo_neon: {
+    scheme: 'dark', canvas: '#0B0416', canvasMid: '#1A0B2E', canvasEnd: '#12061F', surface: '#1E0F33', card: '#2A1450', text: '#F5E9FF', muted: '#C4AEE0', focus: '#00F0FF', accent: '#FF2E97', onAccent: '#0B0416', info: '#7DF9FF', success: '#7CFF6B', warning: '#FFE66D', danger: '#FF6B9D', chart1: '#00F0FF', chart2: '#FF2E97', chart3: '#FFE66D', chart4: '#7CFF6B',
+  },
+  tropical_candy: {
+    scheme: 'light', canvas: '#FFF0F8', canvasMid: '#E8F7FF', canvasEnd: '#FFF8D6', surface: '#FFFFFF', card: '#FFFFFF', text: '#2B1B4A', muted: '#6B5B8A', focus: '#0088B8', accent: '#C2185B', onAccent: '#FFFFFF', info: '#005F8A', success: '#0F7A4F', warning: '#8A5A00', danger: '#C2185B', chart1: '#FF3D8A', chart2: '#00C2FF', chart3: '#FFD93D', chart4: '#3DDC97',
+  },
+  uk_london: {
+    scheme: 'light', canvas: '#E8EEF7', canvasMid: '#DCE6F2', canvasEnd: '#CFD8E8', surface: '#FFFFFF', card: '#FFFFFF', text: '#0E1B33', muted: '#5A6A8A', focus: '#0E2A6B', accent: '#C8102E', onAccent: '#FFFFFF', info: '#0E2A6B', success: '#1B7A5A', warning: '#8A5A00', danger: '#A50E26', chart1: '#0E2A6B', chart2: '#C8102E', chart3: '#C9A227', chart4: '#1B7A5A',
+  },
+  nordic_aurora: {
+    scheme: 'dark', canvas: '#0A1A2E', canvasMid: '#0D2438', canvasEnd: '#071525', surface: '#132B40', card: '#1A3548', text: '#EAF6FF', muted: '#8FAFC8', focus: '#4CC9F0', accent: '#3DDC97', onAccent: '#04101C', info: '#7DD3FC', success: '#86EFAC', warning: '#FDE68A', danger: '#FDA4D0', chart1: '#3DDC97', chart2: '#4CC9F0', chart3: '#B388FF', chart4: '#F72585',
+  },
+  mexico_fiesta: {
+    scheme: 'light', canvas: '#FFE8D6', canvasMid: '#FFD6C0', canvasEnd: '#F7C59F', surface: '#FFF8F0', card: '#FFFDF7', text: '#4A1520', muted: '#8A5A62', focus: '#C41E3A', accent: '#007A4D', onAccent: '#FFFFFF', info: '#1A5B9E', success: '#0F7A4F', warning: '#8A5A00', danger: '#A50E26', chart1: '#E4002B', chart2: '#00A86B', chart3: '#F2A900', chart4: '#6B2D8B',
+  },
+  india_holi: {
+    scheme: 'light', canvas: '#FFF3E6', canvasMid: '#FFE0F0', canvasEnd: '#E8DFFF', surface: '#FFFCF5', card: '#FFFFFF', text: '#2D1B4E', muted: '#6B5A8A', focus: '#5B21B6', accent: '#BF360C', onAccent: '#FFFFFF', info: '#5B21B6', success: '#00695C', warning: '#92400E', danger: '#AD1457', chart1: '#E91E63', chart2: '#7C4DFF', chart3: '#FF6F00', chart4: '#00BFA5',
+  },
+  brazil_carnival: {
+    scheme: 'dark', canvas: '#06281E', canvasMid: '#0A3D2A', canvasEnd: '#041C16', surface: '#0E3328', card: '#145C42', text: '#F0FFF4', muted: '#8FBFA8', focus: '#FFD100', accent: '#FFD100', onAccent: '#06281E', info: '#BAE6FD', success: '#86EFAC', warning: '#FDE68A', danger: '#FFD0D8', chart1: '#00A859', chart2: '#FFD100', chart3: '#0057B8', chart4: '#FD0E56',
   },
 };
 
@@ -207,7 +234,7 @@ test('theme selector previews a manual Taiwan world while auto follows the activ
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
-
+  await openThemeAccordion(page);
   await expect(page.getByRole('radiogroup', { name: 'App theme' })).toBeVisible({ timeout: 15_000 });
   const rootAuto = await page.evaluate(() => ({
     tripTheme: document.documentElement.dataset.tripTheme,
@@ -464,8 +491,9 @@ test('mobile dock reflows at 200% text without overlapping navigation labels', a
 test('theme catalog exposes six choices, semantic roles, and accessible color schemes', async ({ page }) => {
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await openThemeAccordion(page);
   const group = page.getByRole('radiogroup', { name: 'App theme' });
-  await expect(group.getByRole('radio')).toHaveCount(6, { timeout: 15_000 });
+  await expect(group.getByRole('radio')).toHaveCount(13, { timeout: 15_000 });
   await page.getByRole('button', { name: /旅伴 \/ 分帳比例/ }).click();
   const primaryAction = page.getByRole('button', { name: '新增', exact: true });
   await expect(primaryAction).toBeVisible();
@@ -475,6 +503,13 @@ test('theme catalog exposes six choices, semantic roles, and accessible color sc
     ['台灣夜市', 'taiwan_nightmarket', true],
     ['歐洲鐵路', 'europe_rail', false],
     ['全球旅誌', 'global_journal', false],
+    ['東京霓虹', 'tokyo_neon', true],
+    ['熱帶糖果', 'tropical_candy', false],
+    ['英國倫敦', 'uk_london', false],
+    ['北歐極光', 'nordic_aurora', true],
+    ['墨西哥嘉年華', 'mexico_fiesta', false],
+    ['印度灑紅', 'india_holi', false],
+    ['巴西嘉年華', 'brazil_carnival', true],
   ];
   for (const [label, key, dark] of themes) {
     await group.getByRole('radio', { name: label }).check();

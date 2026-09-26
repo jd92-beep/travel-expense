@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { AlertTriangle, CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
 import { Reveal, Toast } from '../components/ui';
-import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { activeTrip, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import { hasCredentialBrokerSession } from '../lib/credentialBroker';
 import { hasDirectNotionToken } from '../lib/notion';
 import { CATEGORIES } from '../lib/constants';
@@ -35,11 +35,6 @@ function historyDateLabel(date: string): string {
   return `${parsed.getFullYear()}年${parsed.getMonth() + 1}月${parsed.getDate()}日（${weekday}）`;
 }
 
-function receiptHasSyncConflict(receipt: Receipt, state: AppState): boolean {
-  if (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') return true;
-  return (state.syncQueue || []).some((item) => isFailedQueueItem(item) && queueItemMatchesReceipt(item, receipt));
-}
-
 function isFailedQueueItem(item: SyncQueueItem): boolean {
   return item.status === 'error' || item.status === 'failed';
 }
@@ -51,8 +46,39 @@ function queueItemMatchesReceipt(item: SyncQueueItem, receipt: Receipt): boolean
     || (!!receipt.notionPageId && item.payload?.notionPageId === receipt.notionPageId);
 }
 
-function findReceiptConflictQueueItem(receipt: Receipt, state: AppState): SyncQueueItem | undefined {
-  return (state.syncQueue || []).find((item) => item.type === 'receipt' && isFailedQueueItem(item) && queueItemMatchesReceipt(item, receipt));
+/** Identity-keyed index of failed queue items — built once per render, not per row. */
+type FailedQueueIndex = Map<string, SyncQueueItem>;
+
+function buildFailedQueueIndex(syncQueue: SyncQueueItem[] | undefined): FailedQueueIndex {
+  const index: FailedQueueIndex = new Map();
+  for (const item of syncQueue || []) {
+    if (!isFailedQueueItem(item)) continue;
+    if (item.entityId) index.set(item.entityId, item);
+    const sourceId = item.payload?.sourceId;
+    if (sourceId) index.set(`src:${sourceId}`, item);
+    const supabaseId = item.payload?.supabaseId;
+    if (supabaseId) index.set(`sb:${supabaseId}`, item);
+    const notionPageId = item.payload?.notionPageId;
+    if (notionPageId) index.set(`np:${notionPageId}`, item);
+  }
+  return index;
+}
+
+function lookupFailedQueueItem(index: FailedQueueIndex, receipt: Receipt): SyncQueueItem | undefined {
+  return index.get(receipt.id)
+    || (receipt.sourceId ? index.get(`src:${receipt.sourceId}`) : undefined)
+    || (receipt.supabaseId ? index.get(`sb:${receipt.supabaseId}`) : undefined)
+    || (receipt.notionPageId ? index.get(`np:${receipt.notionPageId}`) : undefined);
+}
+
+function receiptHasSyncConflict(receipt: Receipt, failedIndex: FailedQueueIndex): boolean {
+  if (receipt.syncStatus === 'error' || receipt.syncStatus === 'failed') return true;
+  return !!lookupFailedQueueItem(failedIndex, receipt);
+}
+
+function findReceiptConflictQueueItem(receipt: Receipt, failedIndex: FailedQueueIndex): SyncQueueItem | undefined {
+  const item = lookupFailedQueueItem(failedIndex, receipt);
+  return item && item.type === 'receipt' ? item : undefined;
 }
 
 function buildSafeReceiptPayload(receipt: Receipt, updatedAt: number): SyncQueueItem['payload'] {
@@ -73,17 +99,17 @@ function isVersionConflictError(message?: string): boolean {
   return !!message && /version conflict|conflict|40001/i.test(message);
 }
 
-function receiptHasTrueConflict(receipt: Receipt, state: AppState): boolean {
+function receiptHasTrueConflict(receipt: Receipt, failedIndex: FailedQueueIndex): boolean {
   if (receipt.ledgerSyncStatus === 'conflict') return true;
-  const queueItem = findReceiptConflictQueueItem(receipt, state);
+  const queueItem = findReceiptConflictQueueItem(receipt, failedIndex);
   return !!queueItem && isVersionConflictError(queueItem.error);
 }
 
-function buildReceiptConflictItems(receipts: Receipt[], state: AppState): ReceiptConflictItem[] {
+function buildReceiptConflictItems(receipts: Receipt[], failedIndex: FailedQueueIndex): ReceiptConflictItem[] {
   return receipts
-    .filter((receipt) => receiptHasTrueConflict(receipt, state))
+    .filter((receipt) => receiptHasTrueConflict(receipt, failedIndex))
     .map((receipt) => {
-      const queueItem = findReceiptConflictQueueItem(receipt, state);
+      const queueItem = findReceiptConflictQueueItem(receipt, failedIndex);
       return {
         receipt,
         queueItem,
@@ -95,7 +121,7 @@ function buildReceiptConflictItems(receipts: Receipt[], state: AppState): Receip
 
 function receiptHealthMarkers(
   receipt: Receipt,
-  state: AppState,
+  failedIndex: FailedQueueIndex,
   sourceIdCounts: Record<string, number>,
   photoSrc?: string,
 ): ReceiptHealthMarker[] {
@@ -106,8 +132,8 @@ function receiptHealthMarkers(
   if (receiptHasLargePhoto(receipt)) markers.push({ key: 'photo-large', label: 'photo large', tone: 'warning' });
   if (receiptPhotoNeedsSync(receipt)) markers.push({ key: 'photo-unsynced', label: 'photo unsynced', tone: 'info' });
   if (receipt.ledgerSyncStatus === 'notion_failed') markers.push({ key: 'notion-failed', label: 'notion sync failed', tone: 'warning' });
-  if (receiptHasTrueConflict(receipt, state)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
-  else if (receiptHasSyncConflict(receipt, state)) markers.push({ key: 'sync-failed', label: 'sync failed', tone: 'warning' });
+  if (receiptHasTrueConflict(receipt, failedIndex)) markers.push({ key: 'sync-conflict', label: 'sync conflict', tone: 'danger' });
+  else if (receiptHasSyncConflict(receipt, failedIndex)) markers.push({ key: 'sync-failed', label: 'sync failed', tone: 'warning' });
   if ((receipt.supabaseId || receipt.notionPageId) && !receipt.sourceId) markers.push({ key: 'cloud-only', label: 'cloud-only', tone: 'info' });
   if (!receipt.supabaseId && !receipt.notionPageId) markers.push({ key: 'local-only', label: 'local-only', tone: 'neutral' });
   return markers;
@@ -122,6 +148,7 @@ export function History({
   onOpen,
   onConfirmPending,
   onPull,
+  onFlushPersist,
   cloudSyncAvailable = false,
 }: {
   state: AppState;
@@ -132,6 +159,7 @@ export function History({
   onOpen: (receipt: Receipt) => void;
   onConfirmPending: (receipt: Receipt) => void;
   onPull?: () => Promise<void>;
+  onFlushPersist?: () => void;
   cloudSyncAvailable?: boolean;
 }) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
@@ -145,7 +173,6 @@ export function History({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
-
 
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
@@ -176,9 +203,13 @@ export function History({
   }, {});
   const pending = useMemo(() => tripReceipts.filter((r) => r.store?.startsWith('⏳ ')), [tripReceipts]);
   const people = getPersons(state);
+  const failedQueueIndex = useMemo(
+    () => buildFailedQueueIndex(state.syncQueue),
+    [state.syncQueue],
+  );
   const conflictItems = useMemo(
-    () => buildReceiptConflictItems(tripReceipts, state),
-    [tripReceipts, state],
+    () => buildReceiptConflictItems(tripReceipts, failedQueueIndex),
+    [tripReceipts, failedQueueIndex],
   );
   useEffect(() => {
     const repairReceiptId = takeReceiptRepairIntent();
@@ -200,23 +231,8 @@ export function History({
   const activeTripName = trip.name || state.tripName || '東京出張之旅';
   const handleSwitchTrip = (tripId: string) => {
     if (!updateState) return;
-    const target = state.trips?.find((t) => t.id === tripId && !t.archived);
-    if (!target) return;
-
-    const trips = (state.trips || []).map((item) => ({
-      ...item,
-      active: item.id === tripId && !item.archived,
-    }));
-
-    updateState({
-      activeTripId: tripId,
-      trips,
-      tripName: target.name,
-      budget: target.budget ?? state.budget,
-      tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
-      customItinerary: target.itinerary || null,
-      tripDateRange: { start: target.startDate, end: target.endDate },
-    });
+    const patch = switchTrip(state, tripId);
+    if (patch) updateState(patch);
   };
 
   async function handlePull(mode: 'manual' | 'auto' = 'manual') {
@@ -247,20 +263,38 @@ export function History({
         syncStatus: 'queued',
         updatedAt: now,
       };
-      const matchingItem = (prev.syncQueue || []).find((item) =>
-        item.type === 'receipt'
-        && (item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt)));
-      const retryQueue = matchingItem
-        ? settleChange(prev.syncQueue || [], matchingItem.id, { kind: 'manual-retry' }).queue.map((item) => (
-          item.id === matchingItem.id ? { ...item, payload: buildSafeReceiptPayload(updatedReceipt, now) } : item
-        ))
-        : prev.syncQueue;
-      const nextQueue = enqueueChange(retryQueue, {
+      let matched = false;
+      const mappedQueue = (prev.syncQueue || []).map((item) => {
+        const matches = item.id === conflict.queueItem?.id || queueItemMatchesReceipt(item, currentReceipt);
+        if (!matches || item.type !== 'receipt') return item;
+        matched = true;
+        return {
+          ...item,
+          error: undefined,
+          status: 'queued' as const,
+          attempts: 0,
+          updatedAt: now,
+          payload: buildSafeReceiptPayload(updatedReceipt, now),
+        };
+      });
+      if (!matched) {
+        mappedQueue.push({
+          id: `receipt-conflict-${updatedReceipt.id}-${now}`,
           type: 'receipt',
           entityId: updatedReceipt.id,
           op: updatedReceipt.supabaseId || updatedReceipt.notionPageId ? 'update' : 'create',
+          status: 'queued',
+          attempts: 0,
+          createdAt: now,
+          updatedAt: now,
           payload: buildSafeReceiptPayload(updatedReceipt, now),
         });
+      }
+      const nextQueue = mappedQueue.filter((item) => !(
+        item.type === 'receipt'
+        && isFailedQueueItem(item)
+        && queueItemMatchesReceipt(item, updatedReceipt)
+      ));
       const stillHasFailedQueue = nextQueue.some(isFailedQueueItem);
       return {
         ...prev,
@@ -271,6 +305,7 @@ export function History({
       };
     });
     setStatus('已保留本機版本，稍後會重新同步。');
+    if (onFlushPersist) window.setTimeout(() => onFlushPersist(), 0);
   }
 
   function handleKeepCloud(conflict: ReceiptConflictItem) {
@@ -296,6 +331,7 @@ export function History({
       };
     });
     setStatus('已信任雲端版本，停止重試本機衝突。');
+    if (onFlushPersist) window.setTimeout(() => onFlushPersist(), 0);
   }
 
   return (
@@ -434,7 +470,7 @@ export function History({
               const cat = categoryById(r.category);
               const person = people.find((p) => p.id === r.personId) || people[0];
               const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
-              const healthMarkers = receiptHealthMarkers(r, state, sourceIdCounts, photoSrc);
+              const healthMarkers = receiptHealthMarkers(r, failedQueueIndex, sourceIdCounts, photoSrc);
               return (
                 <div
                   key={r.id}
@@ -449,6 +485,9 @@ export function History({
                     <strong>
                       {isPendingReceipt(r) && <span className="history-pending-mini">pending</span>}
                       {r.visibility === 'private' && <span className="history-private-mini" title="只有自己見到" aria-label="私人紀錄，只有自己見到">🔒</span>}
+                      {r.createdByLabel && r.createdByLabel !== 'You' && (
+                        <span className="history-owner-mini" title={`由 ${r.createdByLabel} 記錄`} aria-label={`由 ${r.createdByLabel} 記錄`}>👤 {r.createdByLabel}</span>
+                      )}
                       {displayStore(r)}
                     </strong>
                     <small>{[cat.name, r.date ? r.date.slice(5).replace('-', '/') : '', r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>

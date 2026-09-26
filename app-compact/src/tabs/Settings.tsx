@@ -1,10 +1,10 @@
-import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CheckCircle2, ChevronDown, Cloud, Copy, Download, FlaskConical, KeyRound, LoaderCircle, LogOut, Mail, MapPin, NotebookText, Plane, Plus, RotateCcw, Server, ShieldCheck, Sparkles, Trash2, Upload, UserMinus, Users, X } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
 import { useEffect, useMemo, useRef, useState, version as reactVersion } from 'react';
 import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
-import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import { AI_MODELS, APP_VERSION, CATEGORIES, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY, PAYMENTS } from '../lib/constants';
 import {
   brokerHealth,
@@ -36,7 +36,7 @@ import {
   notionFetch,
   pushBackupSnapshot,
 } from '../lib/notion';
-import { canUseNotionMirror, configuredNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
+import { canUseNotionMirror, configuredNotionDatabaseId, extractNotionDatabaseId, hasUserScopedNotionDatabase, notionMirrorGuardMessage } from '../lib/notionAccess';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, RecurringRule, SyncEngineState, SyncQueueItem, ThemePreference, TripDraft, TripInviteSummary, TripMemberRole, TripSharingInviteDraft, TripSharingState, TripProfile } from '../lib/types';
 import { clearCredentialSession, saveState, stripPortableBackupState, stripSensitiveState } from '../lib/storage';
 import { createSupabaseTripInvite, inviteLinkForToken, leaveSupabaseTrip, removeSupabaseTripMember, revokeSupabaseTripInvite, updateSupabaseTripMemberRole, useSupabaseAuth } from '../lib/supabase';
@@ -47,7 +47,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { GradientButton } from '../components/ui/gradient-button';
 import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
-import { THEME_OPTIONS, useTripTheme } from '../theme/tripTheme';
+import { THEME_OPTIONS, TRIP_THEMES, useTripTheme } from '../theme/tripTheme';
 
 const COLORS = ['#CC2929', '#FF91A4', '#2D5A8E', '#059669', '#D97706', '#7C3AED', '#0891B2', '#DB2777'];
 const MAX_SAFE_AMOUNT = 1_000_000_000;
@@ -109,6 +109,9 @@ function sanitizeImportedReceipts(input: unknown, fallbackDate: string, allowedT
         tripId: _tripId,
         tripVersion: _tripVersion,
         tripDayId: _tripDayId,
+        // Crafted backups must not inject large base64 thumbs or remote photo URLs.
+        photoThumb: _photoThumb,
+        photoUrl: _photoUrl,
         _photoSyncedToNotion,
         _photoBodyBlockAdded,
         ...localReceipt
@@ -338,15 +341,51 @@ function aiModelLabel(modelId: string | undefined): string {
   return AI_MODELS.find((model) => model.id === id)?.name || id;
 }
 
+// Model-scan schedule: initial attempt, then automatic retries 5s / 10s / 15s after each
+// failure (4 attempts total). Models that still fail are hidden from the pickers; models that
+// later pass a scan are restored automatically.
+const MODEL_SCAN_RETRY_DELAYS_MS = [5000, 10000, 15000];
+
+function classifyModelScanError(error: unknown): 'quota' | 'unsupported' | 'retryable' {
+  const message = redactedError(error);
+  // Provider contract: 429/quota/daily-limit are hard stops — the model still exists,
+  // so it stays in the list (flagged 限額) instead of being removed.
+  if (/\b429\b|quota|rate.?limit|daily.?limit|額度/i.test(message)) return 'quota';
+  if (/not allowlisted|invalid model|model.*not.*(exist|found)|no longer|deprecated|unsupported/i.test(message)) return 'unsupported';
+  return 'retryable';
+}
+
+async function scanModelWithRetries(state: AppState, modelId: string): Promise<'ok' | 'quota' | 'failed'> {
+  for (let attempt = 0; attempt <= MODEL_SCAN_RETRY_DELAYS_MS.length; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => window.setTimeout(resolve, MODEL_SCAN_RETRY_DELAYS_MS[attempt - 1]));
+    }
+    try {
+      await testAiModel(state, modelId);
+      return 'ok';
+    } catch (error) {
+      const kind = classifyModelScanError(error);
+      if (kind === 'quota') return 'quota';
+      if (kind === 'unsupported') return 'failed';
+      // retryable → fall through to the next scheduled retry
+    }
+  }
+  return 'failed';
+}
+
 function AiModelField({
   label,
   value,
   state,
+  hiddenModels,
+  scanResults,
   onChange,
 }: {
   label: string;
   value: string;
   state: AppState;
+  hiddenModels: string[];
+  scanResults?: Record<string, 'ok' | 'quota' | 'failed'>;
   onChange: (value: string) => void;
 }) {
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -363,6 +402,8 @@ function AiModelField({
       setMessage(`未能使用：${redactedError(error)}`);
     }
   };
+  const visibleModels = AI_MODELS.filter((model) => !hiddenModels.includes(model.id));
+  const valueMissing = !visibleModels.some((model) => model.id === value);
   return (
     <div className="ai-model-field">
       <label>{label}
@@ -374,7 +415,16 @@ function AiModelField({
             onChange(event.target.value);
           }}
         >
-          {AI_MODELS.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+          {valueMissing && (
+            <option value={value}>
+              {AI_MODELS.find((model) => model.id === value)?.name || value}（暫停或舊型號）
+            </option>
+          )}
+          {visibleModels.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
+            </option>
+          ))}
         </select>
       </label>
       <button
@@ -440,11 +490,12 @@ function TripRateInput({
 }
 
 function tripDraftPreviewStats(draft: TripDraft) {
+  // Always count the LIVE editable itinerary so modal header tracks add/delete/reorder.
   const days = draft.trip.itinerary || [];
-  const spots = days.flatMap((day) => day.spots || []);
-  const report = draft.extractionReport;
+  const spots = days.flatMap((day) => day.spots || []).filter((spot) => String(spot.name || '').trim());
   const lodgingNames = new Set<string>();
   const foodNames = new Set<string>();
+  const transportNames = new Set<string>();
   const detailNames = new Set<string>();
   for (const day of days) {
     if (day.lodging?.name) lodgingNames.add(day.lodging.name);
@@ -454,19 +505,20 @@ function tripDraftPreviewStats(draft: TripDraft) {
       if (!name) continue;
       if (spot.type === 'lodging' || /hotel|酒店|住宿|旅館/i.test(name)) lodgingNames.add(name);
       if (spot.type === 'food' || /restaurant|cafe|餐|飯|食|咖啡|壽司|拉麵|bbq/i.test(name)) foodNames.add(name);
+      if (spot.type === 'flight' || spot.type === 'transport') transportNames.add(name);
       if (spot.note || spot.address || spot.mapUrl || spot.time || spot.bookingRef || spot.sourceText) detailNames.add(name);
     }
   }
   return {
-    dayCount: report?.daysExtracted ?? days.length,
-    spotCount: report?.spotsExtracted ?? spots.filter((spot) => String(spot.name || '').trim()).length,
-    lodgingCount: report?.hotelsExtracted ?? lodgingNames.size,
-    foodCount: report?.restaurantsExtracted ?? foodNames.size,
-    transportCount: report?.transportsExtracted ?? 0,
-    detailCount: report?.importantDetailsExtracted ?? detailNames.size,
-    sourceQuality: report?.sourceQuality || 'medium',
-    missingCriticalFields: report?.missingCriticalFields || [],
-    assumptions: report?.assumptions || [],
+    dayCount: days.length,
+    spotCount: spots.length,
+    lodgingCount: lodgingNames.size,
+    foodCount: foodNames.size,
+    transportCount: transportNames.size,
+    detailCount: detailNames.size,
+    sourceQuality: draft.extractionReport?.sourceQuality || 'medium',
+    missingCriticalFields: draft.extractionReport?.missingCriticalFields || [],
+    assumptions: draft.extractionReport?.assumptions || [],
     organizedItinerary: draft.organizedItinerary || '',
     lodgingNames: Array.from(lodgingNames).slice(0, 4),
     foodNames: Array.from(foodNames).slice(0, 4),
@@ -661,7 +713,9 @@ function safeDiagnosticsFilename(): string {
 }
 
 function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Person[]): TripSharePreview {
-  const tripReceipts = scopedReceiptsForTrip(state, trip);
+  // Owner-private rows stay out of share exports unless explicitly opted in later.
+  const tripReceipts = scopedReceiptsForTrip(state, trip).filter((receipt) => receipt.visibility !== 'private');
+  const privateExcluded = scopedReceiptsForTrip(state, trip).filter((receipt) => receipt.visibility === 'private').length;
   const itinerary = (trip.itinerary?.length ? trip.itinerary : getItinerary(state)).filter((day) => {
     if (!day.date) return true;
     return day.date >= trip.startDate && day.date <= trip.endDate;
@@ -683,6 +737,7 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
         'sync queue',
         'deleted cloud markers',
         'other trips',
+        ...(privateExcluded ? [`${privateExcluded} owner-private receipt(s)`] : []),
       ],
     },
     trip: {
@@ -732,10 +787,10 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
   const copiedText = [
     `${payload.trip.name} · Private trip share`,
     `${payload.trip.startDate} to ${payload.trip.endDate} · ${payload.trip.destination || 'Destination pending'}`,
-    `Spend: ${formatMoney(spentHkd)} · Remaining: ${formatMoney(remainingHkd)} · Receipts: ${tripReceipts.length}`,
+    `Spend: ${formatMoney(spentHkd)} · Remaining: ${formatMoney(remainingHkd)} · Receipts: ${tripReceipts.length}${privateExcluded ? ` (${privateExcluded} private excluded)` : ''}`,
     `Next: ${nextStop}`,
     `Receipts: ${receiptLine}`,
-    'Safe export: current trip only; no API keys, broker sessions, Notion/Supabase IDs, sync queue, or other trips.',
+    'Safe export: current trip only; no API keys, broker sessions, Notion/Supabase IDs, sync queue, other trips, or owner-private receipts.',
   ].join('\n');
   return {
     filename: safeShareFilename(payload.trip.name),
@@ -1079,6 +1134,9 @@ export function Settings({
   const [personalNotionToken, setPersonalNotionToken] = useState('');
   const [personalNotionDb, setPersonalNotionDb] = useState(state.notionDb || '');
   const [personalNotionStatus, setPersonalNotionStatus] = useState<PersonalNotionStatus | null>(null);
+  const [confirmDisconnectNotion, setConfirmDisconnectNotion] = useState(false);
+  const confirmDisconnectNotionTimerRef = useRef(0);
+  const [modelScanProgress, setModelScanProgress] = useState<{ done: number; total: number } | null>(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showClearDeviceConfirm, setShowClearDeviceConfirm] = useState(false);
@@ -1129,6 +1187,33 @@ export function Settings({
     setEditableTripDraft(cloneTripDraft(tripDraft));
     setTripReviewDayIndex(0);
   }, [tripDraft, tripDraftModalOpen]);
+
+  // Reconcile the Notion pill with the broker-held connection once per signed-in session:
+  // the pill state is session-only, so without this it shows 未連接 (and keeps 中斷連接
+  // disabled) after an app restart even when the server-side connection is still valid.
+  const personalNotionFetchedRef = useRef(false);
+  useEffect(() => {
+    if (!cloudSyncAvailable || personalNotionFetchedRef.current) return;
+    personalNotionFetchedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const result = await getPersonalNotionIntegration(state);
+        if (cancelled) return;
+        setPersonalNotionStatus(result);
+        if (result.databaseId) setPersonalNotionDb(result.databaseId);
+        const connected = result.status === 'connected';
+        if (connected !== state.personalNotionConnected || (connected && !!result.databaseId && result.databaseId !== state.notionDb)) {
+          applyPersonalNotionConnection(result.databaseId || '', connected);
+        }
+      } catch {
+        // Offline / broker unreachable: keep the last known pill instead of flashing 未連接.
+      }
+    })();
+    return () => { cancelled = true; };
+    // Runs once per signed-in session; state is read at fetch time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudSyncAvailable]);
 
   const handleUpdatePassword = async () => {
     if (!updatePassword || newPasswordInput.length < 6) return;
@@ -1252,9 +1337,19 @@ export function Settings({
   const notionActionDisabled = !!busy || publicSupabaseOnly;
   const directTokenEnabled = true;
   const buildLabel = `v${APP_VERSION}`;
-  const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope]);
+  const tripDoctor = useMemo(() => compactTripDoctor(state, currentTrip, persons, syncState, cloudSyncAvailable, notionMirrorReady, storageScope), [
+    state.receipts,
+    state.syncQueue,
+    state.trips,
+    currentTrip,
+    persons,
+    syncState,
+    cloudSyncAvailable,
+    notionMirrorReady,
+    storageScope,
+  ]);
   const syncReadiness = useMemo(() => buildSyncReadinessDryRun(state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope), [state, currentTrip, syncState, cloudSyncAvailable, notionMirrorReady, brokerReady, storageScope]);
-  const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state, currentTrip]);
+  const tripScopeAudit = useMemo(() => buildTripScopeAudit(state, currentTrip), [state.receipts, state.trips, currentTrip]);
   const failedSyncCount = syncState?.failedCount || 0;
   const pendingSyncCount = syncState?.pendingCount || 0;
   const syncPillTone = syncState?.status === 'error' || failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : 'ok';
@@ -1266,6 +1361,24 @@ export function Settings({
   const queueSummary = syncQueueSummary(state.syncQueue);
   const queuePendingCount = Math.max(pendingSyncCount, queueSummary.pending.length);
   const queueFailedCount = Math.max(failedSyncCount, queueSummary.failed.length);
+  const aiScanSummary = useMemo(() => {
+    const scan = state.aiModelScan;
+    if (!scan) return null;
+    const ids = Object.keys(scan.results);
+    if (!ids.length) return null;
+    const ok = ids.filter((id) => scan.results[id] === 'ok').length;
+    return {
+      ok,
+      total: ids.length,
+      hiddenCount: (state.hiddenAiModels || []).length,
+      atLabel: new Date(scan.at).toLocaleString('zh-HK', { hour12: false }),
+    };
+  }, [state.aiModelScan, state.hiddenAiModels]);
+  const aiScanPillLabel = !aiScanSummary
+    ? '掃描模型'
+    : aiScanSummary.ok === aiScanSummary.total
+      ? '全部可用'
+      : `${aiScanSummary.total - aiScanSummary.ok} 個未能連接`;
   const syncTarget = cloudSyncAvailable ? (notionMirrorReady ? 'Supabase + Notion' : 'Supabase only') : (brokerReady ? 'Broker / Notion' : storageScope);
   const storageAccountId = storageScope.startsWith('supabase:') ? storageScope.slice('supabase:'.length) : '';
   const accountSyncHealth = [
@@ -1344,8 +1457,9 @@ export function Settings({
     setMgrWeatherPreference(target.intelligence?.weatherPreference || 'balanced');
   };
 
-  // Keep managed trip in sync when active trip changes
+  // Keep managed trip in sync when active trip changes — but never while dirty.
   useEffect(() => {
+    if (mgrDirtyRef.current) return;
     handleSelectManagedTrip(currentTrip.id);
   }, [currentTrip.id]);
 
@@ -1445,8 +1559,10 @@ export function Settings({
 
   function statusPill(provider: CredentialProvider) {
     const item = statusFor(provider);
+    // Kids/simple mode: hide missing/unknown provider noise — only show healthy or broken states.
+    if (item.status === 'unknown' || item.status === 'missing') return null;
     const ok = item.status === 'connected';
-    return <span className={`pill ${ok ? 'ok' : item.status === 'missing' ? '' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
+    return <span className={`pill ${ok ? 'ok' : 'hot'}`}>{ok ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />} {provider}: {item.status}</span>;
   }
 
   function openSettingsPanel(id: string) {
@@ -1568,27 +1684,95 @@ export function Settings({
     });
   }
 
+  function friendlyNotionConnectError(error: unknown): string {
+    const message = redactedError(error);
+    if (/credential test failed/i.test(message)) {
+      return 'Notion 拒絕咗呢個組合：請檢查 (1) secret 係咪正確嘅 integration token；(2) 個 database 有冇喺 Connections 邀請咗個 integration。';
+    }
+    if (/token missing/i.test(message)) return '未收到 secret：請重新貼上你嘅 Notion integration secret。';
+    if (/database id missing/i.test(message)) return '未收到 database：請貼上 Notion database 網址或 ID。';
+    if (/未連線|network|failed to fetch|timeout/i.test(message)) return '暫時連唔到 Credential Broker 或網絡不穩，請檢查網絡後再試。';
+    return message;
+  }
+
   async function connectPersonalNotion() {
     if (!cloudSyncAvailable) {
       setStatus('請先登入 Supabase，先可以綁定你自己嘅 Notion notebook。');
       return;
     }
     const secret = personalNotionToken.trim();
-    const databaseId = personalNotionDb.trim();
-    if (!secret || !databaseId) {
-      setStatus('請輸入你自己嘅 Notion connector secret 同 database ID。');
+    const databaseId = extractNotionDatabaseId(personalNotionDb);
+    if (!secret) {
+      setStatus('請輸入你自己嘅 Notion integration secret。');
+      return;
+    }
+    if (!databaseId) {
+      setStatus('個 database 資料睇落唔正確：可以貼成條 Notion database 網址，系統會自動抽出 ID。');
       return;
     }
     try {
-      await run('Connect Personal Notion', async () => {
-        const result = await registerPersonalNotionIntegration(state, secret, databaseId);
+      await run('連接 Personal Notion', async () => {
+        let result: PersonalNotionStatus;
+        try {
+          result = await registerPersonalNotionIntegration(state, secret, databaseId);
+        } catch (error) {
+          throw new Error(friendlyNotionConnectError(error));
+        }
         setPersonalNotionStatus(result);
         applyPersonalNotionConnection(result.databaseId || databaseId, result.status === 'connected');
-        return `Personal Notion 已安全連接：${result.databaseId || databaseId}`;
+        return result.status === 'connected'
+          ? 'Personal Notion 已安全連接；之後新嘅記帳會自動同步 Supabase 同鏡像到你嘅 Notion。'
+          : `Personal Notion 狀態：${result.status}`;
       });
     } finally {
       setPersonalNotionToken('');
     }
+  }
+
+  function armDisconnectNotion() {
+    if (!confirmDisconnectNotion) {
+      setConfirmDisconnectNotion(true);
+      window.clearTimeout(confirmDisconnectNotionTimerRef.current);
+      confirmDisconnectNotionTimerRef.current = window.setTimeout(() => setConfirmDisconnectNotion(false), 3000);
+      return;
+    }
+    window.clearTimeout(confirmDisconnectNotionTimerRef.current);
+    setConfirmDisconnectNotion(false);
+    void disconnectPersonalNotion();
+  }
+
+  // Full-catalog model scan: tests every visible model plus every hidden one (so revived
+  // models reappear), retrying failures at +5s/+10s/+15s, hiding models that never connect,
+  // and leaving quota-limited models in place per the provider contract.
+  async function runModelScan() {
+    if (modelScanProgress) return;
+    if (!brokerReady && !cloudSyncAvailable) {
+      setStatus('模型掃描需要先連接 Credential Broker 或者登入 Supabase。');
+      return;
+    }
+    const visibleIds = AI_MODELS.map((model) => model.id);
+    const candidates = Array.from(new Set([...visibleIds, ...(state.hiddenAiModels || [])]));
+    setModelScanProgress({ done: 0, total: candidates.length });
+    const results: Record<string, 'ok' | 'quota' | 'failed'> = {};
+    try {
+      for (const modelId of candidates) {
+        results[modelId] = await scanModelWithRetries(state, modelId);
+        setModelScanProgress((progress) => (progress ? { done: progress.done + 1, total: progress.total } : progress));
+      }
+    } finally {
+      setModelScanProgress(null);
+    }
+    const nextHidden = candidates.filter((id) => results[id] === 'failed');
+    const quotaIds = candidates.filter((id) => results[id] === 'quota');
+    const restored = (state.hiddenAiModels || []).filter((id) => results[id] === 'ok');
+    updateState({
+      hiddenAiModels: nextHidden,
+      aiModelScan: { at: Date.now(), results },
+    });
+    setStatus(`模型掃描完成:${candidates.length - nextHidden.length - quotaIds.length}/${candidates.length} 個可用`
+      + (quotaIds.length ? `;${quotaIds.length} 個額度用緊(保留喺清單)` : '')
+      + (restored.length ? `;恢復咗 ${restored.length} 個` : '')
+      + (nextHidden.length ? `;隱藏咗 ${nextHidden.length} 個` : '') + '。');
   }
 
   async function disconnectPersonalNotion() {
@@ -1673,7 +1857,15 @@ export function Settings({
     const ratios = state.shareRatios || {};
     const existing = persons.map((person) => Number(ratios[person.id]) || 0);
     const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
-    updateState({ persons: [...persons, next], shareRatios: { ...ratios, [next.id]: Math.max(1, Math.round(avg)) } });
+    const nextPersons = [...persons, next];
+    const nextRatios = { ...ratios, [next.id]: Math.max(1, Math.round(avg)) };
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      persons: nextPersons,
+      shareRatios: nextRatios,
+      peopleByTripId: { ...(state.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
     setNewPersonName('');
     setStatus(`已新增旅伴：${next.name}`);
   }
@@ -1686,10 +1878,14 @@ export function Settings({
     const fallback = persons.find((p) => p.id !== id) || persons[0];
     const shareRatios = { ...state.shareRatios };
     delete shareRatios[id];
+    const nextPersons = persons.filter((p) => p.id !== id);
+    const tripId = currentTrip.id || state.activeTripId;
     setState((prev) => ({
       ...prev,
-      persons: persons.filter((p) => p.id !== id),
+      persons: nextPersons,
       shareRatios,
+      peopleByTripId: { ...(prev.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+      shareRatiosByTripId: { ...(prev.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: shareRatios } : {}) },
       receipts: prev.receipts.map((r) => {
         const next: Receipt = {
           ...r,
@@ -1719,7 +1915,12 @@ export function Settings({
   function resetShareRatios() {
     const ids = persons.map((person) => person.id);
     const equal = sharePercents(ids, {}); // {} → equal split summing to 100
-    updateState({ shareRatios: Object.fromEntries(ids.map((id, idx) => [id, equal[idx]])) });
+    const nextRatios = Object.fromEntries(ids.map((id, idx) => [id, equal[idx]]));
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      shareRatios: nextRatios,
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
     setStatus('已重設為均分比例');
   }
 
@@ -1738,7 +1939,12 @@ export function Settings({
       sumOthers = next.reduce((acc, v, idx) => (idx === lastIdx ? acc : acc + v), 0);
     }
     next[lastIdx] = Math.max(0, 100 - sumOthers);
-    updateState({ shareRatios: Object.fromEntries(ids.map((id, idx) => [id, next[idx]])) });
+    const nextRatios = Object.fromEntries(ids.map((id, idx) => [id, next[idx]]));
+    const tripId = currentTrip.id || state.activeTripId;
+    updateState({
+      shareRatios: nextRatios,
+      shareRatiosByTripId: { ...(state.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
+    });
   }
 
   function patchCurrentTripSharing(updater: (sharing: TripSharingState) => TripSharingState) {
@@ -1781,10 +1987,15 @@ export function Settings({
       const ratios = prev.shareRatios || {};
       const existing = existingPersons.map((person) => Number(ratios[person.id]) || 0);
       const avg = existing.length ? existing.reduce((acc, value) => acc + value, 0) / existing.length : 1;
+      const nextPersons = [...existingPersons, { id, name, emoji: '👤', color: COLORS[existingPersons.length % COLORS.length] }];
+      const nextRatios = { ...ratios, [id]: Math.max(1, Math.round(avg)) };
+      const tripId = prev.activeTripId || currentTrip.id;
       return {
         ...prev,
-        persons: [...existingPersons, { id, name, emoji: '👤', color: COLORS[existingPersons.length % COLORS.length] }],
-        shareRatios: { ...ratios, [id]: Math.max(1, Math.round(avg)) },
+        persons: nextPersons,
+        shareRatios: nextRatios,
+        peopleByTripId: { ...(prev.peopleByTripId || {}), ...(tripId ? { [tripId]: nextPersons } : {}) },
+        shareRatiosByTripId: { ...(prev.shareRatiosByTripId || {}), ...(tripId ? { [tripId]: nextRatios } : {}) },
         settingsUpdatedAt: Date.now(),
       };
     });
@@ -1942,12 +2153,41 @@ export function Settings({
     if (!window.confirm(`確定退出「${currentTrip.name}」？你會即時失去呢個旅程嘅存取權；已同步嘅記帳會保留喺旅程入面。`)) return;
     await run('退出旅程', async () => {
       await leaveSupabaseTrip(sharingSession, currentTrip);
+      const leftTripId = currentTrip.id;
       setState((prev) => {
-        const nextTrips = (prev.trips || []).filter((trip) => trip.id !== currentTrip.id);
+        const nextTrips = (prev.trips || []).filter((trip) => trip.id !== leftTripId);
         const nextActive = nextTrips[0];
+        const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+        const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+        delete peopleByTripId[leftTripId];
+        delete shareRatiosByTripId[leftTripId];
+        const nextPeople = (nextActive && peopleByTripId[nextActive.id]?.length)
+          ? peopleByTripId[nextActive.id]
+          : prev.persons;
+        const nextRatios = (nextActive && shareRatiosByTripId[nextActive.id])
+          ? shareRatiosByTripId[nextActive.id]
+          : prev.shareRatios;
         return migrateAppState({
           ...prev,
           trips: nextTrips,
+          peopleByTripId,
+          shareRatiosByTripId,
+          receipts: prev.receipts.filter((receipt) => receipt.tripId !== leftTripId),
+          syncQueue: (prev.syncQueue || []).filter((item) => {
+            const payloadTripId = (item.payload as { tripId?: string } | undefined)?.tripId;
+            return item.entityId !== leftTripId && payloadTripId !== leftTripId;
+          }),
+          // Tombstones/deleted-source keys for the left trip would suppress receipts
+          // if the trip is later re-joined or SourceIDs collide.
+          receiptTombstones: Object.fromEntries(
+            Object.entries(prev.receiptTombstones || {}).filter(([, tombstone]) => {
+              const tripId = (tombstone as { tripId?: string } | undefined)?.tripId;
+              return tripId !== leftTripId;
+            }),
+          ),
+          notionDeletedSourceIds: Object.fromEntries(
+            Object.entries(prev.notionDeletedSourceIds || {}).filter(([key]) => !key.includes(leftTripId)),
+          ),
           ...(nextActive ? {
             activeTripId: nextActive.id,
             tripName: nextActive.name,
@@ -1955,6 +2195,8 @@ export function Settings({
             budget: nextActive.budget ?? 0,
             tripCurrency: nextActive.currencies?.find((code) => code !== 'HKD') || prev.tripCurrency,
             customItinerary: nextActive.itinerary || [],
+            persons: nextPeople,
+            shareRatios: nextRatios,
           } : {}),
           settingsUpdatedAt: Date.now(),
         });
@@ -1981,15 +2223,16 @@ export function Settings({
       setStatus('呢個旅程已封存；請先改回「進行中」並儲存，然後再切換為 active。');
       return;
     }
-    const selectedTrip = { ...trip, archived: false, active: true, updatedAt: Date.now() };
+    const patch = switchTrip(state, tripId);
+    if (!patch) {
+      setStatus('切換旅程失敗；請再試一次。');
+      return;
+    }
     updateState({
-      activeTripId: selectedTrip.id,
-      trips: trips.map((item) => item.id === selectedTrip.id ? selectedTrip : { ...item, active: false }),
-      tripName: selectedTrip.name,
-      tripDateRange: { start: selectedTrip.startDate, end: selectedTrip.endDate },
-      tripCurrency: nonHomeCurrencyForTrip(selectedTrip, state.tripCurrency),
-      budget: selectedTrip.budget ?? state.budget,
-      customItinerary: selectedTrip.itinerary,
+      ...patch,
+      trips: (patch.trips || trips).map((item) => item.id === tripId
+        ? { ...item, archived: false, active: true, updatedAt: Date.now() }
+        : { ...item, active: false }),
     });
   }
 
@@ -1997,12 +2240,26 @@ export function Settings({
     setState((prev) => {
       const now = Date.now();
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      // Snapshot outgoing active-trip people even when the draft trip id is brand new
+      // (switchTrip returns null if the target trip does not exist yet).
+      const prevTripId = prev.activeTripId;
+      const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+      const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+      if (prevTripId && prevTripId !== draft.trip.id && prev.persons?.length) {
+        peopleByTripId[prevTripId] = prev.persons;
+        if (prev.shareRatios) shareRatiosByTripId[prevTripId] = prev.shareRatios;
+      }
       const exists = prevTrips.some((trip) => trip.id === draft.trip.id);
       const tripsNext = exists
         ? prevTrips.map((trip) => trip.id === draft.trip.id ? { ...draft.trip, active: true, archived: false } : { ...trip, active: false })
         : [...prevTrips.map((trip) => ({ ...trip, active: false })), { ...draft.trip, active: true, archived: false }];
       return migrateAppState({
         ...prev,
+        peopleByTripId,
+        shareRatiosByTripId,
+        // Applying a trip draft does not change the live companion list; maps snapshot the outgoing trip.
+        persons: prev.persons,
+        shareRatios: prev.shareRatios,
         activeTripId: draft.trip.id,
         trips: tripsNext,
         tripName: draft.trip.name,
@@ -2010,6 +2267,8 @@ export function Settings({
         tripCurrency: nonHomeCurrencyForTrip(draft.trip, prev.tripCurrency),
         budget: draft.trip.budget,
         customItinerary: draft.trip.itinerary,
+        // Personal day/spot patches must not re-key onto a newly extracted itinerary.
+        itineraryOverrides: {},
         settingsUpdatedAt: now,
         syncQueue: enqueueChange(enqueueChange(prev.syncQueue, {
           type: 'trip',
@@ -2537,6 +2796,12 @@ export function Settings({
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
+                  <span><StatusPill tone={personalNotionStatus?.status === 'connected' ? 'ok' : 'neutral'}><NotebookText size={14} /> Notion {personalNotionStatus?.status === 'connected' ? '鏡像已連接' : cloudSyncAvailable ? '鏡像未連接' : '鏡像（登入後可用）'}</StatusPill></span>
+                </TooltipTrigger>
+                <TooltipContent>Notion 係可選鏡像備份，唔影響 Supabase 同步。喺下方「連線（進階）」連接你自己嘅 Notion database，新記帳就會自動鏡像過去。</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
                   <span><StatusPill tone="neutral"><ShieldCheck size={14} /> {buildLabel}</StatusPill></span>
                 </TooltipTrigger>
                 <TooltipContent>目前前端 build / security marker</TooltipContent>
@@ -2573,28 +2838,6 @@ export function Settings({
             </button>
           </div>
         </div>
-      </GlassCard>
-
-      <GlassCard className="settings-theme-card">
-        <section aria-labelledby="settings-theme-title">
-          <h2 id="settings-theme-title">外觀主題</h2>
-          <p className="muted">揀手動主題會套用到所有旅程；揀自動就跟返而家旅程嘅目的地。毋須另存。</p>
-          <div className="theme-selector" role="radiogroup" aria-label="App theme">
-            {THEME_OPTIONS.map((option) => (
-              <label className="theme-option" key={option.value}>
-                <input
-                  type="radio"
-                  name="app-theme"
-                  value={option.value}
-                  checked={themePreference === option.value}
-                  onChange={() => updateState({ themePreference: option.value })}
-                />
-                <span>{option.label}</span>
-              </label>
-            ))}
-          </div>
-          <p className="muted" aria-live="polite">目前：{THEME_OPTIONS.find((option) => option.value === themePreference)?.label || '自動（依旅程）'}</p>
-        </section>
       </GlassCard>
 
       {showStressPanel && (<GlassCard className={`settings-trip-doctor settings-trip-doctor--${tripDoctor.tone}`}>
@@ -2766,7 +3009,7 @@ export function Settings({
         </section>
       </GlassCard>)}
 
-      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" meta={<span className="pill">{persons.length} 人</span>}>
+      <AccordionCard id="settings-people" title="旅伴 / 分帳比例" defaultOpen={false} meta={<span className="pill">{persons.length} 人</span>}>
         <p className="muted">分帳用百分比。填頭幾位嘅百分比，最後一位會自動計（100 − 其他總和）。預設全部均分。</p>
         {(() => {
           const pcts = personSharePercents;
@@ -2789,7 +3032,10 @@ export function Settings({
                 />
                 <small>%</small>
               </span>
-              <button className="icon-btn" type="button" onClick={() => removePerson(p.id)} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
+              <button className="icon-btn" type="button" onClick={() => {
+                if (!window.confirm(`確定刪除旅伴「${p.name}」？佢嘅帳單會轉去第一位旅伴。`)) return;
+                removePerson(p.id);
+              }} aria-label={`remove ${p.name}`}><Trash2 size={16} /></button>
             </div>
           ));
         })()}
@@ -2809,84 +3055,70 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      <AccordionCard id="settings-ai-models" eyebrow="Model routing" title="AI 模型選擇" icon={<Sparkles />}>
-        <p className="muted">你選擇嘅 model 會直接做每個功能嘅 primary。如果失敗，會自動 fallback 到 contract default（Scan/Voice → Mimo v2.5，Email/Trip → Mimo v2.5 Pro），再使用其他備用模型。測試只會向所選 model 發出一次極短 JSON request，唔會 fallback。Provider keys 不會進入 React state。</p>
-        <div className="form-grid ai-model-grid">
-          <AiModelField label="Scan model" value={state.scanModel} state={state} onChange={(scanModel) => updateState({ scanModel })} />
-          <AiModelField label="Voice model" value={state.voiceModel} state={state} onChange={(voiceModel) => updateState({ voiceModel })} />
-          <AiModelField label="Email model" value={state.emailModel} state={state} onChange={(emailModel) => updateState({ emailModel })} />
-          <AiModelField label="Trip update model" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
-        </div>
-        <label>Google backup model
-          <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
-        </label>
-        <div style={{ marginTop: '0.75rem' }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={() => setApiKeyModalOpen(true)}
+      <AccordionCard
+        id="settings-ai-models"
+        eyebrow="進階"
+        title="AI 模型選擇"
+        icon={<Sparkles />}
+        defaultOpen={false}
+        meta={(
+          <span
+            role="button"
+            tabIndex={0}
+            className={`pill ai-scan-pill${modelScanProgress ? ' busy' : ''}`}
+            aria-label="掃描所有模型"
+            onClick={(event) => { event.stopPropagation(); void runModelScan(); }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                event.stopPropagation();
+                void runModelScan();
+              }
+            }}
           >
-            <KeyRound size={14} /> Change API Key
-          </button>
+            {modelScanProgress
+              ? <><LoaderCircle size={12} className="spin" /> 掃描中 {modelScanProgress.done}/{modelScanProgress.total}</>
+              : <><FlaskConical size={12} /> {aiScanPillLabel}</>}
+          </span>
+        )}
+      >
+        <p className="muted">平時唔使改。額度用盡時會停止，唔會自動換模型。撳右邊「掃描」會自動測試所有模型:唔到嘅會自動收起,恢復後會自動出返。</p>
+        {aiScanSummary && (
+          <p className="muted">
+            上次掃描:{aiScanSummary.atLabel} · {aiScanSummary.ok}/{aiScanSummary.total} 個連接到
+            {aiScanSummary.hiddenCount ? ` · ${aiScanSummary.hiddenCount} 個暫時隱藏(再掃描會自動測試同恢復)` : ''}
+          </p>
+        )}
+        <div className="form-grid ai-model-grid">
+          <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
+          <AiModelField label="語音模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
+          <AiModelField label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />
+          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
-      </AccordionCard>
-
-      {cloudSyncAvailable && updatePassword && (
-        <AccordionCard id="settings-supabase-account" eyebrow="Supabase Auth" title="雲端帳號與密碼設定 🔐" icon={<KeyRound />}>
-          <div className="settings-auth-layout">
-            <GlassCard className="settings-account-card">
-              <div className="settings-account-copy">
-                <span className="eyebrow">目前帳號</span>
-                <strong>{userEmail || 'Supabase 帳號'}</strong>
-                <small>帳號、密碼同本機資料操作集中管理。</small>
-              </div>
-              <div className="settings-account-actions">
-                {onSignOut && (
-                  <button className="secondary" type="button" disabled={!!busy} onClick={() => void handleSupabaseSignOut()} aria-label="登出 Supabase">
-                    <LogOut size={18} /> 登出
-                  </button>
-                )}
-                {onClearDeviceData && onSignOut && (
-                  <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
-                    <Trash2 size={18} /> 清除此裝置資料
-                  </button>
-                )}
-                {onClearDeviceData && onSignOut && (
-                  <button className="danger settings-danger-solid" type="button" disabled={!!busy} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
-                    <UserMinus size={18} /> 永久刪除帳戶
-                  </button>
-                )}
-              </div>
-            </GlassCard>
-            <div className="settings-password-panel">
-              <label>
-                <span>設定新密碼</span>
-                <input
-                  type="password"
-                  value={newPasswordInput}
-                  onChange={(e) => setNewPasswordInput(e.target.value)}
-                  placeholder="最少 6 位"
-                />
-              </label>
+        {showStressPanel && (
+          <>
+            <label>Google backup model
+              <input value={state.googleBackupModel || ''} onChange={(e) => updateState({ googleBackupModel: e.target.value })} />
+            </label>
+            <div style={{ marginTop: '0.75rem' }}>
               <button
-                className="primary"
                 type="button"
-                disabled={!!busy || newPasswordInput.length < 6}
-                onClick={() => void handleUpdatePassword()}
+                className="btn btn-secondary btn-sm"
+                onClick={() => setApiKeyModalOpen(true)}
               >
-                <KeyRound size={17} /> 儲存雲端登入密碼
+                <KeyRound size={14} /> Change API Key
               </button>
             </div>
-          </div>
-        </AccordionCard>
-      )}
+          </>
+        )}
+      </AccordionCard>
 
-      <AccordionCard id="settings-trip" eyebrow="Trip Manager" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} meta={<span className="pill">v{managedTrip.version}</span>}>
+      <AccordionCard id="settings-trip" eyebrow="旅程" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} defaultOpen={false} meta={<span className="pill">v{managedTrip.version}</span>}>
         <div className="settings-trip-manager">
         <div className="settings-trip-panel settings-trip-panel--active">
           <div className="settings-trip-panel-head">
             <div>
-              <span className="eyebrow">Active trip</span>
+              <span className="eyebrow">而家用緊</span>
               <h3>{managedTrip.name}</h3>
             </div>
             <span className="pill">{mgrCurrency}</span>
@@ -3085,6 +3317,9 @@ export function Settings({
           >
             <CheckCircle2 size={18} /> 儲存旅程修改
           </button>
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
           <button
             className="settings-trip-delete"
             type="button"
@@ -3098,13 +3333,9 @@ export function Settings({
         </div>}
         </div>
 
-        <div className="settings-trip-panel settings-trip-panel--compact">
-          <div className="settings-trip-panel-head">
-            <div>
-              <span className="eyebrow">Currency</span>
-              <h3>匯率與統計口徑</h3>
-            </div>
-          </div>
+        <details className="settings-fx-panel" style={{ marginTop: '0.75rem' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>匯率與統計口徑</summary>
+          <div className="settings-trip-panel settings-trip-panel--compact" style={{ marginTop: '0.5rem' }}>
           <SegmentedControl
             ariaLabel="匯率模式"
             value={state.rateMode === 'fixed' ? 'fixed' : 'live'}
@@ -3131,7 +3362,7 @@ export function Settings({
             )}
           </div>
           {state.rateMode === 'fixed' && (
-            <p className="muted">已鎖定手動匯率 — 出發前兌換嘅價錢唔會被即時匯率覆蓋。想返去自動更新，撳返「即時 (ER-API)」。</p>
+            <p className="muted">已鎖定手動匯率。想返自動，撳「即時 (ER-API)」。</p>
           )}
           {state.rateMode === 'fixed' && !state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()] && (
             <p className="muted">⚠️ 未為 {String(state.tripCurrency || 'JPY').toUpperCase()} 設定固定匯率 — 而家用緊內置近似值，請喺上面輸入你實際兌換到嘅匯率。</p>
@@ -3145,26 +3376,28 @@ export function Settings({
             <input type="checkbox" checked={state.top10IncludeBigItems} onChange={(e) => updateState({ top10IncludeBigItems: e.target.checked })} />
             TOP 10 包括機票/住宿/大型交通
           </label>
-        </div>
+          </div>
+        </details>
         </div>
       </AccordionCard>
 
       <AccordionCard
         id="settings-trip-sharing"
-        eyebrow="Trip sharing"
+        eyebrow="共享"
         title="旅程共享 👥"
         icon={<Users />}
+        defaultOpen={false}
         meta={<span className="pill">{tripSharing.isShared ? `${tripSharing.memberCount} members` : '只限自己'}{tripSharing.pendingInviteCount ? ` · ${tripSharing.pendingInviteCount} pending` : ''}</span>}
       >
         <div className="mini-list">
           <span>目前角色：{tripSharing.role}</span>
-          <span>Backend：Supabase {cloudSyncAvailable ? 'connected' : 'not signed in'} · Notion {tripSharing.backendHealth?.status || 'missing'}</span>
+          <span>{cloudSyncAvailable ? '已登入雲端，可以邀請朋友一齊記帳。' : '登入雲端帳號之後就可以邀請朋友。'}</span>
           <span>{canManageTripSharing ? '你可以邀請、撤回邀請、管理成員角色。' : '你可以查看共享狀態；只有 owner/admin 可以管理成員。'}</span>
         </div>
 
         <GlassCard className="settings-account-card">
           <div className="settings-account-copy">
-            <span className="eyebrow">Invite people</span>
+            <span className="eyebrow">邀請朋友</span>
             <strong>新增共享成員</strong>
             <small>Editor 可以新增自己嘅 expense；Viewer 只可查看共享帳簿。</small>
           </div>
@@ -3220,7 +3453,7 @@ export function Settings({
         )}
 
         <div className="section-head">
-          <h2>Pending invites</h2>
+          <h2>待接受邀請</h2>
           <span className="pill">{sharingInvites.filter((invite) => invite.status === 'pending').length} pending</span>
         </div>
         <div className="mini-list">
@@ -3249,8 +3482,8 @@ export function Settings({
         </div>
 
         <div className="section-head">
-          <h2>Members</h2>
-          <span className="pill">{sharingMembers.length || 1} active</span>
+          <h2>成員</h2>
+          <span className="pill">{sharingMembers.length || 1} 人</span>
         </div>
         <div className="mini-list">
           {sharingMembers.map((member) => {
@@ -3291,7 +3524,7 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-trip-update" eyebrow="Trip Update AI" title="AI 行程更新" icon={<Sparkles />}>
+      <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />} defaultOpen={false}>
         <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
         <textarea
           rows={10}
@@ -3329,6 +3562,32 @@ export function Settings({
           </button>
           {tripDraft && <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(true)}>開啟確認視窗</button>}
           {tripDraft && <button className="secondary" type="button" onClick={() => { setTripDraft(null); setTripDraftModalOpen(false); }}>清除 preview</button>}
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+          <div className="action-row wrap">
+            <button
+              className="danger"
+              type="button"
+              disabled={!!busy}
+              onClick={() => {
+                if (!window.confirm('確定清空目前旅程嘅 AI 行程？其他設定會保留。')) return;
+              updateState({
+                customItinerary: [],
+                itineraryOverrides: {},
+              });
+              const tripsNext = (state.trips || []).map((trip) => trip.id === currentTrip.id
+                ? { ...trip, itinerary: [], version: (trip.version || 1) + 1, updatedAt: Date.now() }
+                : trip);
+              updateState({ trips: tripsNext });
+              setTripDraft(null);
+              setTripDraftModalOpen(false);
+              setStatus('已清空 AI 行程，可以重新貼入或手動編輯。');
+              }}
+            >
+              <RotateCcw size={18} /> 清除 AI 行程
+            </button>
+          </div>
         </div>
         {tripDraft && tripPreviewStats && (
           <div className="trip-preview">
@@ -3386,56 +3645,49 @@ export function Settings({
         )}
       </AccordionCard>
 
-      <AccordionCard id="settings-credentials" eyebrow="Server-side vault" title="Credentials & Connection" icon={<KeyRound />}>
-        <p className="muted">Notion、Kimi、Google、WeatherAPI keys 只喺 Credential Broker vault 入面。React 只保存短期 session；rotation input 唔會寫入 localStorage、IndexedDB、backup 或 Notion。</p>
-        <label>Credential Broker URL
-          <input value={isAllowedCredentialBrokerUrl(state.credentialBrokerUrl) ? state.credentialBrokerUrl || '' : ''} readOnly aria-readonly="true" />
-        </label>
-        <div className="credential-status-grid">
-          <span className={`pill ${brokerReady || cloudSyncAvailable ? 'ok' : 'hot'}`}>
-            <Server size={14} /> Session: {brokerReady ? 'active' : cloudSyncAvailable ? 'active (Supabase)' : 'missing'}
+      <AccordionCard
+        id="settings-credentials"
+        eyebrow="可選"
+        title="連線（進階）"
+        icon={<KeyRound />}
+        defaultOpen={false}
+        meta={(
+          <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : ''}`}>
+            Notion {personalNotionStatus?.status === 'connected' ? '已連接' : cloudSyncAvailable ? '未連接' : '登入後可用'}
           </span>
-          {directTokenEnabled && <span className={`pill ${hasDirectNotionToken() ? 'ok' : 'hot'}`}><KeyRound size={14} /> Local dev Notion: {hasDirectNotionToken() ? 'active' : 'missing'}</span>}
-          <span className={`pill ${notionMirrorReady ? 'ok' : 'hot'}`}>
-            <Cloud size={14} /> Notion mirror: {notionMirrorReady ? 'scoped' : userScopedNotionDb ? 'needs connect' : 'needs own DB'}
-          </span>
-          {statusPill('notion')}
-          {statusPill('kimi')}
-          {statusPill('google')}
-          {statusPill('weatherapi')}
-        </div>
+        )}
+      >
+        <p className="muted">連接你自己嘅 Notion database 之後，新嘅記帳會自動同步 Supabase，同時鏡像一份落你嘅 Notion（可選備份）。連接狀態睇上面嘅 Notion 鏡像指示。</p>
         {cloudSyncAvailable && (
           <div className="rotation-box">
             <div className="section-head">
-              <h2>個人 Notion notebook</h2>
-              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : 'hot'}`}>
-                {personalNotionStatus?.status || 'not checked'}
+              <h2>個人 Notion（可選）</h2>
+              <span className={`pill ${personalNotionStatus?.status === 'connected' ? 'ok' : ''}`}>
+                {personalNotionStatus?.status === 'connected' ? '已連接' : '未連接'}
               </span>
             </div>
-            <p className="muted">呢度只綁定目前 Supabase 帳號。Connector secret 會直接送去 Credential Broker 加密保存，唔會寫入 browser、backup、Supabase row 或 GitHub。</p>
-            <label>Personal Notion database ID
-              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="你自己 Notion database ID" />
+            <p className="muted">1）喺 notion.so/my-integrations 建立 integration，複製個 secret；2）喺你嘅 Notion database 右上角「⋯」→ Connections 邀請返個 integration；3）貼資料落嚟按連接。Secret 只會送去 Credential Broker 加密保存，唔會留喺部機。</p>
+            <label>Notion database
+              <input value={personalNotionDb} onChange={(e) => setPersonalNotionDb(e.target.value)} placeholder="Database 網址或 ID" />
             </label>
-            <label>Personal Notion connector secret
+            <label>Integration secret
               <input
                 type="password"
                 value={personalNotionToken}
                 onChange={(e) => setPersonalNotionToken(e.target.value)}
-                placeholder="貼上你自己 Notion connector secret"
+                placeholder="貼上 ntn_… secret"
                 autoComplete="off"
               />
             </label>
             <div className="action-row wrap">
-              <button className="secondary" type="button" disabled={!!busy} onClick={() => void refreshPersonalNotion()}>
-                Check Personal Notion
-              </button>
               <button className="primary" type="button" disabled={!!busy || !personalNotionToken.trim() || !personalNotionDb.trim()} onClick={() => void connectPersonalNotion()}>
-                <ShieldCheck size={18} /> Connect Personal Notion
+                連接
               </button>
-              <button className="danger" type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={() => void disconnectPersonalNotion()}>
-                Disconnect
+              <button className={confirmDisconnectNotion ? 'primary' : 'secondary'} type="button" disabled={!!busy || personalNotionStatus?.status !== 'connected'} onClick={armDisconnectNotion}>
+                {confirmDisconnectNotion ? '確認中斷？' : '中斷連接'}
               </button>
             </div>
+            <p className="muted">中斷後會停止寫新紀錄入你嘅 Notion；已經寫入嘅內容會保留，Supabase 資料唔受影響。</p>
           </div>
         )}
         {!brokerReady && !cloudSyncAvailable && (
@@ -3447,18 +3699,23 @@ export function Settings({
                 onChange={(e) => setBrokerPassword(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void connectCredentialBroker(); }}
                 autoComplete="current-password"
-                placeholder="Enable AI / Notion mirror"
+                placeholder="解鎖 AI"
               />
             </label>
             <button className="primary" type="button" disabled={!!busy || !brokerPassword.trim()} onClick={() => void connectCredentialBroker()}>
-              <ShieldCheck size={18} /> Connect Broker
+              連接
             </button>
           </div>
         )}
-        {!brokerReady && cloudSyncAvailable && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'rgba(52, 211, 153, 0.08)', border: '1px solid rgba(52, 211, 153, 0.25)', borderRadius: '12px', color: '#047857', fontSize: '13px', fontWeight: 700, marginTop: '16px', width: '100%' }}>
-            <Sparkles size={16} className="spin-once" style={{ color: '#059669', flexShrink: 0 }} />
-            <span>已登入 Supabase 帳號，AI 智能記帳已自動激活，免輸入解鎖密碼！🔓🤖</span>
+        {showStressPanel && (
+          <div className="credential-status-grid">
+            <span className={`pill ${brokerReady || cloudSyncAvailable ? 'ok' : 'hot'}`}>
+              <Server size={14} /> Session: {brokerReady ? 'active' : cloudSyncAvailable ? 'active (Supabase)' : 'missing'}
+            </span>
+            {statusPill('notion')}
+            {statusPill('kimi')}
+            {statusPill('google')}
+            {statusPill('weatherapi')}
           </div>
         )}
         {showStressPanel && (<div className="action-row wrap">
@@ -3584,7 +3841,12 @@ export function Settings({
           <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
           <button className="secondary" type="button" disabled={!!busy} onClick={backupToNotion}><Upload size={18} /> 備份到 Notion</button>
           <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup</button>
-          <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
+        </div>
+        <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+          <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+          <div className="action-row wrap">
+            <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearLocalPreview(true)}><RotateCcw size={18} /> 清除本地資料</button>
+          </div>
         </div>
         {showStressPanel && (<div className="action-row wrap" style={{ marginTop: '0.5rem' }}>
           <button className="secondary" type="button" onClick={previewTripShareExport}><Copy size={18} /> Preview trip share</button>
@@ -3723,7 +3985,94 @@ export function Settings({
         </div>
       </AccordionCard>
 
-      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" meta={<span className="pill">{getItinerary(state).length} 日</span>}>
+      {cloudSyncAvailable && updatePassword && (
+        <AccordionCard id="settings-supabase-account" eyebrow="帳號" title="雲端帳號與密碼設定" icon={<KeyRound />} defaultOpen={false}>
+          <div className="settings-auth-layout">
+            <GlassCard className="settings-account-card">
+              <div className="settings-account-copy">
+                <strong>{userEmail || 'Supabase 帳號'}</strong>
+              </div>
+              <div className="settings-account-actions">
+                {onSignOut && (
+                  <button className="secondary" type="button" disabled={!!busy} onClick={() => {
+                    if (window.confirm('確定要登出帳號？')) void handleSupabaseSignOut();
+                  }} aria-label="登出 Supabase">
+                    <LogOut size={18} /> 登出
+                  </button>
+                )}
+              </div>
+            </GlassCard>
+            <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(0,0,0,.12)' }}>
+              <p className="muted" style={{ margin: '0 0 0.4rem' }}>不可逆操作</p>
+              <div className="settings-account-actions">
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger" type="button" disabled={!!busy} onClick={() => setShowClearDeviceConfirm(true)} aria-label="清除此裝置資料並登出 Supabase">
+                    <Trash2 size={18} /> 清除此裝置資料
+                  </button>
+                )}
+                {onClearDeviceData && onSignOut && (
+                  <button className="danger settings-danger-solid" type="button" disabled={!!busy} onClick={() => setShowDeleteAccountConfirm(true)} aria-label="永久刪除帳戶">
+                    <UserMinus size={18} /> 永久刪除帳戶
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="settings-password-panel">
+              <label>
+                <span>新密碼</span>
+                <input
+                  type="password"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="最少 6 位"
+                />
+              </label>
+              <button
+                className="primary"
+                type="button"
+                disabled={!!busy || newPasswordInput.length < 6}
+                onClick={() => void handleUpdatePassword()}
+              >
+                儲存密碼
+              </button>
+            </div>
+          </div>
+        </AccordionCard>
+      )}
+
+      <AccordionCard id="settings-theme" eyebrow="外觀" title="外觀主題" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">{THEME_OPTIONS.find((o) => o.value === themePreference)?.label || '自動'}</span>}>
+        <p className="muted">揀自動就跟返旅程目的地。</p>
+        <div className="theme-selector" role="radiogroup" aria-label="App theme">
+          {THEME_OPTIONS.map((option) => {
+            const definition = option.value === 'auto' ? null : TRIP_THEMES[option.value as keyof typeof TRIP_THEMES];
+            return (
+              <label className="theme-option" key={option.value}>
+                <input
+                  type="radio"
+                  name="app-theme"
+                  value={option.value}
+                  checked={themePreference === option.value}
+                  onChange={() => updateState({ themePreference: option.value })}
+                />
+                <span className="theme-option-copy">
+                  <span>{option.label}</span>
+                  {definition ? <small>{definition.region.motif}</small> : <small>跟目的地自動換色</small>}
+                  {definition ? (
+                    <span className="theme-option-swatches" aria-hidden="true">
+                      <i style={{ background: definition.colors.canvas }} />
+                      <i style={{ background: definition.colors.accent }} />
+                      <i style={{ background: definition.chart[0] }} />
+                      <i style={{ background: definition.chart[1] }} />
+                    </span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </AccordionCard>
+
+      {showStressPanel && (<AccordionCard id="settings-itinerary-json" title="行程 JSON" defaultOpen={false} meta={<span className="pill">{getItinerary(state).length} 日</span>}>
         <input ref={itineraryInput} hidden type="file" accept="application/json,.json" onChange={(e) => importItinerary(e.target.files?.[0])} />
         <div className="action-row wrap">
           <button className="secondary" type="button" onClick={() => downloadJson(`${state.tripName || 'trip'}-itinerary.json`, getItinerary(state))}><Download size={18} /> 匯出行程</button>
@@ -3733,7 +4082,7 @@ export function Settings({
       </AccordionCard>)}
 
       {showStressPanel && (
-        <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />}>
+        <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />} defaultOpen={false}>
           <p className="muted">呢度係專為 Boss 設計嘅 Premium 測試中心！你可以一鍵模擬高達 1,000 筆數據、網絡延遲、API 斷網故障以及 Tab 內存洩漏測試！</p>
 
           <div className="action-row wrap" style={{ marginBottom: '1rem' }}>
@@ -4332,6 +4681,21 @@ export function Settings({
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '2rem' }}>
           <button type="button" className="secondary" onClick={onReopenGuide}>
             <Sparkles size={14} /> 重新開啟歡迎指南
+          </button>
+        </div>
+      )}
+
+      {onSignOut && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1.25rem' }}>
+          <button
+            type="button"
+            className="danger"
+            disabled={!!busy}
+            onClick={() => {
+              if (window.confirm('確定要登出帳號？')) void handleSupabaseSignOut();
+            }}
+          >
+            <LogOut size={16} /> 登出帳號
           </button>
         </div>
       )}

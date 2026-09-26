@@ -1,4 +1,4 @@
-import { motion, MotionStyle, Transition, useReducedMotion } from "motion/react"
+import { useReducedMotion } from "motion/react"
 
 import { cn } from "@/lib/cn"
 import { shouldDisableHeavyEffects } from "../../lib/performance"
@@ -27,7 +27,7 @@ interface BorderBeamProps {
   /**
    * The motion transition of the border beam.
    */
-  transition?: Transition
+  transition?: Record<string, unknown>
   /**
    * The class name of the border beam.
    */
@@ -57,7 +57,6 @@ export const BorderBeam = ({
   duration = 8,
   colorFrom = "#d94132",
   colorTo = "#d39a29",
-  transition,
   style,
   reverse = false,
   initialOffset = 0,
@@ -65,8 +64,8 @@ export const BorderBeam = ({
 }: BorderBeamProps) => {
   const reducedMotion = useReducedMotion() ?? false
 
-  // The offsetDistance keyframe animation runs on the main thread (motion-path isn't
-  // compositor-only), and TimelineRail mounts one BorderBeam per itinerary day — so on
+  // offset-path is still main-thread, but a pure CSS animation avoids MotionValue
+  // per-frame JS. TimelineRail mounts one BorderBeam per itinerary day — so on
   // phones (tier !== 'full') this is skipped entirely rather than throttled.
   if (shouldDisableHeavyEffects()) {
     return null
@@ -94,9 +93,13 @@ export const BorderBeam = ({
         } as React.CSSProperties
       }
     >
-      <motion.div
+      {/* CSS offset-path animation: same visual as the old motion.div, but no per-frame
+          MotionValue main-thread work. Keyframes live in motion.css. */}
+      <div
+        aria-hidden="true"
         className={cn(
-          "absolute aspect-square",
+          "border-beam-dash absolute aspect-square",
+          reverse ? "border-beam-dash--reverse" : "",
           "bg-linear-to-l from-(--color-from) via-(--color-to) to-transparent",
           className
         )}
@@ -106,22 +109,17 @@ export const BorderBeam = ({
             offsetPath: `rect(0 auto auto 0 round ${size}px)`,
             "--color-from": colorFrom,
             "--color-to": colorTo,
+            "--border-beam-duration": `${duration}s`,
+            "--border-beam-delay": `${-delay}s`,
+            "--border-beam-start": reverse
+              ? `${100 - initialOffset}%`
+              : `${initialOffset}%`,
+            "--border-beam-end": reverse
+              ? `${-initialOffset}%`
+              : `${100 + initialOffset}%`,
             ...style,
-          } as MotionStyle
+          } as React.CSSProperties
         }
-        initial={{ offsetDistance: `${initialOffset}%` }}
-        animate={{
-          offsetDistance: reverse
-            ? [`${100 - initialOffset}%`, `${-initialOffset}%`]
-            : [`${initialOffset}%`, `${100 + initialOffset}%`],
-        }}
-        transition={{
-          repeat: Infinity,
-          ease: "linear",
-          duration,
-          delay: -delay,
-          ...transition,
-        }}
       />
     </div>
   )

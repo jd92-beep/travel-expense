@@ -352,9 +352,10 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   const deleteButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '刪除');
   const saveButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '儲存');
   const cancelButton = coffeeEditorMetrics.footerButtons.find((button) => button.text === '取消');
-  // Boss-specified order (2026-07-03 sketch): 儲存 → 取消 → 刪除, and photo row 加入行程 → 刪除相片.
+  // Footer order follows main's delete-slot layout: 刪除 (left slot) → 儲存 → 取消; photo row 加入行程 → 刪除相片.
+  expect(deleteButton.left).toBeLessThan(saveButton.left);
   expect(saveButton.left).toBeLessThan(cancelButton.left);
-  expect(cancelButton.left).toBeLessThan(deleteButton.left);
+  expect(cancelButton.right).toBeGreaterThan(saveButton.right);
   const deletePhotoButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '刪除相片');
   const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
   expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);

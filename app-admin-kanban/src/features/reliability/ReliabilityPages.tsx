@@ -15,6 +15,7 @@ import {
   formatDateTime,
   FreshnessBanner,
   adminMetaAllowsMutation,
+  adminMutationDisabledReason,
   LoadingState,
   PageHeader,
   Pagination,
@@ -27,9 +28,10 @@ import {
   OperationDialog,
   useOperationFlow,
 } from "../operations/OperationFlow";
+import { useAdminWritePolicy } from "../../lib/writePolicy";
 
 const RELIABILITY_NAV = [
-  { to: "/reliability/incidents", label: "Incidents" },
+  { to: "/reliability/incidents", label: "事件" },
   { to: "/reliability/sync", label: "同步工作" },
   { to: "/reliability/integrity", label: "資料完整性" },
   { to: "/reliability/reconciliation", label: "Notion 對數" },
@@ -53,7 +55,7 @@ function ReliabilityFrame(
 
 export function IncidentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "incidents");
   const values = queryFromSearchParams(searchParams, [
     "severity",
     "status",
@@ -138,6 +140,7 @@ export function IncidentsPage() {
                     aria-label="Incidents 資料表"
                   >
                     <table>
+                      <caption className="sr-only">Incident 佇列清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">Severity</th>
@@ -182,6 +185,17 @@ export function IncidentsPage() {
                     detail={`最後檢查 ${
                       formatDateTime(query.data.meta.generatedAt)
                     }`}
+                    action={searchParams.toString()
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
                   />
                 )}
             </section>
@@ -191,6 +205,7 @@ export function IncidentsPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -200,8 +215,9 @@ export function IncidentsPage() {
 
 export function SyncJobsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const cursorPager = useCursorPagination(searchParams, setSearchParams);
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "sync-jobs");
   const online = useOnline();
+  const writePolicy = useAdminWritePolicy();
   const values = queryFromSearchParams(searchParams, [
     "status",
     "provider",
@@ -231,7 +247,14 @@ export function SyncJobsPage() {
     query.data.meta,
     query.isFetching || query.isPlaceholderData,
     online,
-  ));
+  ) && writePolicy.canMutateCanonical);
+  const mutateReason = adminMutationDisabledReason({
+    meta: query.data?.meta,
+    fetching: query.isFetching || query.isPlaceholderData,
+    online,
+    canWrite: writePolicy.canMutateCanonical,
+    policyLabel: writePolicy.policyLabel,
+  });
   const setFilter = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
@@ -301,6 +324,7 @@ export function SyncJobsPage() {
                     aria-label="同步工作資料表"
                   >
                     <table>
+                      <caption className="sr-only">同步工作佇列清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">狀態</th>
@@ -350,6 +374,7 @@ export function SyncJobsPage() {
                                   title="重試同步工作"
                                   aria-label={`重試同步工作 ${job.id.slice(0, 8)}`}
                                   disabled={!canMutate}
+                                  data-disabled-reason={mutateReason}
                                   onClick={() =>
                                     operationFlow.begin({
                                       action: "retry_sync_job",
@@ -366,6 +391,7 @@ export function SyncJobsPage() {
                                   title="取消同步工作"
                                   aria-label={`取消同步工作 ${job.id.slice(0, 8)}`}
                                   disabled={!canMutate}
+                                  data-disabled-reason={mutateReason}
                                   onClick={() =>
                                     operationFlow.begin({
                                       action: "cancel_sync_job",
@@ -388,6 +414,17 @@ export function SyncJobsPage() {
                     detail={`最後檢查 ${
                       formatDateTime(query.data.meta.generatedAt)
                     }`}
+                    action={searchParams.toString()
+                      ? (
+                        <button
+                          className="button secondary"
+                          type="button"
+                          onClick={() => setSearchParams(new URLSearchParams())}
+                        >
+                          清除篩選
+                        </button>
+                      )
+                      : undefined}
                   />
                 )}
             </section>
@@ -397,6 +434,7 @@ export function SyncJobsPage() {
               disabled={query.isFetching || query.isPlaceholderData}
               onPrevious={cursorPager.previous}
               onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -407,6 +445,8 @@ export function SyncJobsPage() {
 
 export function IntegrityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const cursorPager = useCursorPagination(searchParams, setSearchParams, "integrity");
+  const writePolicy = useAdminWritePolicy();
   const values = queryFromSearchParams(searchParams, [
     "severity",
     "findingType",
@@ -460,10 +500,19 @@ export function IntegrityPage() {
         <button
           className="button primary"
           type="button"
+          title={writePolicy.canMutateCanonical ? undefined : writePolicy.policyLabel}
           disabled={
             query.isFetching || query.isPlaceholderData ||
-            query.data?.data.state === "running"
+            query.data?.data.state === "running" ||
+            !writePolicy.canMutateCanonical
           }
+          data-disabled-reason={!writePolicy.canMutateCanonical
+            ? writePolicy.policyLabel
+            : query.data?.data.state === "running"
+            ? "掃描正在執行"
+            : query.isFetching || query.isPlaceholderData
+            ? "正在更新資料，請稍後"
+            : undefined}
           onClick={() =>
             operationFlow.begin({
               action: "run_integrity_scan",
@@ -566,6 +615,7 @@ export function IntegrityPage() {
                         aria-label="完整性 findings 資料表"
                       >
                         <table>
+                          <caption className="sr-only">完整性 findings 清單</caption>
                           <thead>
                             <tr>
                               <th scope="col">Severity</th>
@@ -601,23 +651,29 @@ export function IntegrityPage() {
                         </table>
                       </div>
                     )
-                    : <EmptyState title="篩選條件下沒有 findings" />}
+                    : <EmptyState
+                      title="篩選條件下沒有 findings"
+                      action={searchParams.toString()
+                        ? (
+                          <button
+                            className="button secondary"
+                            type="button"
+                            onClick={() => setSearchParams(new URLSearchParams())}
+                          >
+                            清除篩選
+                          </button>
+                        )
+                        : undefined}
+                    />}
                 </section>
               )}
             <Pagination
-              hasCursor={Boolean(searchParams.get("cursor"))}
+              hasCursor={cursorPager.hasCursor}
               nextCursor={query.data.meta.nextCursor}
               disabled={query.isFetching || query.isPlaceholderData}
-              onPrevious={() => {
-                const next = new URLSearchParams(searchParams);
-                next.delete("cursor");
-                setSearchParams(next);
-              }}
-              onNext={(cursor) => {
-                const next = new URLSearchParams(searchParams);
-                next.set("cursor", cursor);
-                setSearchParams(next);
-              }}
+              onPrevious={cursorPager.previous}
+              onNext={cursorPager.next}
+              onFirst={cursorPager.first}
             />
           </>
         )}
@@ -693,10 +749,12 @@ export function ReconciliationPage() {
     staleTime: 30_000,
   });
   const reconciliation = query.data?.data;
-  const reconciliationIncomplete = Boolean(reconciliation) && (
-    reconciliation!.notionSource !== "live" || reconciliation!.truncated ||
-    query.data!.meta.warnings.length > 0 ||
-    query.data!.meta.sources?.notion !== "live"
+  const reconciliationIncomplete = Boolean(
+    reconciliation &&
+      (reconciliation.notionSource !== "live" ||
+        reconciliation.truncated ||
+        (query.data?.meta.warnings?.length ?? 0) > 0 ||
+        query.data?.meta.sources?.notion !== "live"),
   );
   return (
     <ReliabilityFrame
@@ -868,6 +926,7 @@ export function ReconciliationPage() {
                     aria-label="Notion 對數結果"
                   >
                     <table>
+                      <caption className="sr-only">Notion 對數結果清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">SourceID</th>

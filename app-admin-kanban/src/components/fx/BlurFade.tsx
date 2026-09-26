@@ -1,20 +1,17 @@
-import type { ReactNode } from "react";
-import { motion } from "motion/react";
-import { useEffectsTier } from "../../lib/performance";
+import type { CSSProperties, ReactNode } from "react";
 
 /**
  * Enter-only staggered entrance wrapper: y (+ blur on the `full` tier). Meant for short,
  * bounded lists (<=8 items, 40ms steps) — status strip units, metric cards, search result
  * cards. Never wrap table rows or long lists (per product register: no decorative motion on
- * data tables). On `lite` tier or reduced-motion, children render with no motion.
+ * data tables).
  *
- * Deliberately does NOT animate opacity. These entrances fire on a page's very first paint
- * (e.g. landing on Overview), and a11y/overflow checks that run immediately after load can
- * sample the DOM mid-animation — an opacity:0→1 tween means a real chance of catching text
- * at partial opacity, which axe reports as a color-contrast failure against the page
- * background (confirmed: without this constraint, `page.goto()` followed immediately by an
- * axe scan intermittently caught status-unit text at opacity 0). Keeping opacity pinned at 1
- * and only animating position/blur keeps contrast correct at every instant of the animation.
+ * CSS-driven (see .blur-fade in styles/motion.css): the animation, its tier gating
+ * (html[data-fx-tier] from lib/fxAttr.ts), and the reduced-motion kill switch all live in
+ * stylesheets — no JS runtime, no re-renders on tier changes. Callers pass `delay` for
+ * stagger; the keyframes deliberately do NOT animate opacity (see motion.css for why: axe
+ * a11y scans sample the DOM right after load, and partial opacity reads as a color-contrast
+ * failure).
  */
 export function BlurFade({
   children,
@@ -30,28 +27,13 @@ export function BlurFade({
    * the card's root DOM node in every current call site). */
   augmentedUi?: string;
 }) {
-  const tier = useEffectsTier();
-
-  if (tier === "lite") {
-    return <div className={className} data-augmented-ui={augmentedUi}>{children}</div>;
-  }
-
-  const initial = tier === "full"
-    ? { y: 6, filter: "blur(3px)" }
-    : { y: 6 };
-  const animate = tier === "full"
-    ? { y: 0, filter: "blur(0px)" }
-    : { y: 0 };
-
   return (
-    <motion.div
-      className={className}
+    <div
+      className={className ? `${className} blur-fade` : "blur-fade"}
       data-augmented-ui={augmentedUi}
-      initial={initial}
-      animate={animate}
-      transition={{ duration: 0.2, delay, ease: [0.22, 1, 0.36, 1] }}
+      style={{ "--blur-fade-delay": `${delay}s` } as CSSProperties}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

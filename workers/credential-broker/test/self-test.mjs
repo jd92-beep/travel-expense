@@ -383,6 +383,19 @@ async function run() {
     });
     assert.equal(rateLimited.response.status, 429);
 
+    // Rate limit is keyed on client IP only. Rotating Origin must NOT mint a fresh bucket.
+    const originRotated = await jsonFetch(env, '/session/unlock', {
+      method: 'POST',
+      origin: 'http://127.0.0.1:8902',
+      body: { password: 'wrong-via-other-origin' },
+    });
+    assert.equal(originRotated.response.status, 429);
+
+    // Clear the rate-limit window so the rest of the suite can unlock.
+    for (const key of [...env.CREDENTIALS_VAULT.values.keys()]) {
+      if (key.startsWith('rate:unlock:')) await env.CREDENTIALS_VAULT.delete(key);
+    }
+
     const trusted = await trustedDeviceRegistration();
     const trustedOrigin = 'http://127.0.0.1:8902';
     const unlocked = await jsonFetch(env, '/session/unlock', {

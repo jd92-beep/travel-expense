@@ -265,7 +265,10 @@ export function getDirectNotionToken(): string {
 export function loadCredentialSession(): AppCredentials {
   try {
     const raw = localStorage.getItem(BROKER_SESSION_KEY);
-    const parsed = raw ? JSON.parse(raw) as AppCredentials : {};
+    if (!raw) return {};
+    // Prototype-pollution-safe parse (same guard as app state snapshots).
+    const parsed = safeJsonParse(raw) as AppCredentials | null;
+    if (!parsed || typeof parsed !== 'object') return {};
     if (!parsed.credentialSession || Number(parsed.credentialSessionExpiresAt) <= Date.now()) {
       localStorage.removeItem(BROKER_SESSION_KEY);
       return {};

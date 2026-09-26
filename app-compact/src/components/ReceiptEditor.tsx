@@ -178,7 +178,7 @@ function parseItemLine(
 
 // Free-typing wrapper: keeps the raw text while focused, parses + reformats on blur so the
 // caret never jumps mid-edit and both currencies re-derive from whichever number changed.
-function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ariaLabel }: {
+function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ariaLabel, disabled }: {
   item: { desc: string; amount: number; qty?: number };
   prefix: string;
   hkdOf: (n: number) => number;
@@ -186,6 +186,7 @@ function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ar
   onCommit: (next: { desc: string; amount: number; qty?: number }) => void;
   placeholder?: string;
   ariaLabel: string;
+  disabled?: boolean;
 }) {
   const [raw, setRaw] = useState<string | null>(null);
   const isBlankNew = !item.desc && !item.amount;
@@ -196,6 +197,7 @@ function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ar
       value={display}
       placeholder={placeholder}
       aria-label={ariaLabel}
+      disabled={disabled}
       onChange={(e) => setRaw(e.target.value)}
       onBlur={() => {
         if (raw != null) onCommit(parseItemLine(raw, item, hkdOf, fromHkd));
@@ -248,6 +250,7 @@ export function ReceiptEditor({
   onSave,
   onDelete,
   onAddToItinerary,
+  currentUserId,
 }: {
   state: AppState;
   receipt?: Receipt | null;
@@ -255,6 +258,7 @@ export function ReceiptEditor({
   onSave: (receipt: Receipt) => void;
   onDelete?: (receipt: Receipt) => void;
   onAddToItinerary?: (receipt: Receipt) => void;
+  currentUserId?: string;
 }) {
   const persons = useMemo(() => getPersons(state), [state]);
   const first = persons[0] || { id: '', name: '' };
@@ -262,6 +266,22 @@ export function ReceiptEditor({
   // Viewers on a shared trip are read-only — they can't save or delete receipts (RLS enforces
   // this server-side; this prevents a confusing failed write on the client).
   const viewerReadOnly = activeTrip(state).sharing?.role === 'viewer';
+  // A receipt owned by ANOTHER trip member is read-only too: the canonical RPC rejects
+  // non-owner updates/deletes with 42501, and the local optimistic edit/tombstone would
+  // otherwise diverge from the server copy forever (edit wins every merge via newer
+  // updatedAt; delete hides a row that still exists for everyone else). Two signals:
+  // ownerId vs the live session id, or the pull-time createdByLabel ('You' = mine) —
+  // either one saying "not mine" is enough.
+  const foreignOwned = !!receipt
+    && !!receipt.ownerId
+    && (
+      (!!currentUserId && receipt.ownerId !== currentUserId)
+      || (!!receipt.createdByLabel && receipt.createdByLabel !== 'You')
+    );
+  const readOnly = viewerReadOnly || foreignOwned;
+  const ownerLabel = receipt?.createdByLabel && receipt.createdByLabel !== 'You'
+    ? receipt.createdByLabel
+    : '旅伴';
   const currencyForDate = (date?: string) => (
     itinerary.find((day) => day.date === date)?.currency
     || state.tripCurrency
@@ -417,7 +437,16 @@ export function ReceiptEditor({
 
     // Auto compress to 800px width to keep localStorage lightweight (~50-80KB) and prevent size limit crashes
     const compressed = await compressPhoto(base64, mime, 800);
-    setDraft((d) => ({ ...d, photoThumb: compressed || base64 }));
+    if (!mountedRef.current) return;
+    // Replacing the photo must clear the cloud path/synced flags, otherwise sync skips upload.
+    setDraft((d) => ({
+      ...d,
+      photoThumb: compressed || base64,
+      photoUrl: '',
+      _photoSyncedToSupabase: false,
+      supabasePhotoPath: undefined,
+      _photoSyncAttempts: 0,
+    }));
 
     if (photoRef.current) photoRef.current.value = '';
   }
@@ -480,6 +509,14 @@ export function ReceiptEditor({
             splitType: keepSplits ? selectedSplitType : undefined,
             splits: keepSplits ? finalSplits : undefined,
             visibility: privacyEligible && draft.visibility === 'private' ? 'private' : undefined,
+            // Photo replaced/deleted in this edit session must re-upload (or clear cloud path).
+            ...(receipt?.photoThumb !== draft.photoThumb
+              ? {
+                _photoSyncedToSupabase: false,
+                supabasePhotoPath: undefined,
+                _photoSyncAttempts: 0,
+              }
+              : {}),
             lineItems: finalLineItems.length ? finalLineItems : undefined,
             itemsText: itemRowsMode
               ? (finalLineItems.length ? serializeLineItems(finalLineItems, editPrefix) : '')
@@ -489,29 +526,32 @@ export function ReceiptEditor({
         }}
       >
         <div className="modal-head">
-          <h2 id="receipt-editor-title">{receipt ? '編輯紀錄' : '手動記一筆'}</h2>
+          <h2 id="receipt-editor-title">{receipt ? (foreignOwned ? '旅伴紀錄' : '編輯紀錄') : '手動記一筆'}</h2>
           <button type="button" className="icon-btn" onClick={onCancel}>×</button>
         </div>
+        {foreignOwned && (
+          <p className="muted field-hint" style={{ margin: '0 0 8px' }}>👤 呢筆由 {ownerLabel} 記錄，全團可見，但只有建立者可以修改或刪除。</p>
+        )}
 
         <label>店名 / 項目
-          <input value={draft.store} onChange={(e) => set('store', e.target.value)} autoFocus />
+          <input value={draft.store} onChange={(e) => set('store', e.target.value)} autoFocus disabled={readOnly} />
         </label>
         <div className="form-grid">
           <label>日期
-            <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} />
+            <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} disabled={readOnly} />
           </label>
           <label>時間
-            <input type="time" value={draft.time || ''} onChange={(e) => set('time', e.target.value)} />
+            <input type="time" value={draft.time || ''} onChange={(e) => set('time', e.target.value)} disabled={readOnly} />
           </label>
         </div>
         <div className="form-grid">
           <label>金額
-            <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero onValue={(n) => set('total', n)} />
+            <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero disabled={readOnly} onValue={(n) => set('total', n)} />
           </label>
           <label>貨幣
             {/* Explicit aria-label: a wrapping <label> gives the select an accessible name polluted
                 with every <option> text (貨幣JPYHKD...), breaking exact a11y queries. */}
-            <select aria-label="貨幣" value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} onChange={(e) => {
+            <select aria-label="貨幣" value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} disabled={readOnly} onChange={(e) => {
               set('originalCurrency', e.target.value);
               set('currency', e.target.value);
             }}>
@@ -522,7 +562,7 @@ export function ReceiptEditor({
         {editCurrencyCode !== 'HKD' && (
           <div className="receipt-rate-pin">
             <label className="check-row">
-              <input type="checkbox" checked={Boolean(draft.exchangeRatePinned)} onChange={(e) => {
+              <input type="checkbox" checked={Boolean(draft.exchangeRatePinned)} disabled={readOnly} onChange={(e) => {
                 const checked = e.target.checked;
                 setDraft((d) => ({
                   ...d,
@@ -538,7 +578,7 @@ export function ReceiptEditor({
             </label>
             {draft.exchangeRatePinned && (
               <label>固定匯率（1 HKD = {editCurrencyCode}）
-                <input type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} onChange={(e) => {
+                <input type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} disabled={readOnly} onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   set('exchangeRate', Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : undefined);
                 }} />
@@ -548,28 +588,28 @@ export function ReceiptEditor({
           </div>
         )}
         <label>Booking Ref
-          <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" />
+          <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" disabled={readOnly} />
         </label>
         <div className="form-grid">
           <label>類別
-            <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)}>
+            <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)} disabled={readOnly}>
               {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </label>
           <label>支付
-            <select value={draft.payment} onChange={(e) => set('payment', e.target.value as PaymentId)}>
+            <select value={draft.payment} onChange={(e) => set('payment', e.target.value as PaymentId)} disabled={readOnly}>
               {PAYMENTS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
         </div>
         <div className="form-grid">
           <label>付款人
-            <select value={draft.personId || first?.id || ''} onChange={(e) => set('personId', e.target.value)}>
+            <select value={draft.personId || first?.id || ''} onChange={(e) => set('personId', e.target.value)} disabled={readOnly}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
           <label>分帳
-            <select aria-label="分帳" value={draft.splitMode || 'shared'} onChange={(e) => setDraft((d) => {
+            <select aria-label="分帳" value={draft.splitMode || 'shared'} disabled={readOnly} onChange={(e) => setDraft((d) => {
               const splitMode = e.target.value as SplitMode;
               return { ...d, splitMode, payers: splitMode === 'private' ? undefined : d.payers };
             })}>
@@ -580,7 +620,7 @@ export function ReceiptEditor({
         </div>
         {draft.splitMode === 'private' && (
           <label>受惠人
-            <select aria-label="受惠人" value={draft.beneficiaryId || draft.personId || first?.id || ''} onChange={(e) => set('beneficiaryId', e.target.value)}>
+            <select aria-label="受惠人" value={draft.beneficiaryId || draft.personId || first?.id || ''} onChange={(e) => set('beneficiaryId', e.target.value)} disabled={readOnly}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>
@@ -735,7 +775,7 @@ export function ReceiptEditor({
           <select
             aria-label="可見度"
             value={privacyEligible ? (draft.visibility || 'trip') : 'trip'}
-            disabled={!privacyEligible}
+            disabled={!privacyEligible || readOnly}
             onChange={(e) => set('visibility', e.target.value === 'private' ? 'private' : undefined)}
           >
             <option value="trip">全團可見</option>
@@ -745,7 +785,7 @@ export function ReceiptEditor({
           {privacyEligible && draft.visibility === 'private' && <small className="muted field-hint">🔒 只會 sync 去你自己嘅戶口，唔會出現喺旅伴 app 或 Notion</small>}
         </label>
         <label>地址 / 地圖搜尋
-          <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" />
+          <input value={draft.address || ''} onChange={(e) => set('address', e.target.value)} placeholder="例：名古屋市中村区名駅4-6-25" disabled={readOnly} />
         </label>
         {itemRowsMode ? (
           <div className="receipt-items-editor">
@@ -758,9 +798,10 @@ export function ReceiptEditor({
                   hkdOf={hkdOfItem}
                   fromHkd={fromHkdAmount}
                   ariaLabel={`品項 ${idx + 1}`}
+                  disabled={readOnly}
                   onCommit={(next) => updateItem(idx, next)}
                 />
-                <button type="button" className="icon-btn receipt-item-remove" aria-label={`刪除品項 ${idx + 1}`} onClick={() => removeItem(idx)}>×</button>
+                <button type="button" className="icon-btn receipt-item-remove" aria-label={`刪除品項 ${idx + 1}`} disabled={readOnly} onClick={() => removeItem(idx)}>×</button>
               </div>
             ))}
             <div className="receipt-item-row receipt-item-row--new">
@@ -771,18 +812,19 @@ export function ReceiptEditor({
                 fromHkd={fromHkdAmount}
                 ariaLabel="新品項"
                 placeholder={`加新品項…   ${editPrefix}金額   HK$`}
+                disabled={readOnly}
                 onCommit={(next) => setNewItem({ desc: next.desc, amount: next.amount })}
               />
-              <button type="button" className="icon-btn receipt-item-add" aria-label="新增品項" disabled={!newItem.desc.trim() && !newItem.amount} onClick={appendNewItem}>＋</button>
+              <button type="button" className="icon-btn receipt-item-add" aria-label="新增品項" disabled={readOnly || (!newItem.desc.trim() && !newItem.amount)} onClick={appendNewItem}>＋</button>
             </div>
           </div>
         ) : (
           <label>品項
-            <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={6} />
+            <textarea value={draft.itemsText || ''} onChange={(e) => set('itemsText', e.target.value)} rows={6} disabled={readOnly} />
           </label>
         )}
         <label>備註
-          <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} />
+          <textarea value={draft.note || ''} onChange={(e) => set('note', e.target.value)} rows={3} disabled={readOnly} />
         </label>
         {receipt?.supabaseId && (
           <ExpenseComments receiptSupabaseId={receipt.supabaseId} readOnly={viewerReadOnly} />
@@ -805,8 +847,15 @@ export function ReceiptEditor({
             </button>
           )}
           <div className="photo-tool-buttons">
-            {(draft.photoThumb || draft.photoUrl) && <button type="button" className="danger" onClick={() => setDraft((d) => ({ ...d, photoThumb: '', photoUrl: '' }))}>刪除相片</button>}
-            <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>
+            {(draft.photoThumb || draft.photoUrl) && !readOnly && <button type="button" className="danger" onClick={() => setDraft((d) => ({
+              ...d,
+              photoThumb: '',
+              photoUrl: '',
+              _photoSyncedToSupabase: false,
+              supabasePhotoPath: undefined,
+              _photoSyncAttempts: 0,
+            }))}>刪除相片</button>}
+            {!readOnly && <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>}
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
               const total = validAmount(draft.total);
               if (total == null) {
@@ -819,12 +868,14 @@ export function ReceiptEditor({
         </div>
 
         <div className="modal-actions receipt-editor-actions">
+          {receipt && onDelete && !readOnly
+            ? <div className="receipt-delete-slot"><button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button></div>
+            : null}
           <div className="receipt-final-actions">
-            {viewerReadOnly
-              ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>只可檢視（Viewer 權限）</span>
+            {readOnly
+              ? <span className="muted" style={{ fontSize: '12px', alignSelf: 'center' }}>{viewerReadOnly ? '只可檢視（Viewer 權限）' : `由 ${ownerLabel} 記錄 · 只有建立者可以修改或刪除`}</span>
               : <GradientButton type="submit" className="text-sm">儲存</GradientButton>}
             <button type="button" className="secondary" onClick={onCancel}>取消</button>
-            {receipt && onDelete && !viewerReadOnly ? <button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button> : null}
           </div>
         </div>
       </form>

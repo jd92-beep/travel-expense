@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, RefreshCw } from "lucide-react";
 import { adminGet } from "../../lib/api/adminClient";
+import { useAdminWritePolicy } from "../../lib/writePolicy";
 import {
   EmptyState,
   ErrorState,
@@ -18,9 +19,9 @@ import {
 } from "../operations/OperationFlow";
 
 const SYSTEM_NAV = [
-  { to: "/system/providers", label: "Providers" },
-  { to: "/system/releases", label: "Releases" },
-  { to: "/system/infrastructure", label: "Infrastructure" },
+  { to: "/system/providers", label: "AI Provider" },
+  { to: "/system/releases", label: "版本發佈" },
+  { to: "/system/infrastructure", label: "基礎設施" },
 ];
 
 type ProviderRow = {
@@ -82,6 +83,7 @@ function providerProbeCoolingDown(provider: ProviderRow, now = Date.now()) {
 
 export function ProvidersPage() {
   const [now, setNow] = useState(Date.now);
+  const writePolicy = useAdminWritePolicy();
   const query = useQuery({
     queryKey: ["admin", "providers"],
     queryFn: ({ signal }) =>
@@ -104,8 +106,8 @@ export function ProvidersPage() {
     <div className="workspace-stack">
       <WorkspaceNav items={SYSTEM_NAV} />
       <PageHeader
-        title="Providers"
-        description="Configured、Healthy、實際 model、latency、errors 及 quota 分開顯示"
+        title="AI Providers"
+        description="設定狀態、健康、實際模型、延遲與錯誤分開顯示；Broker online 不等於 provider healthy"
         actions={
           <button
             className="button secondary"
@@ -129,6 +131,12 @@ export function ProvidersPage() {
               meta={query.data.meta}
               fetching={query.isFetching}
             />
+            {!writePolicy.canProbe && !writePolicy.loading && (
+              <div className="integrity-warning" role="status">
+                <strong>Provider probe 目前停用</strong>
+                <span>{writePolicy.policyLabel}</span>
+              </div>
+            )}
             <section className="data-section">
               <header>
                 <div>
@@ -148,19 +156,20 @@ export function ProvidersPage() {
                     aria-label="Provider 資料表"
                   >
                     <table className="provider-table">
+                      <caption className="sr-only">AI 與外部 providers 狀態清單</caption>
                       <thead>
                         <tr>
                           <th scope="col">Provider</th>
-                          <th scope="col">Configured</th>
-                          <th scope="col">Health</th>
-                          <th scope="col">App models</th>
-                          <th scope="col">Required model</th>
-                          <th scope="col">Actual model</th>
-                          <th scope="col">Last success</th>
-                          <th scope="col">Last probe</th>
+                          <th scope="col">已設定</th>
+                          <th scope="col">健康</th>
+                          <th scope="col">應用模型</th>
+                          <th scope="col">必需模型</th>
+                          <th scope="col">實際模型</th>
+                          <th scope="col">最後成功</th>
+                          <th scope="col">最後探測</th>
                           <th scope="col">p50 / p95</th>
-                          <th scope="col">Errors 24h</th>
-                          <th scope="col">429 24h</th>
+                          <th scope="col">24h 錯誤</th>
+                          <th scope="col">24h 429</th>
                           <th scope="col"><span className="sr-only">操作</span></th>
                         </tr>
                       </thead>
@@ -181,20 +190,20 @@ export function ProvidersPage() {
                                   ? "error"
                                   : "unknown"}
                                 label={provider.configured === true
-                                  ? "Configured"
+                                  ? "已設定"
                                   : provider.configured === false
-                                  ? "Missing"
-                                  : "Unknown"}
+                                  ? "缺少設定"
+                                  : "未知"}
                               />
                             </td>
                             <td data-label="Health">
                               <StatusBadge
                                 value={provider.status}
                                 label={provider.healthy === true
-                                  ? "Healthy"
+                                  ? "健康"
                                   : provider.healthy === false
-                                  ? "Failed"
-                                  : "Unknown"}
+                                  ? "探測失敗"
+                                  : "未知"}
                               />
                             </td>
                             <td data-label="App models">
@@ -247,7 +256,18 @@ export function ProvidersPage() {
                                   ? `Probe cooldown until ${formatDateTime(provider.probeAvailableAt)}`
                                   : `Probe ${provider.requiredModel || provider.label}`}
                                 aria-label={`Probe ${provider.label}`}
-                                disabled={provider.configured === false || coolingDown || query.isFetching}
+                                disabled={provider.configured === false || coolingDown || query.isFetching || !writePolicy.canProbe}
+                                data-disabled-reason={!writePolicy.canProbe
+                                  ? writePolicy.policyLabel
+                                  : provider.configured === false
+                                  ? "Provider 未設定"
+                                  : coolingDown
+                                  ? `Probe 冷卻中，至 ${
+                                    formatDateTime(provider.probeAvailableAt)
+                                  }`
+                                  : query.isFetching
+                                  ? "正在更新資料，請稍後"
+                                  : undefined}
                                 onClick={() =>
                                   operationFlow.begin({
                                     action: "provider_probe",
@@ -402,6 +422,7 @@ function ReleaseProvenance({ runtime }: { runtime: RuntimeData }) {
         aria-label="版本與部署 provenance 資料表"
       >
         <table className="release-table">
+          <caption className="sr-only">版本與部署 provenance 清單</caption>
           <thead>
             <tr>
               <th scope="col">Component</th>

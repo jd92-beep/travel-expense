@@ -1,13 +1,69 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-08-24 HKT
+Last updated: 2026-09-20 HKT
 
 ## Current Status
 
-- Production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
+- **Production `1.4.1` LIVE** — Session 93 perf/UX overhaul, promoted by protected workflow
+  `35483016157` at exact SHA `9eb662743306ada242a42315d3219a1969879d38`. Live `/api/health`
+  returns version `1.4.1`, gitSha `9eb6627…`, deployment `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
+  `acceptingReadTraffic=true`. Contents (front-end only): framer-motion removed
+  (CSS/rAF replacements), lazy ProtectedShell + react-query out of the entry
+  (login entry JS 493.8→324.1 kB min), optimistic login render, self-hosted preloaded fonts,
+  idle-deferred three.js scene, concurrent workspace prefetch, augmented-ui replaced by native
+  `chamfer.css` clip-path with 1 px border-ring bleed (CSS 228.6→65.5 kB min), sticky table
+  headers, receipts table min-width, `.button.danger`, shared ConfirmDialog, Toaster,
+  `data-disabled-reason` tooltips, 「未知狀態」 badge fallback, cursor-stack pagination with
+  sessionStorage, submit-based filters, empty-state actions, `/` + Cmd/Ctrl+K search focus.
+  Measured on built app: cold 161 ms / warm reload 29 ms to interactive login form (local).
+  Also includes the smoke-test race fix (`9eb6627`): the "provider cooldown" spec now computes
+  its cooldown deadline at request time inside the mock route (`providerProbeAvailableInMs`),
+  closing a CI flake where a setup-time `Date.now()+1s` deadline expired before a slow
+  runner's page mount. Release train note: edge provenance baked + 3 secrets aligned on the
+  exact release SHA before each dispatch (first dispatch `35482604904` on `d3eb1c7` failed
+  closed on that flake; superseded by `35483016157`).
+- **Production `1.3.9` LIVE** — protected workflow `35451419090` promoted exact SHA
+  `44d674e7193419960edfdd1ef49e2a4f740cb9f9`. Live `/api/health` returns version `1.3.9`,
+  gitSha `44d674e…`, deployment `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, `acceptingReadTraffic=true`.
+  Contents: fresh-browser login CSRF fix (`auth/begin`/`auth/finish`/`passkeys/enroll/*` no
+  longer require the pre-session `__Host-admin_csrf` cookie client-side) + Playwright regression
+  spec. Edge provenance baked at `44d674e` and the three provenance secrets aligned before the
+  successful readiness verify (two earlier dispatches failed closed at candidate readiness, as
+  designed). Boss's fresh post-bootstrap Chrome login passed — root HANDOVER Open Item 1 closed.
+- **`1.3.7` code ready, previously production `1.3.6`** — Session 90b adds `admin_purge_user` (R3).
+  Double-gated: `ADMIN_WRITE_MODE=allowlisted` **and** `ADMIN_ALLOW_R3_USER_PURGE=true`.
+  Default remains off; Edge must be re-deployed via the protected workflow before the flag
+  can take effect. Live DB already has `private.admin_purge_user_manifest` +
+  `public.admin_purge_user` (service_role only). Solo/unshared targets only; Notion pages
+  are listed for manual cleanup, not auto-deleted.
+- **Production `1.3.6` LIVE** — protected workflow `34916648671` promoted exact SHA
+  `3ef88351710e0b9426c68d649a8a884444df0d78`. Live `/api/health` returns version `1.3.6`,
+  gitSha `3ef8835…`, deployment `dpl_6VNEkz8suZRj61TuXRjhwBZjdSSU`,
+  `acceptingReadTraffic=true`. Unauthenticated `/api/admin/session` returns `401`.
+  CSP now includes `worker-src 'self' blob:`. Edge deployment suffix `_108`; schema
+  `20260712123000`. Edge provenance secrets (`ADMIN_EDGE_SOURCE_SHA`,
+  `ADMIN_EXPECTED_EDGE_SOURCE_SHA`, `ADMIN_FRONTEND_GIT_SHA`) were aligned to this SHA
+  before the successful readiness verify (first promotion attempt failed readiness 503
+  while Edge still pointed at `1.3.4`).
+
+- **`1.3.6` contents** — production-readiness + UX modernization on top of 1.3.5:
+  - Quiet chrome: solid content frames, accent bar headings (no neon blocks), hex-grid gated to
+    `full` fx tier only; denser sticky tables; breadcrumbs on detail pages; Overview KPI deep-links.
+  - Status system: zh-HK labels for raw tokens (`outcome_unknown`→結果待確認, etc.); severity
+    keeps mono/uppercase; Providers/System/Reliability nav + Activity→操作中心 copy normalized.
+  - Bug fixes: IntegrityPage uses `useCursorPagination`; `formatMoney(null)` shows 未有金額;
+    support-bundle ObjectURL revoke deferred; receipts selection notice clears on empty scope;
+    Trips/Itinerary wire `useOnline`; Audit 24h/all is a radiogroup.
+  - Provider catalog contract test wired into `test:contract`.
+
+- **`1.3.5` contents** — write-policy UI gate, safe cursor previous, LoginGate bootstrap removal,
+  CSRF fail-closed, query-cache clear on logout/401, Audit filter submit, StrictMode-safe receipts
+  selection, security-scan `server/admin` walk, CSP `worker-src`.
+
+- Previous production `1.3.4` lazy-loads feature route groups, reducing the main application chunk from
   roughly 623 kB to 224 kB while keeping the Three.js login scene isolated. The root route now
   supplies `hydrateFallbackElement`, so React Router no longer emits the lazy initial-route
-  fallback warning. Typecheck, build, unit `33/33`, contract `24/24`, targeted browser `11/11`,
+  fallback warning. Typecheck, build, unit `34/34`, contract `24/24`, targeted browser `11/11`,
   security scan, and production dependency audit are green. It also embeds the contract-verified
   provider catalog inside the BFF function archive, closing the candidate `/api/admin/session` 500
   caused by an import outside Vercel's function root. Protected workflow `32687928249` promoted

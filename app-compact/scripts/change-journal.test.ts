@@ -109,7 +109,7 @@ accessDeniedQueue = settleChange(accessDeniedQueue, accessDeniedQueue[0].id, {
 assert.equal(accessDeniedQueue[0].status, 'error');
 assert.equal(restoreJournal(accessDeniedQueue).queue[0].status, 'queued');
 
-let terminal = enqueueChange([], receipt('terminal'));
+let terminal = enqueueChange([], receipt('terminal', { updatedAt: 10 }));
 terminal = settleChange(terminal, terminal[0].id, {
   kind: 'terminal-error',
   error: '40001 version conflict',
@@ -117,9 +117,17 @@ terminal = settleChange(terminal, terminal[0].id, {
 assert.equal(restoreJournal(terminal).queue[0].status, 'error');
 const terminalAttempts = terminal[0].attempts;
 const terminalError = terminal[0].error;
+// Same-or-older payload keeps terminal conflict evidence visible.
+const terminalKept = enqueueChange(terminal, receipt('terminal', { updatedAt: 10 }));
+assert.equal(terminalKept[0].attempts, terminalAttempts);
+assert.equal(terminalKept[0].error, terminalError);
+assert.equal(terminalKept[0].status, 'error');
+// A strictly newer local edit supersedes the terminal failure and re-queues.
 terminal = enqueueChange(terminal, receipt('terminal', { updatedAt: 30 }));
-assert.equal(terminal[0].attempts, terminalAttempts);
-assert.equal(terminal[0].error, terminalError);
+assert.equal(terminal[0].attempts, 0);
+assert.equal(terminal[0].status, 'queued');
+assert.equal(terminal[0].error, undefined);
+assert.equal(terminal[0].payload?.updatedAt, 30);
 terminal = settleChange(terminal, terminal[0].id, { kind: 'manual-retry' }).queue;
 assert.equal(terminal[0].attempts, 0);
 assert.equal(terminal[0].status, 'queued');

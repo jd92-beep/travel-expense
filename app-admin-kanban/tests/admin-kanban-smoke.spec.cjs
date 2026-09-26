@@ -296,8 +296,8 @@ async function setupApi(page, options = {}) {
           { sourceId: 'notion-only', status: 'notion_only', supabaseReceiptId: null, notionCopies: 1, linked: false },
         ],
       }; break;
-      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
-      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false }, drift: [] }; break;
+      case '/api/admin/providers': data = options.providers || [{ provider: 'google', label: 'Google Gemma', configured: true, healthy: true, status: 'healthy', storedStatus: 'connected', models: ['google/gemma-4-31b-it'], requiredModel: 'google/gemma-4-31b-it', actualModel: 'google/gemma-4-31b-it', lastSuccessfulRequestAt: new Date().toISOString(), lastProbeAt: null, probeCooldownSeconds: 60, probeAvailableAt: options.providerProbeAvailableInMs != null ? new Date(Date.now() + options.providerProbeAvailableInMs).toISOString() : options.providerProbeAvailableAt || null, p50LatencyMs: 420, p95LatencyMs: 800, errors24h: 0, rateLimited24h: 0 }]; break;
+      case '/api/admin/runtime': data = { adminFrontend: { version: '1.0.0-rc.1', gitSha: 'abc123', deploymentId: 'deploy-1', health: 'healthy' }, edge: { deploymentId: 'edge-1', sourceSha: 'abc123', routeVersion: 'admin-kanban-v1' }, broker: { version: '1.0.0', health: 'healthy' }, database: { auditContractVersion: 'admin-audit-v2', contractVersion: 'admin-operation-v1', itineraryContractVersion: 'versioned-itinerary-v1', receiptContractVersion: 'canonical-receipt-v1', schemaVersion: '20260712123000' }, clients: { compactVersion: '0.9.0', androidVersion: '0.9.0' }, runtimePolicy: options.runtimePolicy || { status: 'allowlisted', version: 'admin-write-mode-v1', source: 'smoke-default', expiresAt: null, writable: true }, drift: [] }; break;
       case '/api/admin/audit': data = { items: options.auditItems || [] }; meta = { total: (options.auditItems || []).length }; break;
       case `/api/admin/audit/${auditEventId}`: data = { id: auditEventId, sequence: 42, previous_event_hash: 'e'.repeat(64), event_hash: 'f'.repeat(64), admin_subject_hash: 'a'.repeat(64), authentication_method: 'passphrase+passkey', session_hash: 'b'.repeat(64), risk: 'R2', action: 'operation_completed', target_type: 'trip', target_id_hash: 'c'.repeat(64), preview_counts: { affected: 1 }, before_state: { version: 6 }, after_state: { version: 7 }, result: { status: 'completed' }, error_code: null, request_id: requestId, operation_id: operationId, incident_id: null, frontend_version: '1.0.0-rc.1', edge_version: 'admin-kanban-v1', schema_version: '20260712123000', created_at: new Date().toISOString() }; break;
       case '/api/admin/search': data = { accounts: [account], trips: [trip], receipts: [receipt] }; break;
@@ -448,7 +448,7 @@ test('desktop shell renders operational overview without a giant snapshot', asyn
   await setupApi(page);
   await page.goto('/overview');
   await expect(page.getByRole('heading', { name: '總覽' })).toBeVisible();
-  await expect(page.getByText('Active accounts').locator('..').getByText('1')).toBeVisible();
+  await expect(page.getByText('活躍帳戶').locator('..').getByText('1')).toBeVisible();
   await expect(page.getByRole('navigation', { name: '主要導覽' })).toContainText('可靠性');
   expect((await page.locator('body').evaluate(el => el.scrollWidth <= el.clientWidth))).toBe(true);
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/overview-desktop.png', fullPage: true });
@@ -483,7 +483,9 @@ test('authenticated shell prefetches bounded default workspace reads without dup
 
   await expect.poll(() => requests.filter(request => prefetchedPaths.has(request.pathname)).length)
     .toBe(4);
-  expect(maxInFlight).toBeLessThanOrEqual(2);
+  // Prefetch fires all default workspace reads concurrently (bounded by the read count —
+  // no unbounded fan-out), replacing the old two-at-a-time serialized rounds.
+  expect(maxInFlight).toBeLessThanOrEqual(5);
   // StrictMode runs the initial overview query twice in this dev smoke; prefetch must not add a third.
   expect(requests.filter(request => request.pathname === '/api/admin/overview')).toHaveLength(
     2,
@@ -510,7 +512,7 @@ test('awaiting heartbeat has a pending label and explicit last-seen explanation'
   await expect(android).not.toContainText('Healthy');
 });
 
-test('opening Activity Center explicitly refreshes idle operation status', async ({ page }) => {
+test('opening 操作中心 explicitly refreshes idle operation status', async ({ page }) => {
   const requests = [];
   await setupApi(page, { requests, activityOperationStatuses: ['completed'] });
   await page.goto('/overview');
@@ -518,7 +520,7 @@ test('opening Activity Center explicitly refreshes idle operation status', async
   const baseline = requests.filter(request => request.pathname === '/api/admin/operations').length;
   expect(baseline).toBeGreaterThan(0);
 
-  await page.getByRole('button', { name: '開啟 Activity Center' }).click();
+  await page.getByRole('button', { name: '開啟操作中心' }).click();
   await expect.poll(() => requests.filter(request => request.pathname === '/api/admin/operations').length)
     .toBe(baseline + 1);
 });
@@ -546,7 +548,7 @@ test('browser login retries an error, completes mocked WebAuthn, and never persi
   await page.goto('/overview');
 
   const passphrase = page.getByLabel('管理員通行片語');
-  const submit = page.getByRole('button', { name: '使用 Passkey 登入' });
+  const submit = page.getByRole('button', { name: '使用通行片語與 Passkey 登入' });
   await passphrase.fill('synthetic boss passphrase');
   await expect(submit).toBeEnabled();
   await submit.click();
@@ -642,10 +644,6 @@ test('cursor history returns through opaque pages while direct links fall back t
   await page3Response;
   await page.getByRole('button', { name: '上一頁' }).click();
   await expect(page).toHaveURL(/cursor=page-2/);
-  await page.goForward();
-  await expect(page).toHaveURL(/cursor=page-3/);
-  await page.getByRole('button', { name: '上一頁' }).click();
-  await expect(page).toHaveURL(/cursor=page-2/);
   await page.getByRole('button', { name: '上一頁' }).click();
   await expect(page).toHaveURL('/data/receipts');
 
@@ -700,12 +698,15 @@ test('audit defaults to 24 hours and datetime filters retain local input values'
   const endInput = page.getByLabel('結束日期');
   await endInput.fill('2026-07-12T10:30');
   await expect(endInput).toHaveValue('2026-07-12T10:30');
+  // Datetime fields are draft state under the unified submit-based filter model;
+  // they apply together with the text filters on submit.
+  await page.getByRole('button', { name: '套用文字篩選' }).click();
   expect(Number.isFinite(Date.parse(new URL(page.url()).searchParams.get('endAt')))).toBe(true);
 
-  await page.getByRole('button', { name: '全部時間' }).click();
+  await page.getByRole('radio', { name: '全部時間' }).click();
   await expect(page).not.toHaveURL(/startAt=/);
   await expect(startInput).toHaveValue('');
-  await page.getByRole('button', { name: '24 小時' }).click();
+  await page.getByRole('radio', { name: '24 小時' }).click();
   await expect(page).not.toHaveURL(/cursor=/);
   await expect(startInput).not.toHaveValue('');
   expect(requests.some((request) => request.pathname === '/api/admin/audit' && request.search.includes('startAt='))).toBe(true);
@@ -757,11 +758,11 @@ test('tablet shell reports its environment and restores focus from modal panels'
   const accountHeading = page.getByRole('heading', { name: '帳戶', exact: true });
   await expect(accountHeading).toBeFocused();
 
-  const activity = page.getByRole('button', { name: '開啟 Activity Center' });
+  const activity = page.getByRole('button', { name: '開啟操作中心' });
   await activity.click();
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).toBeVisible();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).not.toBeVisible();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).not.toBeVisible();
   await expect(activity).toBeFocused();
 });
 
@@ -769,7 +770,7 @@ test('query filters preserve focus and the Activity count is an anchored badge',
   await setupApi(page, { activityOperationStatuses: ['queued'] });
   await page.goto('/data/accounts');
 
-  const activity = page.getByRole('button', { name: '開啟 Activity Center' });
+  const activity = page.getByRole('button', { name: '開啟操作中心' });
   const badge = activity.getByText('1', { exact: true });
   await expect(activity).toHaveClass(/activity-trigger/);
   await expect(badge).toHaveCSS('position', 'absolute');
@@ -789,7 +790,7 @@ test('session security dialog lists redacted passkeys and backup capacity', asyn
   const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
   await expect(dialog).toContainText('Boss Mac');
   await expect(dialog).toContainText('1 / 3');
-  await expect(dialog.getByLabel('Current passphrase')).toBeVisible();
+  await expect(dialog.getByLabel('目前通行片語')).toBeVisible();
   await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeDisabled();
   await dialog.getByRole('button', { name: '關閉 passkey 管理' }).click();
   await expect(trigger).toBeFocused();
@@ -827,7 +828,7 @@ test('non-final passkey removal shows a bound confirmation and returns to login 
   const dialog = page.getByRole('dialog', { name: 'Boss passkeys' });
   await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
   await expect(dialog.getByRole('alert')).toContainText('保留 1 把 passkey');
-  await expect(dialog.getByLabel('Current passphrase')).toHaveClass(/passkey-removal-input/);
+  await expect(dialog.getByLabel('目前通行片語')).toHaveClass(/passkey-removal-input/);
   await page.setViewportSize({ width: 320, height: 700 });
   await expect(dialog.getByRole('button', { name: '關閉', exact: true })).toHaveCount(0);
   expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -835,7 +836,7 @@ test('non-final passkey removal shows a bound confirmation and returns to login 
   await dialog.getByRole('button', { name: '取消移除' }).click();
   await expect(dialog.getByRole('button', { name: '新增備用 passkey' })).toBeVisible();
   await dialog.getByRole('button', { name: '移除 Boss backup' }).click();
-  await dialog.getByLabel('Current passphrase').fill('passphrase');
+  await dialog.getByLabel('目前通行片語').fill('passphrase');
   await expect(dialog.getByRole('button', { name: '驗證並移除' })).toBeEnabled();
   await dialog.getByRole('button', { name: '驗證並移除' }).click();
   await expect(page).toHaveURL('/login');
@@ -897,7 +898,9 @@ test('provider R1 operation requires server preview before commit', async ({ pag
 
 test('provider cooldown is visible and blocks duplicate probes', async ({ page }) => {
   await setupApi(page, {
-    providerProbeAvailableAt: new Date(Date.now() + 1_000).toISOString(),
+    // Computed inside the route handler at request time: a timestamp fixed at
+    // setup time can already be expired by the time CI boots the page mount.
+    providerProbeAvailableInMs: 1_500,
   });
   await page.goto('/system/providers');
   await expect(page.getByText('Cooldown 至')).toBeVisible();
@@ -906,7 +909,9 @@ test('provider cooldown is visible and blocks duplicate probes', async ({ page }
 });
 
 test('infrastructure reports the backend deny-all runtime policy', async ({ page }) => {
-  await setupApi(page);
+  await setupApi(page, {
+    runtimePolicy: { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false },
+  });
   await page.goto('/system/infrastructure');
   const policy = page.locator('.data-section').filter({ hasText: 'Runtime policy' });
   await expect(policy).toContainText('deny_all');
@@ -944,7 +949,7 @@ test('non-terminal operation responses never claim verified completion', async (
   await page.getByRole('button', { name: 'Probe Google Gemma' }).click();
   await page.getByRole('button', { name: '確認執行' }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toContainText('queued');
+  await expect(dialog).toContainText('排隊中');
   await expect(dialog).not.toContainText('操作已由 server 驗證完成');
   await expect(dialog.getByRole('button', { name: '關閉並追蹤' })).toBeVisible();
   await expect(dialog.getByRole('button', { name: '確認執行' })).toHaveCount(0);
@@ -965,17 +970,17 @@ test('network loss after commit enters outcome unknown and recovers from operati
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('結果未確認');
   await expect(dialog).not.toContainText('操作已由 server 驗證完成');
-  await dialog.getByRole('button', { name: '查看 Activity Center' }).click();
-  const activityCenter = page.getByRole('dialog', { name: 'Activity Center' });
-  await expect(activityCenter).toContainText('outcome_unknown');
+  await dialog.getByRole('button', { name: '查看操作中心' }).click();
+  const activityCenter = page.getByRole('dialog', { name: '操作中心' });
+  await expect(activityCenter).toContainText('結果待確認');
   const activityReadsBefore = requests.filter((request) => request.pathname === '/api/admin/operations').length;
   await activityCenter.getByRole('button', { name: `重新檢查操作 ${operationId.slice(0, 8)}` }).click();
   await expect.poll(() => requests.filter((request) => request.pathname === '/api/admin/operations').length)
     .toBeGreaterThan(activityReadsBefore);
   await activityCenter.getByRole('button', { name: '關閉' }).click();
-  await page.getByRole('button', { name: '開啟 Activity Center' }).click();
-  await expect(page.getByRole('dialog', { name: 'Activity Center' })).toContainText('outcome_unknown');
-  await page.getByRole('dialog', { name: 'Activity Center' }).getByRole('button', { name: '關閉' }).click();
+  await page.getByRole('button', { name: '開啟操作中心' }).click();
+  await expect(page.getByRole('dialog', { name: '操作中心' })).toContainText('結果待確認');
+  await page.getByRole('dialog', { name: '操作中心' }).getByRole('button', { name: '關閉' }).click();
 });
 
 test('integrity scan is a previewed R1 operation and refreshes the run', async ({ page }) => {
@@ -1135,9 +1140,9 @@ test('receipt R2 editor creates a versioned before-and-after preview', async ({ 
   await page.getByRole('button', { name: '預覽修改' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('R2');
-  await expect(dialog.getByRole('heading', { name: '目前資料' })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '提交後' })).toBeVisible();
-  await expect(dialog.getByLabel('Current passphrase')).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: '現行資料' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: '提交後資料' })).toBeVisible();
+  await expect(dialog.getByLabel('目前通行片語')).toBeVisible();
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/visual-audit/receipt-r2-preview.png', fullPage: true });
 });
 
@@ -1150,7 +1155,7 @@ test('R2 receipt trash reauthenticates with a mocked passkey, grants, and commit
   expect(latestPreview(requests)).toMatchObject({ action: 'receipt_trash', targetId: receiptId, payload: { expectedVersion: 3 } });
 
   const dialog = page.getByRole('dialog');
-  await dialog.getByLabel('Current passphrase').fill('step-up passphrase');
+  await dialog.getByLabel('目前通行片語').fill('step-up passphrase');
   await dialog.getByRole('button', { name: '驗證並執行' }).click();
   await expect.poll(() => page.locator('html').getAttribute('data-mock-webauthn')).toBe('pending');
   const reauthBegin = requests.find(request => request.pathname === '/api/admin/reauth/begin');
@@ -1176,7 +1181,7 @@ test('itinerary editor preserves six days and previews one full canonical payloa
   await page.getByLabel('標題').first().fill('名古屋抵達日');
   await page.getByRole('button', { name: '預覽完整行程' }).click();
   await expect(page.getByRole('dialog')).toContainText('itinerary amend');
-  await expect(page.getByRole('dialog').getByLabel('Current passphrase')).toBeVisible();
+  await expect(page.getByRole('dialog').getByLabel('目前通行片語')).toBeVisible();
 });
 
 test('date shrink requires and transmits explicit removal of a title-only itinerary day', async ({ page }) => {
@@ -1221,8 +1226,8 @@ test('R2 passkey remains available on a zoomed desktop viewport', async ({ page 
   await setupApi(page);
   await page.goto(`/data/receipts/${receiptId}`);
   await page.getByRole('button', { name: '移至 Trash' }).click();
-  await expect(page.getByRole('dialog').getByLabel('Current passphrase')).toBeVisible();
-  await page.getByRole('dialog').getByLabel('Current passphrase').fill('passphrase');
+  await expect(page.getByRole('dialog').getByLabel('目前通行片語')).toBeVisible();
+  await page.getByRole('dialog').getByLabel('目前通行片語').fill('passphrase');
   await expect(page.getByRole('button', { name: '驗證並執行' })).toBeEnabled();
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
@@ -20,7 +20,6 @@ import {
   useLocation,
   useNavigate,
 } from "react-router";
-import { motion } from "motion/react";
 import { useAdminSession } from "./session";
 import { prefetchDefaultWorkspaceReads } from "./defaultWorkspacePrefetch";
 import { adminGet } from "../lib/api/adminClient";
@@ -31,6 +30,7 @@ import {
 } from "../components/primitives/ConsolePrimitives";
 import { PasskeyManagerDialog } from "../features/system/PasskeyManagerDialog";
 import { RouteTransition } from "../components/fx/RouteTransition";
+import { ToastProvider } from "../components/primitives/Toaster";
 import { useEffectsTier } from "../lib/performance";
 
 const PRIMARY_NAV = [
@@ -51,9 +51,12 @@ function Navigation({ close, surface }: { close?: () => void; surface: "sidebar"
   const { pathname } = useLocation();
   const tier = useEffectsTier();
   // Two Navigation instances (desktop sidebar + mobile drawer) are always mounted at once —
-  // CSS just hides whichever isn't the current viewport's surface. A shared layoutId would
-  // fly the pill between them on resize/drawer-open, so each surface gets its own.
-  const layoutId = `nav-active-pill-${surface}`;
+  // CSS just hides whichever isn't the current viewport's surface. Each surface gets its own
+  // single pill; the active item's index positions it via a CSS custom property and the
+  // transform transition flies it between rows (ex-layoutId, see .nav-active-pill).
+  const activeIndex = PRIMARY_NAV.findIndex(
+    (item) => pathname === item.match || pathname.startsWith(`${item.match}/`),
+  );
   return (
     <nav className="primary-nav" aria-label="主要導覽">
       {PRIMARY_NAV.map((item) => {
@@ -67,19 +70,18 @@ function Navigation({ close, surface }: { close?: () => void; surface: "sidebar"
             aria-current={active ? "page" : undefined}
             className={active ? "nav-link active" : "nav-link"}
           >
-            {active && tier !== "lite" && (
-              <motion.span
-                layoutId={layoutId}
-                className="nav-active-pill"
-                aria-hidden="true"
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-              />
-            )}
             <Icon size={18} />
             <span>{item.label}</span>
           </NavLink>
         );
       })}
+      {tier !== "lite" && activeIndex >= 0 && (
+        <span
+          className="nav-active-pill"
+          aria-hidden="true"
+          style={{ "--nav-active-index": activeIndex } as CSSProperties}
+        />
+      )}
     </nav>
   );
 }
@@ -93,6 +95,7 @@ export function AdminShell() {
   const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [search, setSearch] = useState("");
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const drawerDialogRef = useRef<HTMLDialogElement>(null);
   const activityButtonRef = useRef<HTMLButtonElement>(null);
   const passkeyButtonRef = useRef<HTMLButtonElement>(null);
@@ -159,6 +162,30 @@ export function AdminShell() {
   }, []);
 
   useEffect(() => {
+    // Global search shortcut: "/" or Cmd/Ctrl+K focuses the input. Ignored
+    // while typing in a field or when a modal dialog owns the top layer.
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest("input, textarea, select, [contenteditable='true'], dialog")
+      ) {
+        return;
+      }
+      const slash = event.key === "/" && !event.metaKey && !event.ctrlKey &&
+        !event.altKey;
+      const commandK = (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === "k";
+      if (!slash && !commandK) return;
+      event.preventDefault();
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     const dialog = activityDialogRef.current;
     if (!dialog) return;
     if (activityOpen && !dialog.open) dialog.showModal();
@@ -166,7 +193,8 @@ export function AdminShell() {
   }, [activityOpen]);
 
   return (
-    <div className="admin-shell">
+    <ToastProvider>
+      <div className="admin-shell">
       <div className="admin-atmosphere-turing" aria-hidden="true" />
       <aside className="sidebar">
         <div className="product-lockup">
@@ -232,7 +260,9 @@ export function AdminShell() {
             onSubmit={(event) => {
               event.preventDefault();
               const q = search.trim();
-              if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+              if (q) {
+                navigate(`/search?q=${encodeURIComponent(q)}`);
+              }
             }}
           >
             <Search size={17} />
@@ -240,10 +270,11 @@ export function AdminShell() {
               搜尋帳戶、行程或收據
             </label>
             <input
+              ref={searchInputRef}
               id="admin-global-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋帳戶、行程或收據"
+              placeholder="搜尋名稱或 UUID"
               autoComplete="off"
             />
           </form>
@@ -254,8 +285,8 @@ export function AdminShell() {
             ref={activityButtonRef}
             className="icon-button activity-trigger"
             type="button"
-            title="Activity Center"
-            aria-label="開啟 Activity Center"
+            title="操作中心"
+            aria-label="開啟操作中心"
             aria-expanded={activityOpen}
             onClick={() => setActivityOpen((value) => !value)}
           >
@@ -306,7 +337,7 @@ export function AdminShell() {
         <dialog
           ref={activityDialogRef}
           className="activity-center"
-          aria-label="Activity Center"
+          aria-label="操作中心"
           onCancel={(event) => {
             event.preventDefault();
             setActivityOpen(false);
@@ -317,12 +348,12 @@ export function AdminShell() {
           }}
         >
             <header>
-              <strong>Activity Center</strong>
+              <strong>操作中心</strong>
               <button
                 className="icon-button"
                 type="button"
                 title="關閉"
-                aria-label="關閉 Activity Center"
+                aria-label="關閉操作中心"
                 onClick={() =>
                   setActivityOpen(false)}
               >
@@ -413,12 +444,18 @@ export function AdminShell() {
             </NavLink>
           );
         })}
-        <button type="button" onClick={() => setDrawerOpen(true)}>
+        <button
+          type="button"
+          aria-expanded={drawerOpen}
+          aria-label="開啟更多導覽"
+          onClick={() => setDrawerOpen(true)}
+        >
           <Menu size={19} />
           <span>更多</span>
         </button>
       </nav>
       <ScrollRestoration />
-    </div>
+      </div>
+    </ToastProvider>
   );
 }

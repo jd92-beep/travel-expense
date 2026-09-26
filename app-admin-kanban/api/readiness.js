@@ -21,14 +21,43 @@ export function validateReadinessData(data, { expectedGitSha, expectedSchemaVers
     ? drift.filter((code) => !ALLOWED_CANDIDATE_DRIFT.has(code))
     : drift;
   const edgeSourceMatches = data?.edge?.sourceSha === expectedGitSha;
-  if (!/^[0-9a-f]{40}$/i.test(expectedGitSha)
-    || !/^\d{14}$/.test(expectedSchemaVersion)
-    || data?.edge?.deploymentId === 'unknown'
-    || data?.database?.schemaVersion !== expectedSchemaVersion
-    || data?.broker?.health !== 'healthy'
-    || !edgeSourceMatches
-    || unexpectedDrift.length > 0) {
-    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready', 503, {
+  if (!/^[0-9a-f]{40}$/i.test(expectedGitSha)) {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: missing release git SHA', 503, {
+      retryable: true,
+    });
+  }
+  if (!/^\d{14}$/.test(expectedSchemaVersion)) {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: schema version config', 503, {
+      retryable: true,
+    });
+  }
+  if (data?.edge?.deploymentId === 'unknown') {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: edge deployment id', 503, {
+      retryable: true,
+    });
+  }
+  if (data?.database?.schemaVersion !== expectedSchemaVersion) {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: database schema version', 503, {
+      retryable: true,
+    });
+  }
+  if (data?.broker?.health !== 'healthy') {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', 'Release dependencies are not ready: broker health', 503, {
+      retryable: true,
+    });
+  }
+  if (!edgeSourceMatches) {
+    const expected = String(expectedGitSha || '').slice(0, 12);
+    const observed = String(data?.edge?.sourceSha || '').slice(0, 12);
+    throw new HttpError(
+      'UPSTREAM_UNAVAILABLE',
+      `Release dependencies are not ready: edge source SHA mismatch (edge=${observed} expected=${expected})`,
+      503,
+      { retryable: true },
+    );
+  }
+  if (unexpectedDrift.length > 0) {
+    throw new HttpError('UPSTREAM_UNAVAILABLE', `Release dependencies are not ready: ${unexpectedDrift.join(',')}`, 503, {
       retryable: true,
     });
   }

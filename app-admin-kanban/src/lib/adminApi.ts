@@ -42,6 +42,16 @@ function csrfToken(): string {
   return part ? decodeURIComponent(part.slice(prefix.length)) : '';
 }
 
+// Login and first-enrollment mutations run before any opaque session exists, so the
+// session-bound CSRF cookie cannot be present yet. The BFF protects these endpoints with
+// strict same-origin checks plus the WebAuthn ceremony instead of CSRF validation.
+const PRE_SESSION_MUTATION_PATHS = new Set([
+  '/api/admin/auth/begin',
+  '/api/admin/auth/finish',
+  '/api/admin/passkeys/enroll/begin',
+  '/api/admin/passkeys/enroll/finish',
+]);
+
 async function parseJson<T>(response: Response): Promise<T> {
   const text = await response.text();
   let payload: any;
@@ -71,6 +81,9 @@ async function request<T>(path: string, options: { method?: string; body?: unkno
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
   if (method !== 'GET' && method !== 'HEAD') {
     const token = csrfToken();
+    if (!token && !PRE_SESSION_MUTATION_PATHS.has(path)) {
+      throw new AdminApiError('管理員 CSRF session 已失效', 'CSRF_REJECTED', 403);
+    }
     if (token) headers['X-Admin-CSRF'] = token;
   }
   return parseJson<T>(await fetch(path, {
