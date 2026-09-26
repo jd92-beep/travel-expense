@@ -1,15 +1,15 @@
 # Agent Handover
 
 ## Last Worked On
-- **Date**: 2026-09-20 HKT
-- **Focus**: Session 93 — Admin `1.4.0`/`1.4.1`: full-console analysis; bundle/boot performance overhaul
-  (framer-motion removed, lazy shell, optimistic login, font preload), CSS purge (augmented-ui
-  replaced), UX pass (danger purge styling, ConfirmDialog, toasts, pagination persistence,
-  filter unification, captions, search shortcuts); then production release train with a
-  smoke-test race fix.
+- **Date**: 2026-09-26 HKT
+- **Focus**: Session 94 — Compact shared-ledger end-to-end review + fixes (foreign-receipt
+  read-only guard, owner display names, member-contribution stats, purge notice), four live DB
+  migrations applied via Management API (comments visibility policy, account-deletion ownership
+  transfer, `admin_purge_user`, receipt key-presence upsert), and full Supabase migration-history
+  reconciliation (69/69 aligned, `db push` channel restored).
 - **Agent**: Kimi Code.
-- **App version**: Admin **`1.4.1` LIVE** (`9eb6627`, Vercel `dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`,
-  protected workflow `35483016157`). Compact `0.24.0` live.
+- **App version**: Compact **`0.24.3` LIVE** (GitHub Pages deploy green; commits `56e1348`,
+  `1dc4758`, `ab4a05c`, `53d407d`). Admin `1.4.1` live.
 
 ## ⚙️ Build Versioning Rule (MANDATORY)
 
@@ -18,7 +18,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.0`; the Android branch is `0.22.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.3`; the Android branch is `0.22.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -34,6 +34,9 @@ you closed with your session number.
    them, and leaves trip-visible receipts with the successor. Proven by live SQL smoke
    `supabase/tests/account_deletion_transfer_smoke.sql` (transaction + rollback) on
    `fbnnjoahvtdrnigevrtw`. Reopen only if a real user account deletion fails in product.
+   (2026-09-26, Session 94: migration `20260916110000` formally applied to live via Management
+   API and verified; `admin_purge_user` `20260916130000` applied service-role only at the same
+   time. `delete_own_user_account` confirmed carrying `search_path=""`.)
 1. 🟢 **CLOSED (Session 92) — Fresh post-bootstrap Chrome login PASSED on live Admin `1.3.9`** —
    Boss completed a fresh login (passphrase + Boss passkey) on live `1.3.9` (`44d674e`, Vercel
    `dpl_BRSAuxpZAPVPeLUyYLiskkb4sxNB`, protected workflow `35451419090`). The original blocker
@@ -79,7 +82,9 @@ you closed with your session number.
     `itinerary_version` but not `country_code`, `theme_key`, `locale`, `weather_region` or
     `trip_intelligence`. Compact `0.16.6` safely falls back to the legacy row contract, but reconcile
     the migration history on a reviewed branch before adding these columns. Do not use `db push` or
-    migration repair without Boss approval.
+    migration repair without Boss approval. (2026-09-26, Session 94: the migration-history
+    reconciliation is complete — 69/69 aligned, `db push` channel restored; the column drift
+    itself is unchanged and still needs a reviewed additive migration.)
 15. 🟡 **One-time stale Chrome tab reload confirmation** — the currently open Compact tab was
     created at 10:11 on `0.16.4`, before Sessions 57/58 deployed. It cannot run the new freshness
     detector until Boss performs one hard refresh after `0.16.6` reaches production. Do not claim
@@ -141,8 +146,43 @@ you closed with your session number.
 25. 🟢 **Compact Notion diagnostic smoke realigned in Session 87** — the removed Settings UI is no
    longer treated as a navigation contract. The diagnostic API is exercised directly and retains
    the original mixed-schema `conflicting-duplicate=7`, `meta-fallback=5`, `skipped-row=2` assertions.
+26. 🟢 **Session 94 closed the shared-ledger review + migration-history reconciliation** —
+   end-to-end review of solo/shared expense recording fixed: foreign-owned receipts are
+   read-only in ReceiptEditor, History shows an owner badge, owner display names come from
+   profiles, Stats gained a member-contribution block on shared trips, and a purge notice
+   surfaces when a member is removed (Compact `0.24.1`–`0.24.3`, live on Pages). Live DB:
+   `20260916090000` (comments visibility policy + lease index), `20260916110000`,
+   `20260916130000` and `20260926100000` (receipt upsert key-presence, fixes silent field
+   drops on partial payloads) applied via Management API and individually verified. Migration
+   history fully reconciled (7 local-only recorded via targeted `migration repair`, 3
+   remote-only hotfixes stubbed): `migration list` 69/69 aligned and `db push --dry-run`
+   reports "Remote database is up to date". Remaining open follow-ups stay in Items 2, 6,
+   7, 12 and 14.
 
 ## What Was Done
+
+### Session 94 (Kimi Code — Compact shared-ledger review + live DB migrations + history reconcile)
+
+Compact `0.24.1`–`0.24.3` (live on GitHub Pages); four live DB migrations applied via Management
+API; migration history reconciled. Detail in `CHANGELOG.md` 2026-09-26 entries.
+1. **Shared-ledger E2E review + fixes (Compact `0.24.1`–`0.24.3`, live)** — foreign-owned
+   receipts are now read-only in ReceiptEditor (`foreignOwned` by ownerId vs session user or
+   `createdByLabel ≠ 'You'`); History shows a per-receipt owner badge (`👤 name`);
+   `rowToPulledReceipt`/`rowToReceiptForTrip` resolve `createdByLabel` from profile display
+   names; Stats gained a 「共享成員記帳」 member-contribution block on shared trips; the sync
+   purge branch surfaces a one-cycle banner when the user was removed from a trip. New visual
+   specs `sharing-visual-check.spec.cjs` + `stats-attribution-visual-check.spec.cjs` pass.
+2. **Live DB migrations applied + verified** — `20260916090000` (expense_comments visibility
+   policy + lease index), `20260916110000` (account-deletion ownership transfer),
+   `20260916130000` (`admin_purge_user`, service-role only) and `20260926100000` (receipt
+   upsert key-presence: `p_receipt ? 'note'` etc., stops silent field drops on partial
+   payloads). Each verified by Management API query (policy qual, index presence, GUC guard,
+   `search_path=""`).
+3. **Migration history reconciled (`53d407d`)** — 7 local-only migrations recorded via targeted
+   `supabase migration repair --status applied` after per-migration live probes; 3 remote-only
+   hotfixes stubbed with `select 1` placeholders. `migration list` 69/69 aligned; `db push
+   --dry-run` reports "Remote database is up to date". The historical 🔴 HIGH PRIORITY item is
+   closed below.
 
 ### Session 93 (Kimi Code — Admin 1.4.0 console analysis + perf/UX overhaul)
 
@@ -2067,7 +2107,7 @@ Isolated worktree branch `compact/perf-bugs-themes` from `main` @ `252003d`. Com
 > this file — reconcile there; do not act from this section without re-verifying.
 
 ### 🔴 HIGH PRIORITY
-1. **Reconcile Supabase migration history divergence**: The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).
+1. ✅ **CLOSED 2026-09-26 (Session 94) — Supabase migration history divergence reconciled**: done on a reviewed branch merged to `main` (`53d407d`). Seven local-only migrations were recorded via targeted `supabase migration repair --status applied` (each probed on live first); three remote-only hotfixes (`20260718170855`, `20260718170939`, `20260824033202`) got `select 1` placeholder files. `supabase migration list` is 69/69 aligned and `db push --dry-run` reports "Remote database is up to date". Original text kept for history: ~~The live project `fbnnjoahvtdrnigevrtw` has ~17 migrations in its `schema_migrations` table that are **not** in `supabase/migrations/`, and many repo migrations are not recorded as applied. `supabase db push` therefore refuses ("Remote migration versions not found in local migrations directory"). **Do NOT blind-push or blind-`migration repair`** — it could re-run old non-idempotent migrations on live data. Reconcile via `supabase db pull` into a branch, diff, then decide. Until then, apply single idempotent statements via the Management API (token in macOS keychain `security find-generic-password -s "Supabase CLI" -w`, `POST /v1/projects/<ref>/database/query`).~~
 
 ### 🟡 NEEDS LIVE VERIFICATION (Session 18 changes)
 1. **Notion settings round-trip (Phase 1)**: Code path typechecks + builds, but a full write→read cycle needs a device with a real Notion token (not available in the dev session). Confirm a large itinerary survives push→pull via the new code block.
