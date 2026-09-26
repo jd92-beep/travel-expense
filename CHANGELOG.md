@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-26
+
+- **fix(compact): shared-trip receipt ownership guard, member attribution and removal notice.** Compact ships `0.24.1`–`0.24.3`: trip-mates' receipts are read-only in the editor (closing the permanent local-divergence bug where a 42501-rejected edit/tombstone never reverted), History rows show a 👤 creator badge with real member display names, the Stats payer panel gains a 共享成員記帳 attribution block, and an authoritative pull that purges revoked/deleted trips now surfaces a one-cycle banner instead of dropping shared records silently.
+- **fix(db): key-presence UPDATE contract for shared receipts, live-applied.** Migration `20260926100000_upsert_receipt_key_presence_update.sql` was applied to live project `fbnnjoahvtdrnigevrtw` via the Management API (history divergence documented in HANDOVER still blocks `db push`; repair stays unapproved). `upsert_shared_trip_receipt` UPDATE assignments now change a column only when its key is present in the payload — a partial payload can no longer null out note/splits/etc., reset amount to 0, flip visibility back to 'trip', or overwrite record_date; present-but-empty still clears intentionally. Live `pg_get_functiondef` verification confirmed the guard. Repo-pending migrations `20260916090000`, `20260916110000`, `20260916130000` remain unapplied pending Boss review.
+
 ## 2026-09-20
 
 - **feat(compact): wide-screen desktop redesign and September UX/hardening train.** Compact ships `0.19.0`–`0.24.0`: a glass-sidebar workspace layout with per-tab bento grids for wide screens (dashboard, history, stats, scan, timeline, weather, settings), expanded weather providers with theme-aware weather UI, regional-theme smoothing, Notion connect UX with model scan and Kimi catalog realignment, tab de-lag, iOS/PWA install meta with HEIC OCR path, and a hardening batch (hydrate race, login device-trust, broker session, partial trip paste, sharing cleanup). React parity carries `0.2.10`.
