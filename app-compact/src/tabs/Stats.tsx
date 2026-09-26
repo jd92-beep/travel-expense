@@ -34,6 +34,26 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   const trueTotal = scopedState.receipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
   const maxPersonTotal = Math.max(1, ...persons.map((_, i) => (settlement.sharedByPayer[i] || 0) + (settlement.privateByOwner[i] || 0)));
   const settlementActionPlan = buildSettlementActionPlan(settlement, resolvedTripCurrency, toHkd);
+  // Shared-trip attribution: which app member recorded/paid how much. Keyed by ownerId so
+  // 'You' vs each trip-mate is explicit; receipts without an owner (pre-sharing locals)
+  // group under 本機紀錄 so the bar set still sums to the visible total.
+  const memberContributions = useMemo(() => {
+    if (!trip.sharing?.isShared) return [];
+    const byOwner = new Map<string, { label: string; count: number; total: number }>();
+    for (const r of scopedState.receipts) {
+      const key = r.ownerId || 'local';
+      const label = r.ownerId
+        ? (r.createdByLabel === 'You' ? '你' : (r.createdByLabel || '旅伴'))
+        : '本機紀錄';
+      const entry = byOwner.get(key) || { label, count: 0, total: 0 };
+      entry.count += 1;
+      entry.total += getReceiptTripAmount(r, state, resolvedTripCurrency);
+      byOwner.set(key, entry);
+    }
+    return [...byOwner.values()].sort((a, b) => b.total - a.total);
+  }, [trip.sharing?.isShared, scopedState.receipts, state, resolvedTripCurrency]);
+  const maxMemberTotal = Math.max(1, ...memberContributions.map((entry) => entry.total));
+  const MEMBER_COLORS = ['#1E4D6B', '#8B4A6B', '#2D6E48', '#9A6A1B', '#5b4a68', '#C23B5E'];
   const topReceipts = scopedState.receipts
     .filter((r) => state.top10IncludeBigItems || !isFlightOrHotelItem(r))
     .slice()
@@ -258,6 +278,21 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
         {settlement.crossPrivate.length > 0 && (
           <div className="mini-list">
             {settlement.crossPrivate.map((cp) => <span key={cp.id}>代付：{cp.payer.name} 代 {cp.beneficiary.name} 付 {resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' '}{fmt(cp.amount)} · {cp.store}</span>)}
+          </div>
+        )}
+        {memberContributions.length > 0 && (
+          <div className="member-contrib-block" aria-label="共享成員記帳歸屬">
+            <span className="member-contrib-title">共享成員記帳</span>
+            {memberContributions.map((entry, idx) => (
+              <Bar
+                key={entry.label}
+                label={`${entry.label} · ${entry.count} 筆`}
+                value={entry.total}
+                max={maxMemberTotal}
+                state={scopedState}
+                color={MEMBER_COLORS[idx % MEMBER_COLORS.length]}
+              />
+            ))}
           </div>
         )}
       </DataPanel>

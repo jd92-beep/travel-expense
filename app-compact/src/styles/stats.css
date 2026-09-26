@@ -764,6 +764,22 @@
   font-weight: 800;
 }
 
+/* Shared-trip member attribution block inside the 付款人 panel */
+.stats-tab.stats-cockpit .member-contrib-block {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(122, 92, 148, 0.28);
+  display: grid;
+  gap: 6px;
+}
+.stats-tab.stats-cockpit .member-contrib-title {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #5b4a68;
+  text-transform: uppercase;
+}
+
 .stats-tab.stats-cockpit .rank-row {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
