@@ -331,6 +331,9 @@ export function ReceiptEditor({
     () => validatePayers(totalForSplit, payerRows, editPrefix),
     [payerRows, totalForSplit, editPrefix],
   );
+  // Keystroke string for 金額 — parsing every keystroke would turn "12." into 12 and make
+  // decimals untypeable. Committed into draft.total on blur / save (Dashboard budget pattern).
+  const [totalInput, setTotalInput] = useState<string>(() => (receipt?.total != null ? String(receipt.total) : ''));
 
   useEffect(() => {
     mountedRef.current = true;
@@ -341,7 +344,7 @@ export function ReceiptEditor({
 
   useEffect(() => {
     setShowDeleteConfirm(false);
-    setDraft((receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
+    const nextDraft = (receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
       id: newId(),
       store: '',
       total: 0,
@@ -353,7 +356,9 @@ export function ReceiptEditor({
       personId: first?.id || '',
       splitMode: 'shared',
       createdAt: Date.now(),
-    });
+    };
+    setDraft(nextDraft);
+    setTotalInput(nextDraft.total != null ? String(nextDraft.total) : '');
     // Only reset when the receipt ID changes, not on every AppState update or object reference change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipt?.id]);
@@ -386,6 +391,12 @@ export function ReceiptEditor({
   const parseAmountInput = (raw: string) => {
     const parsed = parseFloat(raw);
     return !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0;
+  };
+  // Parse the string draft into draft.total and return it for validation/save.
+  const commitTotalDraft = (): number => {
+    const parsed = parseAmountInput(totalInput);
+    setDraft((d) => ({ ...d, total: parsed }));
+    return parsed;
   };
   const updateItem = (idx: number, patch: Partial<ReceiptLineItem>) => setDraft((d) => ({
     ...d,
@@ -459,10 +470,8 @@ export function ReceiptEditor({
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
-          const total = validAmount(draft.total);
-          // 原金額 UI field was removed — the schema field now simply mirrors 金額.
-          const originalAmount = total;
-          if (total == null || originalAmount == null) {
+          const total = validAmount(commitTotalDraft());
+          if (total == null) {
             alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
             return;
           }
@@ -491,15 +500,31 @@ export function ReceiptEditor({
             ? [{ id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }]
             : [];
           const finalLineItems = [...(draft.lineItems || []), ...pendingNewItem];
-          const savedCurrency = draft.currency || draft.originalCurrency || currencyForDate(draft.date);
+          const nextOriginalCurrency = draft.originalCurrency || draft.currency || currencyForDate(draft.date);
+          const nextCurrency = draft.currency || draft.originalCurrency || currencyForDate(draft.date);
+          const prevOriginalCurrency = receipt?.originalCurrency || receipt?.currency;
+          const currencyChanged = !receipt
+            || (nextCurrency !== (receipt.currency || prevOriginalCurrency))
+            || (nextOriginalCurrency !== prevOriginalCurrency);
+          // Preserve original-currency amounts / pinned-rate rows: only rewrite originalAmount
+          // when the currency changed or the field is missing. A same-currency total correction
+          // still mirrors the new total.
+          const totalCorrected = !receipt || total !== Number(receipt.total);
+          // 原金額 mirrors 金額 only when both currencies are the same. A foreign originalAmount
+          // (or a pinned-rate row) must survive a total correction — it lives in a different
+          // currency the 金額 field does not edit.
+          const originalMirrorsTotal = nextOriginalCurrency === nextCurrency;
+          const keepOriginalAmount = !!receipt
+            && receipt.originalAmount != null
+            && !currencyChanged
+            && (!totalCorrected || !originalMirrorsTotal);
           onSave({
             ...draft,
             store: draft.store.trim() || '未命名',
             total,
-            // 原金額 UI field was removed — the schema field now simply mirrors 金額.
-            originalAmount: total,
-            originalCurrency: draft.originalCurrency || draft.currency || currencyForDate(draft.date),
-            currency: savedCurrency,
+            originalAmount: keepOriginalAmount && receipt ? Number(receipt.originalAmount) : total,
+            originalCurrency: nextOriginalCurrency,
+            currency: nextCurrency,
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
             // 鎖定匯率：pinned 就 stamp 用户輸入嘅匯率；HKD 永遠 1:1 唔使 pin。
@@ -546,7 +571,13 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid">
           <label>金額
-            <NumberTextInput value={draft.total} max={MAX_RECEIPT_AMOUNT} blankZero disabled={readOnly} onValue={(n) => set('total', n)} />
+            <input type="text" inputMode="decimal" value={totalInput} disabled={readOnly} onChange={(e) => {
+              setTotalInput(e.target.value);
+            }} onBlur={() => {
+              commitTotalDraft();
+              // Normalize the display after commit; keep a blank field blank.
+              setTotalInput(totalInput.trim() === '' ? '' : String(parseAmountInput(totalInput)));
+            }} />
           </label>
           <label>貨幣
             {/* Explicit aria-label: a wrapping <label> gives the select an accessible name polluted
@@ -857,7 +888,7 @@ export function ReceiptEditor({
             }))}>刪除相片</button>}
             {!readOnly && <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>}
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
-              const total = validAmount(draft.total);
+              const total = validAmount(commitTotalDraft());
               if (total == null) {
                 alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
                 return;

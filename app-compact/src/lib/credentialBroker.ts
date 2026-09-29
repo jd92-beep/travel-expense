@@ -95,10 +95,16 @@ async function parseBrokerResponse<T>(response: Response): Promise<T> {
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
-    throw new Error(redactedError(`${response.status} ${response.statusText}`));
+    const err = new Error(redactedError(`${response.status} ${response.statusText}`)) as Error & { status?: number };
+    err.status = response.status;
+    throw err;
   }
   if (!response.ok || data?.ok === false) {
-    throw new Error(redactedError(data?.error || data?.message || `${response.status} ${response.statusText}`));
+    const detail = redactedError(data?.error || data?.message || `${response.status} ${response.statusText}`);
+    // Attach the HTTP status so callers can treat 429/quota responses as hard stops.
+    const err = new Error(/\b\d{3}\b/.test(detail) ? detail : `${response.status} ${detail}`) as Error & { status?: number };
+    err.status = response.status;
+    throw err;
   }
   return data as T;
 }

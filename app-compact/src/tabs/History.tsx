@@ -9,7 +9,7 @@ import { takeReceiptRepairIntent } from '../lib/repairIntent';
 import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
-import { categoryById, displayStore, fmt, getPersons, hkd, isPendingReceipt, isSettlementReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
+import { categoryById, displayStore, fmt, getPersons, isPendingReceipt, isSettlementReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
 import { currencyPrefix } from '../lib/currency';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { enqueueChange, settleChange } from '../lib/changeJournal';
@@ -96,7 +96,7 @@ function buildSafeReceiptPayload(receipt: Receipt, updatedAt: number): SyncQueue
 // schema, auth) is transient and just needs a retry — it must NOT show the "safe choice"
 // resolver, which previously fired on every transient error (the spurious "1 conflict").
 function isVersionConflictError(message?: string): boolean {
-  return !!message && /version conflict|conflict|40001/i.test(message);
+  return !!message && /40001|version conflict|版本衝突/i.test(message);
 }
 
 function receiptHasTrueConflict(receipt: Receipt, failedIndex: FailedQueueIndex): boolean {

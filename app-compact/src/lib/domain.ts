@@ -308,7 +308,7 @@ export function isPendingReceipt(receipt: Receipt): boolean {
   return receipt.store?.startsWith('⏳ ') || false;
 }
 
-export function hkd(jpy: number, state: AppState): number {
+export function jpyToHkd(jpy: number, state: AppState): number {
   const rate = Math.max(0.1, perHkdForCurrency(state, 'JPY'));
   return Math.round((Number(jpy) || 0) / rate);
 }
@@ -335,24 +335,22 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
     return Math.round((Number(r.total) || 0) / Math.max(0.1, pinnedRate));
   }
 
-  const rate = Math.max(0.1, Number(r.exchangeRate) || perHkdForCurrency(state, cur));
+  const storedRate = Number(r.exchangeRate);
+  const hasStoredRate = Number.isFinite(storedRate) && storedRate > 0;
+  const storedHkd = typeof r.hkdAmount === 'number' && Number.isFinite(r.hkdAmount) ? r.hkdAmount : 0;
 
-  // 增加強大嘅自我修復 Self-Healing 校驗：
-  // 如果 hkdAmount 存在，但與依匯率計算出的金額偏差超過 10% (偏離過大說明數據有污染/被寫錯了)，
-  // 或者當 total > 100 且 hkdAmount <= 5 (顯然比例不對) 時，我們強制重新計算！
-  let isHkdAmountValid = false;
-  if (typeof r.hkdAmount === 'number' && r.hkdAmount > 0) {
-    const ratio = (Number(r.total) || 0) / r.hkdAmount;
+  // 自我修復只信「行內數據」：hkdAmount 缺失/<=0 先補齊；有正數 hkdAmount 時只拿行內
+  // 自帶匯率 (r.exchangeRate) 校驗，偏差 >10% 先重算。唔好單憑今日市場匯率覆寫歷史
+  // 金額 —— 市場波動唔等於舊數據被污染。
+  if (storedHkd > 0) {
+    if (!hasStoredRate) return storedHkd;
+    const rate = Math.max(0.1, storedRate);
+    const ratio = (Number(r.total) || 0) / storedHkd;
     const percentDiff = Math.abs(ratio - rate) / rate;
-    if (percentDiff < 0.10) {
-      isHkdAmountValid = true;
-    }
+    return percentDiff < 0.10 ? storedHkd : Math.round((Number(r.total) || 0) / rate);
   }
 
-  if (isHkdAmountValid && typeof r.hkdAmount === 'number') {
-    return r.hkdAmount;
-  }
-
+  const rate = Math.max(0.1, hasStoredRate ? storedRate : perHkdForCurrency(state, cur));
   return Math.round((Number(r.total) || 0) / rate);
 }
 

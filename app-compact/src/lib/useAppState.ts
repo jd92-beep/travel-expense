@@ -12,7 +12,7 @@ import { clearCurrencyCache } from './currency';
 import { enqueueChange } from './changeJournal';
 import { receiptSourceTombstoneKey } from './syncMerge';
 import { saveStoredSnapshot } from './storage';
-import type { AppState, Receipt } from './types';
+import type { AppState, Receipt, SyncQueueItem } from './types';
 
 const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'budget',
@@ -48,7 +48,35 @@ function migrateScopedState(input: unknown, storageScope: string, userEmail: str
   return sanitizePublicDemoState(migrateAppState(input), storageScope, userEmail);
 }
 
-const PERSIST_DEBOUNCE_MS = 0;
+const PERSIST_DEBOUNCE_MS = 300;
+
+// Late hydrate must not drop a pre-hydrate edit (and must not drop persisted rows either).
+// Reference inequality on two non-empty arrays is always true, so merge by stable key instead:
+// hydrated is the base, live items overlay it (same key = live wins; live-only keys are additions).
+function mergeByKey<T>(base: T[], overlay: T[], keyOf: (item: T) => string): T[] {
+  if (!overlay?.length) return base || [];
+  if (!base?.length) return overlay;
+  const byKey = new Map<string, T>();
+  for (const item of base) byKey.set(keyOf(item), item);
+  for (const item of overlay) byKey.set(keyOf(item), item);
+  const merged: T[] = [];
+  const seen = new Set<string>();
+  for (const item of base) {
+    const key = keyOf(item);
+    if (seen.has(key)) continue;
+    merged.push(byKey.get(key) as T);
+    seen.add(key);
+  }
+  for (const item of overlay) {
+    const key = keyOf(item);
+    if (seen.has(key)) continue;
+    merged.push(item);
+    seen.add(key);
+  }
+  return merged;
+}
+
+const syncQueueKey = (item: SyncQueueItem) => `${item.type}:${item.entityId}`;
 
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => safeInitialState(storageScope, userEmail));
@@ -60,8 +88,10 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   // (e.g. History "Keep local" racing an in-flight hydrateScope).
   const mutationSeqRef = useRef(0);
 
-  // Coalesce the full-AppState snapshot write: typing/upserting would otherwise serialize the
-  // entire state to localStorage + IndexedDB on every setState. Flushed on hide/unmount/scope change.
+  // Coalesce the expensive IndexedDB structured-clone write (photo thumbs included) at
+  // PERSIST_DEBOUNCE_MS. The localStorage mirror is written through on every commit so
+  // pagehide and smoke tests always observe the latest snapshot without waiting out the
+  // debounce. hide/unload/scope-change still flush the pending IndexedDB write immediately.
   const flushPersist = useCallback(() => {
     if (persistTimerRef.current != null) {
       window.clearTimeout(persistTimerRef.current);
@@ -70,8 +100,6 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     const pending = pendingPersistRef.current;
     if (!pending) return;
     pendingPersistRef.current = null;
-    // Sync localStorage first so pagehide and smoke tests always observe the latest snapshot;
-    // IndexedDB still goes through persistScope.
     try {
       saveStoredSnapshot(migrateAppState(pending.state), pending.scope);
     } catch { /* persistScope reports storage failures below */ }
@@ -92,12 +120,25 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     persistGenRef.current += 1;
     const gen = persistGenRef.current;
     pendingPersistRef.current = { scope, userEmail: email, state: next };
+    // Write-through the localStorage mirror first: discrete commits (save/click) must land
+    // in that key immediately — smoke tests and pagehide read it and cannot wait out the
+    // IndexedDB debounce below.
+    try {
+      saveStoredSnapshot(migrateAppState(next), scope);
+    } catch { /* flushPersist reports storage failures */ }
     if (persistTimerRef.current != null) window.clearTimeout(persistTimerRef.current);
     persistTimerRef.current = window.setTimeout(() => {
       if (gen !== persistGenRef.current) return;
-      flushPersist();
+      const pending = pendingPersistRef.current;
+      pendingPersistRef.current = null;
+      if (!pending) return;
+      void persistScope(pending.scope, pending.userEmail, pending.state).then((result) => {
+        if (result.status !== 'succeeded') {
+          console.warn(`[useAppState] Persist ${result.status}:`, result.error);
+        }
+      });
     }, delayMs);
-  }, [flushPersist]);
+  }, []);
 
   useLayoutEffect(() => {
     let alive = true;
@@ -113,12 +154,8 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
           return {
             ...hydrated,
             lastTab: prev.lastTab !== hydrated.lastTab ? prev.lastTab : hydrated.lastTab,
-            receipts: prev.receipts?.length && prev.receipts !== hydrated.receipts
-              ? prev.receipts
-              : hydrated.receipts,
-            syncQueue: prev.syncQueue?.length && prev.syncQueue !== hydrated.syncQueue
-              ? prev.syncQueue
-              : hydrated.syncQueue,
+            receipts: mergeByKey(hydrated.receipts || [], prev.receipts || [], (r) => r.id),
+            syncQueue: mergeByKey(hydrated.syncQueue || [], prev.syncQueue || [], syncQueueKey),
           };
         });
         setHydratedScope(storageScope);

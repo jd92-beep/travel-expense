@@ -133,6 +133,10 @@ export function sanitizePublicDemoState(state: AppState, scope: string, userEmai
 
 export function safeInitialState(scope: string, userEmail: string | null): AppState {
   const credentials = scope === 'local' ? loadCredentials() : {};
+  // Do NOT load the stored snapshot here: first paint must wait for hydrateScope's
+  // canonical localStorage+IndexedDB merge (security: no poisoned pre-hydrate snapshot).
+  // rateMode/rate races are handled by waiting for isStorageReady before the boot
+  // live-rate fetch, and by settingsUpdatedAt field merge inside hydrateScope.
   return sanitizePublicDemoState(normalizeState(migrateAppState({
     ...DEFAULT_STATE,
     ...credentials,
@@ -157,6 +161,25 @@ export function createScopedPersistence(
         ? freshness(indexedState) > freshness(localState) ? indexedState : localState
         : localState || indexedState || DEFAULT_STATE;
       const other = newest === localState ? indexedState : localState;
+      // Settings (rate/rateMode/theme/…) must follow settingsUpdatedAt, not overall freshness.
+      // A debounced IndexedDB write can lag the localStorage mirror; a receipt-only update must
+      // not let a stale rateMode/rate clobber the newer fixed-rate choice.
+      const settingsFrom = (localState?.settingsUpdatedAt || 0) >= (indexedState?.settingsUpdatedAt || 0)
+        ? localState
+        : indexedState;
+      const settingsPatch = settingsFrom
+        ? {
+            rate: settingsFrom.rate,
+            rateMode: settingsFrom.rateMode,
+            rateTable: settingsFrom.rateTable,
+            tripCurrency: settingsFrom.tripCurrency,
+            budget: settingsFrom.budget,
+            themePreference: settingsFrom.themePreference,
+            displayCurrency: settingsFrom.displayCurrency,
+            statsIncludeTransportLodging: settingsFrom.statsIncludeTransportLodging,
+            top10IncludeBigItems: settingsFrom.top10IncludeBigItems,
+          }
+        : {};
       const receiptTombstones = mergeTombstones(
         tombstonesOf(newest),
         tombstonesOf(other || {}),
@@ -169,11 +192,12 @@ export function createScopedPersistence(
         ? {
             ...other,
             ...newest,
+            ...settingsPatch,
             receipts: resolved.receipts,
             receiptTombstones: resolved.tombstones,
             trips: mergeTrips(newest.trips, other.trips),
           }
-        : { ...newest, receipts: resolved.receipts, receiptTombstones: resolved.tombstones };
+        : { ...newest, ...settingsPatch, receipts: resolved.receipts, receiptTombstones: resolved.tombstones };
       const credentials = scope === 'local' ? loadCredentials() : {};
       return sanitizePublicDemoState(normalizeState(migrateAppState({
         ...merged,

@@ -1,7 +1,7 @@
 import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
-import { ActionRippleButton, GlassCard, NumberTextInput, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
+import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
 import { ShimmerButton } from '../components/ui/shimmer-button';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
@@ -574,13 +574,37 @@ export function Scan({
     setBatch((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   }
 
+  // Keystroke strings for batch 金額 — parsing every keystroke would turn "12." into 12 and
+  // make decimals untypeable (same pattern as ReceiptEditor / Dashboard budget editor).
+  const [batchTotalDrafts, setBatchTotalDrafts] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (batch.length === 0) setBatchTotalDrafts({});
+  }, [batch.length]);
+  const commitBatchTotal = (id: string, raw: string) => {
+    const n = Number(raw);
+    updateBatch(id, { total: Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000_000) : 0 });
+    setBatchTotalDrafts((drafts) => {
+      const next = { ...drafts };
+      delete next[id];
+      return next;
+    });
+  };
+
   function selectCompleteBatchRows() {
     setBatch((rows) => rows.map((row) => ({ ...row, selected: !receiptNeedsReview(row) })));
   }
 
   function saveBatch() {
     if (savingBatch) return;
-    const selected = batch.filter((row) => row.selected !== false).map(({ selected: _selected, ...receipt }) => receipt);
+    // Commit any in-flight 金額 keystrokes — blur may not fire before the save click.
+    const withDrafts = batch.map((row) => {
+      const raw = batchTotalDrafts[row.id];
+      if (raw == null) return row;
+      const n = Number(raw);
+      return { ...row, total: Number.isFinite(n) && n >= 0 ? Math.min(n, 1_000_000_000) : 0 };
+    });
+    setBatchTotalDrafts({});
+    const selected = withDrafts.filter((row) => row.selected !== false).map(({ selected: _selected, ...receipt }) => receipt);
     // Block receipts missing store/date/amount even if manually re-selected; save the valid rest.
     const valid = selected.filter((receipt) => !receiptNeedsReview(receipt));
     const skipped = selected.length - valid.length;
@@ -991,7 +1015,7 @@ export function Scan({
                   </label>
                   <div className="form-grid">
                     <label>店名<input value={row.store} onChange={(e) => updateBatch(row.id, { store: e.target.value })} /></label>
-                    <label>金額<NumberTextInput value={row.total} max={1_000_000_000} blankZero onValue={(n) => updateBatch(row.id, { total: n })} /></label>
+                    <label>金額<input type="text" inputMode="decimal" value={batchTotalDrafts[row.id] ?? (row.total != null ? String(row.total) : '')} onChange={(e) => setBatchTotalDrafts((drafts) => ({ ...drafts, [row.id]: e.target.value }))} onBlur={() => { const raw = batchTotalDrafts[row.id]; if (raw != null) commitBatchTotal(row.id, raw); }} /></label>
                     <label>日期<input type="date" value={row.date} onChange={(e) => updateBatch(row.id, { date: e.target.value })} /></label>
                     <label>訂單編號<input value={row.bookingRef || ''} onChange={(e) => updateBatch(row.id, { bookingRef: e.target.value })} /></label>
                   </div>

@@ -56,11 +56,12 @@ retryQueue = settleChange(retryQueue, retryId, {
 assert.equal(retryQueue[0].attempts, 3);
 assert.equal(retryQueue[0].status, 'error');
 const restoredNetworkUnavailable = restoreJournal(retryQueue);
-assert.equal(restoredNetworkUnavailable.queue[0].status, 'queued');
-assert.equal(restoredNetworkUnavailable.queue[0].attempts, 2);
-assert.equal(restoredNetworkUnavailable.queue[0].error, undefined);
-assert.equal(restoredNetworkUnavailable.status, 'queued');
-assert.equal(restoredNetworkUnavailable.failedCount, 0);
+// Exhausted failures stay visible across reloads — no silent resurrection.
+assert.equal(restoredNetworkUnavailable.queue[0].status, 'error');
+assert.equal(restoredNetworkUnavailable.queue[0].attempts, 3);
+assert.equal(restoredNetworkUnavailable.queue[0].error, 'Supabase network is unavailable. Please try again.');
+assert.equal(restoredNetworkUnavailable.status, 'error');
+assert.equal(restoredNetworkUnavailable.failedCount, 1);
 
 let transientRestoreQueue = enqueueChange([], receipt('transient-restore'));
 for (let attempt = 1; attempt <= 3; attempt += 1) {
@@ -71,12 +72,12 @@ for (let attempt = 1; attempt <= 3; attempt += 1) {
 }
 assert.equal(transientRestoreQueue[0].status, 'error');
 const restoredTransient = restoreJournal(transientRestoreQueue);
-assert.equal(restoredTransient.queue[0].status, 'queued');
-assert.equal(restoredTransient.queue[0].attempts, 2);
-assert.equal(restoredTransient.queue[0].error, undefined);
-assert.equal(restoredTransient.queue[0].nextRetryAt, undefined);
-assert.equal(restoredTransient.status, 'queued');
-assert.equal(restoredTransient.failedCount, 0);
+// Exhausted transient items are not reset to MAX-1 with a wiped error on reload.
+assert.equal(restoredTransient.queue[0].status, 'error');
+assert.equal(restoredTransient.queue[0].attempts, 3);
+assert.equal(restoredTransient.queue[0].error, 'Failed to fetch');
+assert.equal(restoredTransient.status, 'error');
+assert.equal(restoredTransient.failedCount, 1);
 
 let photoRetryQueue = enqueueChange([], receipt('photo-retry'));
 for (let attempt = 1; attempt <= 3; attempt += 1) {

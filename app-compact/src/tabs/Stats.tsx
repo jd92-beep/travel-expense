@@ -536,6 +536,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
           entityId: trip.id,
           op: 'update',
           payload: {
+            tripId: trip.id,
             sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
             updatedAt: nextTrip.updatedAt,
           },

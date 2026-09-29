@@ -127,17 +127,16 @@ export function settleChange(
 export function restoreJournal(queue: SyncQueueItem[] | undefined): JournalResult {
   const restored = (queue || []).map((item): SyncQueueItem => {
     const failed = item.status === 'error' || item.status === 'failed';
-    const exhaustedTransient = failed
-      && item.attempts >= MAX_SYNC_RETRY_ATTEMPTS
-      && isTransientSyncErrorMessage(item.error || '');
+    // Only requeue retryable work that still has attempts left (and interrupted
+    // in-flight items). Exhausted and terminal failures stay visible across
+    // reloads — resurrecting them with a wiped error hides real breakage.
     const retryable = failed
       && !terminalError(item.error || '')
-      && (item.attempts < MAX_SYNC_RETRY_ATTEMPTS || exhaustedTransient);
+      && item.attempts < MAX_SYNC_RETRY_ATTEMPTS;
     return item.status === 'syncing' || retryable
       ? {
           ...item,
           status: 'queued',
-          attempts: exhaustedTransient ? Math.max(0, MAX_SYNC_RETRY_ATTEMPTS - 1) : item.attempts,
           error: undefined,
           nextRetryAt: undefined,
 

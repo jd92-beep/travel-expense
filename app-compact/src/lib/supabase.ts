@@ -231,9 +231,16 @@ function cleanTime(value: unknown): string | null {
   return `${match[1].padStart(2, '0')}:${match[2]}:00`;
 }
 
+// Keep finite zeroes as 0 (a real amount) — use null only when the value is absent/NaN.
+function finiteNumberOrNull(value: unknown): number | null {
+  const n = Number(value ?? NaN);
+  return Number.isFinite(n) ? n : null;
+}
+
 function cleanUuid(value: unknown): string | null {
   const text = String(value || '').trim();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text) ? text : null;
+  // Version nibble accepts RFC 4122 versions 1-8 to match broker/BFF UUID_RE.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text) ? text : null;
 }
 
 function isMissingSharingTableError(error: unknown): boolean {
@@ -923,13 +930,32 @@ export async function ensureSupabaseProfile(session: Session, state: AppState): 
   if (!supabase) return;
   const user = session.user as User;
   const displayName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Travel user';
-  const { error } = await supabase.from('profiles').upsert({
+  // Never clobber user-edited profile fields on every sync: insert when the row is
+  // missing, and otherwise only fill fields that are still null/empty.
+  const { data: existing, error: lookupError } = await supabase
+    .from('profiles')
+    .select('id,display_name,avatar_url,home_currency,locale')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) {
+    const patch: Record<string, unknown> = {};
+    if (!String(existing.display_name || '').trim()) patch.display_name = displayName;
+    if (!existing.avatar_url) patch.avatar_url = user.user_metadata?.avatar_url || null;
+    if (!String(existing.home_currency || '').trim()) patch.home_currency = 'HKD';
+    if (!String(existing.locale || '').trim()) patch.locale = navigator.language || 'zh-HK';
+    if (!Object.keys(patch).length) return;
+    const { error } = await supabase.from('profiles').update(patch).eq('id', user.id);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from('profiles').insert({
     id: user.id,
     display_name: displayName,
     avatar_url: user.user_metadata?.avatar_url || null,
     home_currency: 'HKD',
     locale: navigator.language || 'zh-HK',
-  }, { onConflict: 'id' });
+  });
   if (error) throw error;
 }
 
@@ -1154,6 +1180,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
     metadataUpdate.version = Math.max(
       Number(metadataUpdate.version) || 1,
       Number(itineraryResult?.version) || 1,
+      Number(contractRow?.version) || 1,
     );
     let metadataResult = await withTimeout(supabase
       .from('trips')
@@ -1347,11 +1374,11 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     payment_method: receipt.payment || 'cash',
     amount: Number(receipt.total || 0),
     currency: receipt.currency || receipt.originalCurrency || state.tripCurrency || 'JPY',
-    home_amount: Number(receipt.hkdAmount || 0) || null,
+    home_amount: finiteNumberOrNull(receipt.hkdAmount),
     home_currency: 'HKD',
-    original_amount: Number(receipt.originalAmount ?? receipt.total) || null,
+    original_amount: finiteNumberOrNull(receipt.originalAmount ?? receipt.total),
     original_currency: receipt.originalCurrency || receipt.currency || state.tripCurrency || 'JPY',
-    exchange_rate: Number(receipt.exchangeRate || 0) || null,
+    exchange_rate: finiteNumberOrNull(receipt.exchangeRate),
     items_text: receipt.itemsText || null,
     note: receipt.note || null,
     address: receipt.address || null,

@@ -5,7 +5,7 @@ import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
 import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
-import { AI_MODELS, APP_VERSION, CATEGORIES, DEFAULT_KIMI_PRIMARY_MODEL_ID, ITINERARY, PAYMENTS } from '../lib/constants';
+import { AI_MODELS, APP_VERSION, CATEGORIES, DEFAULT_KIMI_PRIMARY_MODEL_ID, isBoss, ITINERARY, PAYMENTS } from '../lib/constants';
 import {
   brokerHealth,
   disconnectPersonalNotionIntegration,
@@ -24,7 +24,7 @@ import {
   type ProviderStatus,
 } from '../lib/credentialBroker';
 import { appRatePatchFromSnapshot, currencyPrefix, fetchLiveCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES } from '../lib/currency';
-import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, getResolvedTripCurrency, isPendingReceipt, safePhotoUrl, sharePercents, todayYmd, validateItinerary } from '../lib/domain';
+import { categoryById, computeSettlements, downloadJson, exportCsv, getItinerary, getPersons, getReceiptHkdAmount, getResolvedTripCurrency, isPendingReceipt, safePhotoUrl, sharePercents, todayYmd, validateItinerary } from '../lib/domain';
 import { isReceiptPhotoExpected, receiptHasLargePhoto, receiptPhotoNeedsSync } from '../lib/receiptHealth';
 import { saveReceiptRepairIntent } from '../lib/repairIntent';
 import { receiptSourceTombstoneKey } from '../lib/syncMerge';
@@ -722,7 +722,7 @@ function buildTripSharePreview(state: AppState, trip: TripProfile, persons: Pers
   });
   const personNameById = new Map(persons.map((person) => [person.id, person.name]));
   const shareTripCurrency = getResolvedTripCurrency(state, trip);
-  const spentHkd = tripReceipts.reduce((sum, receipt) => sum + (Number(receipt.hkdAmount ?? receipt.total) || 0), 0);
+  const spentHkd = tripReceipts.reduce((sum, receipt) => sum + (getReceiptHkdAmount(receipt, state) || 0), 0);
   const budgetHkd = Number(trip.budget || state.budget || 0) / Math.max(0.1, perHkdForCurrency(state, shareTripCurrency));
   const remainingHkd = Math.max(0, budgetHkd - spentHkd);
   const payload: TripSharePreview['payload'] = {
@@ -1487,11 +1487,16 @@ export function Settings({
   }, [state.notionDb]);
 
   const [clickCount, setClickCount] = useState(0);
+  // Stress tools inject 1000 mock receipts into real user state and hijack fetch — Boss-only.
+  // isBoss alone (not DEV-gated) so Boss can still exercise them from the production PWA.
+  // Panel visibility AND every handler re-check this; localStorage unlock alone is not enough.
+  const stressToolsUnlocked = isBoss(userEmail);
   const [showStressPanel, setShowStressPanel] = useState(() => localStorage.getItem('__stress_panel_unlocked') === 'true');
   const [stressLatency, setStressLatency] = useState(() => localStorage.getItem('__stress_latency') === 'true');
   const [stressFault, setStressFault] = useState(() => localStorage.getItem('__stress_fault') === 'true');
 
   const handleVersionClick = () => {
+    if (!stressToolsUnlocked) return;
     setClickCount((prev) => {
       const next = prev + 1;
       if (next >= 5) {
@@ -1505,18 +1510,21 @@ export function Settings({
   };
 
   const toggleStressLatency = (val: boolean) => {
+    if (!stressToolsUnlocked) return;
     localStorage.setItem('__stress_latency', String(val));
     setStressLatency(val);
     setStatus(val ? '⏳ 已開啟 5 秒同步網絡延遲模擬' : '⚡ 已關閉同步網絡延遲模擬');
   };
 
   const toggleStressFault = (val: boolean) => {
+    if (!stressToolsUnlocked) return;
     localStorage.setItem('__stress_fault', String(val));
     setStressFault(val);
     setStatus(val ? '⚠️ 已開啟 Notion 同步 500 伺服器故障模擬' : '✅ 已關閉 Notion 同步故障模擬');
   };
 
   const handleMassInject = () => {
+    if (!stressToolsUnlocked) return;
     void run('瞬間導入 1000 筆名古屋消費', async () => {
       const mockReceipts = generateMockReceipts(1000);
       setState((prev) => migrateAppState({
@@ -1528,6 +1536,10 @@ export function Settings({
   };
 
   const handleTabSwitchTest = () => {
+    if (!stressToolsUnlocked) {
+      setStatus('⚠️ 壓力測試面板僅限 Boss 帳號使用');
+      return Promise.resolve('stress panel locked');
+    }
     if (!changeTab) {
       setStatus('⚠️ changeTab prop 缺失，無法啟動切換壓力測試');
       return new Promise<string>((resolve) => resolve('changeTab is missing'));
@@ -4081,7 +4093,7 @@ export function Settings({
         </div>
       </AccordionCard>)}
 
-      {showStressPanel && (
+      {stressToolsUnlocked && showStressPanel && (
         <AccordionCard id="settings-stress-test" eyebrow="Stress Test Portal" title="極限壓力與故障測試面板 🚀" icon={<Sparkles />} defaultOpen={false}>
           <p className="muted">呢度係專為 Boss 設計嘅 Premium 測試中心！你可以一鍵模擬高達 1,000 筆數據、網絡延遲、API 斷網故障以及 Tab 內存洩漏測試！</p>
 

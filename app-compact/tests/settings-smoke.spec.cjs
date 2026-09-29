@@ -380,7 +380,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByLabel('New credential').fill('rotate-placeholder');
   await page.getByLabel('Admin maintenance passphrase').fill('admin-placeholder');
   await page.getByRole('button', { name: /Rotate safely/ }).click();
-  await expect(page.getByText(/Rotate notion失敗：Credential test failed/)).toBeVisible();
+  await expect(page.getByText(/Rotate notion失敗：(?:\d{3} )?Credential test failed/)).toBeVisible();
   await expect(page.getByLabel('New credential')).toHaveValue('');
   await expect(page.getByLabel('Admin maintenance passphrase')).toHaveValue('');
   const storageAfterRotate = await page.evaluate(() => JSON.stringify(localStorage));
@@ -631,7 +631,9 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await setAccordion(page, '資料管理');
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除裝置信任/ }).click();
   await expect(page.getByText(/已清除此裝置信任/)).toBeVisible();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
+  // Trust key is removed synchronously; poll until gone (and not re-seeded by a late effect).
+  await page.waitForFunction(() => localStorage.getItem('travel-expense-react:device-trust:v1') == null);
+  expect(await page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
 
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除本地資料/ }).click();
   const clearLocalPreview = page.getByLabel('Clear local data preview');
@@ -1721,12 +1723,18 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
+    // Seed once per tab. addInitScript re-runs on page.reload(); without this guard the reload
+    // would wipe the fixed rate the test just persisted and re-seed the live stub value.
+    if (sessionStorage.getItem('fixed-rate-seeded') === '1') return;
+    sessionStorage.setItem('fixed-rate-seeded', '1');
     localStorage.clear();
+    try { indexedDB.deleteDatabase('travel-expense-react'); } catch { /* best effort */ }
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
       budget: 101800,
       rate: 20.36,
+      rateMode: 'live',
       rateTable: { JPY: { currency: 'JPY', perHkd: 20.36, source: 'test-seed', fetchedAt: Date.now() } },
       tripCurrency: 'JPY',
       autoSync: false,
@@ -1734,6 +1742,7 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
       shareRatios: { p_boss: 1 },
       receipts: [],
       schemaVersion: 3,
+      settingsUpdatedAt: Date.now(),
     }));
   });
 
