@@ -8750,6 +8750,7 @@ body {
 
   .scan-screen .scan-utility-button {
     min-height: 96px !important;
+    min-width: 64px !important;
     flex-direction: column !important;
     justify-content: center !important;
     gap: 6px !important;

@@ -821,7 +821,7 @@ export function Scan({
           <button
             type="button"
             className="scan-fx-wide-button relative z-10 mb-4"
-            aria-label="匯率"
+            aria-label="匯率 Exchange Rate"
             onClick={() => setFxOpen(true)}
           >
             <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
