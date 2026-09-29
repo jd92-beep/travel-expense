@@ -380,7 +380,7 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await page.getByLabel('New credential').fill('rotate-placeholder');
   await page.getByLabel('Admin maintenance passphrase').fill('admin-placeholder');
   await page.getByRole('button', { name: /Rotate safely/ }).click();
-  await expect(page.getByText(/Rotate notion失敗：Credential test failed/)).toBeVisible();
+  await expect(page.getByText(/Rotate notion失敗：(?:\d{3} )?Credential test failed/)).toBeVisible();
   await expect(page.getByLabel('New credential')).toHaveValue('');
   await expect(page.getByLabel('Admin maintenance passphrase')).toHaveValue('');
   const storageAfterRotate = await page.evaluate(() => JSON.stringify(localStorage));
@@ -629,7 +629,9 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await setAccordion(page, '資料管理');
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除裝置信任/ }).click();
   await expect(page.getByText(/已清除此裝置信任/)).toBeVisible();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
+  // Trust key is removed synchronously; poll until gone (and not re-seeded by a late effect).
+  await page.waitForFunction(() => localStorage.getItem('travel-expense-react:device-trust:v1') == null);
+  expect(await page.evaluate(() => localStorage.getItem('travel-expense-react:device-trust:v1'))).toBeNull();
 
   await page.locator('#settings-data-panel').getByRole('button', { name: /清除本地資料/ }).click();
   const clearLocalPreview = page.getByLabel('Clear local data preview');
