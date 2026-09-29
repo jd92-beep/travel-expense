@@ -1632,9 +1632,18 @@ async function handleRequest(request, env) {
       const user = await optionalSupabaseUser(request, env);
       if (!user) await verifySession(request.headers.get(SESSION_HEADER), env);
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, user, 'kimi', request);
-      const model = providerModel('kimi', body.model || 'kimi-code');
-      const parsed = await kimiJson(env, tripAnalysisPrompt(body), 'trip', undefined, model);
+      // body.model may carry a provider prefix (e.g. "mimo/mimo-v2.5-pro") — route to
+      // that provider instead of forcing kimi. Unprefixed models keep the legacy kimi path.
+      const rawModel = String(body.model || '');
+      const prefixed = rawModel.match(/^(kimi|google|mimo|volcano)\/(.+)$/);
+      const provider = prefixed ? prefixed[1] : 'kimi';
+      const model = providerModel(provider, prefixed ? prefixed[2] : (rawModel || 'kimi-code'));
+      await consumeSupabaseAiQuota(env, user, provider, request);
+      const prompt = tripAnalysisPrompt(body);
+      const parsed = provider === 'google' ? await googleJson(env, prompt, 'trip', undefined, model)
+        : provider === 'mimo' ? await mimoJson(env, prompt, 'trip', undefined, model)
+        : provider === 'volcano' ? await volcanoJson(env, prompt, 'trip', undefined, model)
+        : await kimiJson(env, prompt, 'trip', undefined, model);
       return json({ ok: true, data: normalizeTripAnalysis(parsed, body) }, 200, cors);
     }
     if (url.pathname === '/weather/forecast') {
@@ -1646,9 +1655,10 @@ async function handleRequest(request, env) {
     }
 
     const edgeBrokerRoute = url.pathname === '/credentials/status' || url.pathname === '/credentials/test';
+    let quotaUser = null;
     if (!(edgeBrokerRequest && edgeBrokerRoute)) {
-      const user = await optionalSupabaseUser(request, env);
-      if (!user) {
+      quotaUser = await optionalSupabaseUser(request, env);
+      if (!quotaUser) {
         await verifySession(request.headers.get(SESSION_HEADER), env);
       }
     }
@@ -1666,11 +1676,11 @@ async function handleRequest(request, env) {
     }
     if (url.pathname === '/credentials/test') {
       const body = await readJson(request);
-      await consumeSupabaseAiQuota(env, null, 'credential-test', request);
+      await consumeSupabaseAiQuota(env, quotaUser, 'credential-test', request);
       return json({ ok: true, status: await testProvider(env, body.provider, undefined, { model: body.model }) }, 200, cors);
     }
     if (url.pathname === '/credentials/test-all') {
-      await consumeSupabaseAiQuota(env, null, 'credential-test-all', request);
+      await consumeSupabaseAiQuota(env, quotaUser, 'credential-test-all', request);
       return json({ ok: true, providers: await Promise.all(PROVIDERS.map((provider) => testProvider(env, provider))) }, 200, cors);
     }
     if (url.pathname === '/credentials/rotate') {

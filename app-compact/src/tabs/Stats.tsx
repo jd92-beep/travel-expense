@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingUp, Trophy, Users, WalletCards } from 'lucide-react';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
+import { enqueueChange } from '../lib/changeJournal';
 import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, todayForReceipts } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
@@ -425,29 +426,20 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
         updatedAt: now,
       };
 
-      const queueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip' as const,
-        entityId: trip.id,
-        op: 'update' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: {
-          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
-          updatedAt: nextTrip.updatedAt,
-        },
-      };
-
       setState((prev: AppState) => ({
         ...prev,
         budget: newBudget,
         trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
-        syncQueue: [
-          ...(prev.syncQueue || []),
-          queueItem,
-        ].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: trip.id,
+          op: 'update',
+          payload: {
+            tripId: trip.id,
+            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+            updatedAt: nextTrip.updatedAt,
+          },
+        }),
       }));
     } else {
       updateState({ budget: newBudget });

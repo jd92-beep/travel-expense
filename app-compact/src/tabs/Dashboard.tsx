@@ -46,6 +46,7 @@ import {
 import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
 import { parseTripParagraph } from '../lib/ai';
+import { enqueueChange } from '../lib/changeJournal';
 import { brokerAiJson, redactedError } from '../lib/credentialBroker';
 import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
 
@@ -101,6 +102,13 @@ function addDaysToIsoDate(date: string, daysToAdd: number) {
 
 function normalizeTripDurationDays(value: number) {
   return Math.max(1, Math.min(60, Math.round(value) || 1));
+}
+
+// Local calendar date — never UTC ISO (wrong "today" before 08:00 in UTC+8).
+function localTodayIsoDate() {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
 function normalizeDestinationText(value: string) {
@@ -234,7 +242,7 @@ function buildFallbackItinerary(base: TripProfile, destinationIdeas: Destination
   return base.itinerary.map((day, index) => {
     const sourcePool = isJeju ? JEJU_FALLBACK_SPOTS : ideaSpots;
     const daySpots = sourcePool.length
-      ? sourcePool.slice(index * 2, index * 2 + 3)
+      ? sourcePool.slice(index * 3, index * 3 + 3)
       : [];
     const wrappedSpots = daySpots.length ? daySpots : sourcePool.slice(0, 3);
     const firstSpot = wrappedSpots[0] as (ItinerarySpot & { region?: string; city?: string; country?: string }) | undefined;
@@ -497,7 +505,7 @@ export function Dashboard({
         // Local calendar date — never UTC ISO (wrong "today" before 08:00 in UTC+8).
         const now = new Date();
         const pad = (n: number) => String(n).padStart(2, '0');
-        const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+        const todayStr = localTodayIsoDate();
         const futureDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6);
         const futureStr = `${futureDate.getFullYear()}-${pad(futureDate.getMonth() + 1)}-${pad(futureDate.getDate())}`;
         setNewTripStartDate(todayStr);
@@ -627,7 +635,7 @@ export function Dashboard({
 
   const applyTripDuration = (days: number, baseDate = newTripStartDate) => {
     const duration = normalizeTripDurationDays(days);
-    const start = baseDate || new Date().toISOString().slice(0, 10);
+    const start = baseDate || localTodayIsoDate();
     setNewTripStartDate(start);
     setNewTripEndDate(addDaysToIsoDate(start, duration - 1));
   };
@@ -809,30 +817,20 @@ export function Dashboard({
         updatedAt: now,
       };
 
-      const queueItem: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
-        type: 'trip' as const,
-        entityId: trip.id,
-        op: 'update' as const,
-        status: 'queued' as const,
-        attempts: 0,
-        createdAt: now,
-        updatedAt: now,
-        payload: {
-          tripId: trip.id,
-          sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
-          updatedAt: nextTrip.updatedAt,
-        },
-      };
-
       setState((prev: AppState) => ({
         ...prev,
         budget: newBudget,
         trips: (prev.trips || []).map((t) => t.id === trip.id ? nextTrip : t),
-        syncQueue: [
-          ...(prev.syncQueue || []),
-          queueItem,
-        ].slice(-500),
+        syncQueue: enqueueChange(prev.syncQueue, {
+          type: 'trip',
+          entityId: trip.id,
+          op: 'update',
+          payload: {
+            tripId: trip.id,
+            sourceId: nextTrip.sourceId || `trip_${nextTrip.id}`,
+            updatedAt: nextTrip.updatedAt,
+          },
+        }),
       }));
     } else {
       updateState({ budget: newBudget });
@@ -841,8 +839,8 @@ export function Dashboard({
   };
 
   // 統一口徑與過濾邏輯：
-  // 總消費額永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
-  // statsIncludeTransportLodging 只影響今日/日均與統計圖表的大額項目篩選。
+  // 總消費額、預算環與日均結餘永遠包含所有項目，確保預算使用比例不會因圖表篩選而被低估。
+  // statsIncludeTransportLodging 只影響「已記 N 筆」等圖表口徑計數。
   const statsIncludeTransportLodging = !!state.statsIncludeTransportLodging;
   const totalIncludeFL = true;
   const dailyIncludeFL = statsIncludeTransportLodging;
@@ -856,13 +854,13 @@ export function Dashboard({
   const dailyReceipts = todayReceipts.filter((r) => dailyIncludeFL || !isBigTripItem(r));
   const totalReceipts = tripReceipts.filter((r) => totalIncludeFL || !isBigTripItem(r));
 
-  // 基於港幣做精準累加
+  // 基於港幣做精準累加（今日口徑 = 全部今日收據，配合每日預算環）
   const spentHkd = totalReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
-  const todaySpentHkd = dailyReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
+  const todaySpentHkd = todayReceipts.reduce((s, r) => s + getReceiptHkdAmount(r, state), 0);
 
   // 目的貨幣等值花費 (用於輔助顯示)
   const totalForBudget = totalReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
-  const todayTotal = dailyReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
+  const todayTotal = todayReceipts.reduce((s, r) => s + getReceiptTripAmount(r, state, resolvedTripCurrency), 0);
 
   const budgetHkd = Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state));
   const currentBudget = showTripCurrency ? (Number(state.budget) || 0) : budgetHkd;
@@ -895,6 +893,47 @@ export function Dashboard({
   const dayRemainingSecondary = showTripCurrency ? displayMoney(dayRemainingHkd, 'HKD') : displayMoney(dayRemainingTrip, resolvedTripCurrency);
 
   const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [];
+
+  // Spot↔receipt matching: exact normalized name wins first, then a bidirectional
+  // substring match that requires the shorter side to be >= 2 chars. Each receipt is
+  // claimed by at most one spot so one receipt cannot light up multiple rows.
+  const spotMatchedReceipt = useMemo(() => {
+    const normalizeName = (value: string) => value.trim().toLowerCase().replace(/\s+/g, ' ');
+    const usedReceiptIds = new Set<string>();
+    const matches = new Map<string, Receipt>();
+    const candidates = todayReceipts.filter((r) => normalizeName(displayStore(r)));
+    const spotEntries = displaySpots.map((spot, idx) => ({
+      key: spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`,
+      name: normalizeName(spot.name),
+    }));
+
+    // Pass 1: exact normalized equality, in spot order.
+    for (const entry of spotEntries) {
+      if (!entry.name) continue;
+      const exact = candidates.find((r) => !usedReceiptIds.has(r.id) && normalizeName(displayStore(r)) === entry.name);
+      if (exact) {
+        usedReceiptIds.add(exact.id);
+        matches.set(entry.key, exact);
+      }
+    }
+    // Pass 2: fuzzy contains, longer side must contain the shorter (>= 2 chars).
+    for (const entry of spotEntries) {
+      if (!entry.name || matches.has(entry.key)) continue;
+      const fuzzy = candidates.find((r) => {
+        if (usedReceiptIds.has(r.id)) return false;
+        const store = normalizeName(displayStore(r));
+        const [longer, shorter] = store.length >= entry.name.length
+          ? [store, entry.name]
+          : [entry.name, store];
+        return shorter.length >= 2 && longer.includes(shorter);
+      });
+      if (fuzzy) {
+        usedReceiptIds.add(fuzzy.id);
+        matches.set(entry.key, fuzzy);
+      }
+    }
+    return matches;
+  }, [displaySpots, todayReceipts, today]);
 
   return (
     <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto" aria-label="旅程總覽">
@@ -1066,7 +1105,7 @@ export function Dashboard({
                 </div>
                 <div className="preview-dashboard-budget-row is-left">
                   <span>剩餘預算</span>
-                  <strong><TickerMoney text={showTripCurrency ? displayMoney(Math.max(0, state.budget - totalForBudget), resolvedTripCurrency) : displayMoney(remainingBudgetHkd, 'HKD')} /></strong>
+                  <strong><TickerMoney text={showTripCurrency ? displayMoney(Math.max(0, (Number(state.budget) || 0) - totalForBudget), resolvedTripCurrency) : displayMoney(remainingBudgetHkd, 'HKD')} /></strong>
                 </div>
               </div>
             </div>
@@ -1148,7 +1187,7 @@ export function Dashboard({
           <div>
             <span>今日支出</span>
             <strong><TickerMoney text={todaySpendPrimary} /></strong>
-            <small>{todaySpendSecondary} · 已記 {dailyReceipts.length} 筆</small>
+            <small>{todaySpendSecondary} · 已記 {dailyReceipts.length} 筆{dailyIncludeFL ? '' : '（圖表口徑，未含機票/住宿/交通）'}</small>
           </div>
           <div>
             <span>每日預算使用</span>
@@ -1188,33 +1227,48 @@ export function Dashboard({
           {displaySpots.map((spot, idx) => {
             const details = getSpotIconDetails(spot.type, spot.name);
             const spotKey = spot.id || spot.spotId || `${today}_${spot.time || 'time'}_${spot.name || idx}_${idx}`;
-            // Empty names must not match: ''.includes(x)/x.includes('') would attach one receipt to every spot.
-            const spotName = spot.name.trim().toLowerCase();
-            const matchedReceipt = spotName ? dailyReceipts.find((r) => {
-              const store = displayStore(r).trim().toLowerCase();
-              return store ? (store.includes(spotName) || spotName.includes(store)) : false;
-            }) : undefined;
+            const matchedReceipt = spotMatchedReceipt.get(spotKey);
             const spotMeta = [spot.note, spot.address].filter(Boolean).join(' · ');
             return (
               <article
                 key={spotKey}
                 className="dashboard-compact-itinerary-row"
-                onClick={() => openMapExternal(spot.mapUrl, spot.name, spot.address)}
-                title="點擊開啟 Google Map"
+                onClick={() => setSheet({ kind: 'spot', spot })}
+                title="點擊查看行程詳情"
               >
                 <time>{spot.time || '--:--'}</time>
                 <div className={`dashboard-compact-itinerary-icon ${details.bgClass}`}>
                   {details.icon}
                 </div>
-                <div className="dashboard-compact-itinerary-main">
+                <button
+                  type="button"
+                  className="dashboard-compact-itinerary-main border-none bg-transparent p-0 m-0 text-left cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSheet({ kind: 'spot', spot });
+                  }}
+                  aria-label={`查看 ${spot.name} 行程詳情`}
+                >
                   <strong>{spot.name}</strong>
                   <span>{spotMeta || spot.type || 'Trip stop'}</span>
                   <small>{spot.type || 'itinerary'}{day?.city || day?.region ? ` · ${day?.city || day?.region}` : ''}</small>
-                </div>
+                </button>
                 <div className="dashboard-compact-itinerary-actions">
+                  <button
+                    type="button"
+                    aria-label={`開啟 ${spot.name} 地圖`}
+                    title="開啟 Google Map"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openMapExternal(spot.mapUrl, spot.name, spot.address);
+                    }}
+                  >
+                    <MapPin size={14} /> 地圖
+                  </button>
                   {matchedReceipt ? (
                     <button
                       type="button"
+                      aria-label={`查看 ${displayStore(matchedReceipt)} 收據`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onOpen(matchedReceipt);
@@ -1222,9 +1276,7 @@ export function Dashboard({
                     >
                       {currencyPrefix(matchedReceipt.currency || 'JPY')}{fmt(matchedReceipt.total)}
                     </button>
-                  ) : (
-                    <span><MapPin size={14} /> 地圖</span>
-                  )}
+                  ) : null}
                 </div>
               </article>
             );
@@ -1261,40 +1313,42 @@ export function Dashboard({
           {recentReceipts.length ? recentReceipts.slice(0, 6).map((r) => {
             const photoSrc = safePhotoUrl(r.photoUrl, r.photoThumb);
             return (
-              <button
+              <article
                 key={r.id}
-                type="button"
                 className="dashboard-compact-recent-row"
                 onClick={() => onOpen(r)}
               >
                 <VisualIcon id={r.category as any} size="sm" className="dashboard-compact-recent-icon" />
-                <div className="dashboard-compact-recent-main">
+                <button
+                  type="button"
+                  className="dashboard-compact-recent-main border-none bg-transparent p-0 m-0 text-left cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen(r);
+                  }}
+                  aria-label={`查看 ${displayStore(r)} 收據`}
+                >
                   <strong>{displayStore(r)}</strong>
                   <span>{categoryById(r.category).name} · {(r.date || '').split('-').slice(1).join('/')}</span>
-                </div>
+                </button>
                 {photoSrc && (
-                  <span
-                    className="dashboard-compact-recent-photo"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setViewPhoto(r); }}
-                    role="button"
-                    tabIndex={0}
+                  <button
+                    type="button"
+                    className="dashboard-compact-recent-photo border-none p-0 cursor-pointer"
                     aria-label={`查看 ${displayStore(r)} 收據相片`}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setViewPhoto(r);
-                      }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewPhoto(r);
                     }}
                   >
                     <Camera size={13} />
-                  </span>
+                  </button>
                 )}
                 <div className="dashboard-compact-recent-amount">
                   <strong>{formatCurrencyAmount(Number(r.total) || 0, r.currency || r.originalCurrency || resolvedTripCurrency)}</strong>
                   <span>{formatCurrencyAmount(getReceiptHkdAmount(r, state), 'HKD')}</span>
                 </div>
-              </button>
+              </article>
             );
           }) : (
             <p className="text-center text-xs text-slate-400 py-6">暫時未有支出紀錄。</p>

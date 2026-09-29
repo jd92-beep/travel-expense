@@ -121,7 +121,13 @@ export function sourceNetwork(rawIp) {
 export function loginBucketKey(req, kind = 'login') {
   const pepper = process.env.ADMIN_LOGIN_RATE_PEPPER;
   if (!pepper || pepper.length < 32) throw new Error('ADMIN_LOGIN_RATE_PEPPER missing');
+  // Prefer platform-attested client IP over the leftmost X-Forwarded-For hop, which
+  // the client can spoof to evade rate limiting. On Vercel, x-real-ip is the platform
+  // value and the rightmost x-vercel-forwarded-for hop is the trusted one.
+  const realIp = String(req.headers['x-real-ip'] || '').split(',')[0].trim();
+  const vercelHops = String(req.headers['x-vercel-forwarded-for'] || '').split(',');
+  const vercelIp = vercelHops.length ? vercelHops[vercelHops.length - 1].trim() : '';
   const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  const rawIp = forwarded || req.socket?.remoteAddress || '';
+  const rawIp = realIp || vercelIp || forwarded || req.socket?.remoteAddress || '';
   return crypto.createHmac('sha256', pepper).update(`${kind}:${sourceNetwork(rawIp)}`).digest('hex');
 }

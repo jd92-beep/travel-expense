@@ -396,8 +396,10 @@ function sameModelAttempt(a: ModelAttempt, b: ModelAttempt): boolean {
 }
 
 function isQuotaOrRateLimitError(error: unknown): boolean {
+  const status = Number((error as { status?: unknown } | null | undefined)?.status);
+  if (status === 429) return true;
   const message = error instanceof Error ? error.message : String(error || '');
-  return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(message);
+  return /(?:\b429\b|quota|daily limit|rate.?limit|too many requests|resource_?exhausted|用量|配額|配额|限額|限额|限流)/i.test(message);
 }
 
 function isBrokerRouteUnavailable(error: unknown): boolean {
@@ -1306,6 +1308,8 @@ CRITICAL ITEMS FORMATTING RULES:
   try {
     parsed = coerceModelJson(await callPreferredJson(state, prompt, source.includes('voice') ? 'voice' : 'email'));
   } catch (error) {
+    // Quota / 429 is a hard stop — never paper over it with a heuristic receipt.
+    if (isQuotaOrRateLimitError(error)) throw error instanceof Error ? error : new Error(String(error));
     return [{
       ...heuristicReceiptFromText(text, state),
       source,
@@ -1569,8 +1573,7 @@ ${organizedItinerary.slice(0, 28000)}`;
 }
 
 function isQuotaHardStopError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(message);
+  return isQuotaOrRateLimitError(error);
 }
 
 function mergeDaySpots(

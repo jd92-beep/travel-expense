@@ -401,8 +401,10 @@ export function App() {
   useEffect(() => {
     // Fixed mode: the user pre-exchanged currency before the trip and locked in that rate — skip the
     // background live-rate fetch entirely (not just discard its result), so fixed mode also means no
-    // wasted network call on every boot. `state` here is the mount-time value (this effect's dep array
-    // is stable), which is correct: rateMode loads synchronously from localStorage before first render.
+    // wasted network call on every boot.
+    // Wait for storage hydration: rateMode is restored from localStorage/IndexedDB asynchronously,
+    // and applying a live rate before that would overwrite a fixed pre-trip rate.
+    if (!isStorageReady) return undefined;
     if (state.rateMode === 'fixed') return undefined;
     let alive = true;
     fetchBootCurrencySnapshot().then(snapshot => {
@@ -422,10 +424,7 @@ export function App() {
     return () => {
       alive = false;
     };
-    // Mount-once by design (boot-time fetch); rateMode is read from the mount-time closure, which is
-    // correct since it loads synchronously from localStorage before first render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setState]);
+  }, [isStorageReady, state.rateMode, setState]);
 
   useEffect(() => {
     bootSyncInitiated.current = false;

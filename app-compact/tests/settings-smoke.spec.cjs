@@ -1718,12 +1718,18 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
+    // Seed once per tab. addInitScript re-runs on page.reload(); without this guard the reload
+    // would wipe the fixed rate the test just persisted and re-seed the live stub value.
+    if (sessionStorage.getItem('fixed-rate-seeded') === '1') return;
+    sessionStorage.setItem('fixed-rate-seeded', '1');
     localStorage.clear();
+    try { indexedDB.deleteDatabase('travel-expense-react'); } catch { /* best effort */ }
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
       budget: 101800,
       rate: 20.36,
+      rateMode: 'live',
       rateTable: { JPY: { currency: 'JPY', perHkd: 20.36, source: 'test-seed', fetchedAt: Date.now() } },
       tripCurrency: 'JPY',
       autoSync: false,
@@ -1731,6 +1737,7 @@ test('Fixed exchange rate mode locks the rate against live auto-refresh', async 
       shareRatios: { p_boss: 1 },
       receipts: [],
       schemaVersion: 3,
+      settingsUpdatedAt: Date.now(),
     }));
   });
 

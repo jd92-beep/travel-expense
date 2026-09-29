@@ -69,9 +69,13 @@ function normalizeItineraryDate(rawDate: unknown, fallbackYear: number): string 
     if (isValidMonthDay(month, day)) return `${fallbackYear}-${pad2(month)}-${pad2(day)}`;
   }
 
+  // Date-only strings are local calendar dates — parse at local midnight and read local
+  // getters. Mixing local parse with getUTC* shifted the day back one in UTC+8.
+  // Strings that already carry a time (and possibly an offset) keep their instant and
+  // resolve through the same local getters so timezone-bearing values stay intact.
   const parsed = new Date(raw + (raw.includes('T') ? '' : 'T00:00:00'));
   if (!Number.isNaN(parsed.getTime())) {
-    return `${parsed.getUTCFullYear()}-${pad2(parsed.getUTCMonth() + 1)}-${pad2(parsed.getUTCDate())}`;
+    return `${parsed.getFullYear()}-${pad2(parsed.getMonth() + 1)}-${pad2(parsed.getDate())}`;
   }
   return raw;
 }
