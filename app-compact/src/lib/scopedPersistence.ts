@@ -133,13 +133,12 @@ export function sanitizePublicDemoState(state: AppState, scope: string, userEmai
 
 export function safeInitialState(scope: string, userEmail: string | null): AppState {
   const credentials = scope === 'local' ? loadCredentials() : {};
-  // Seed from the synchronous localStorage mirror (not DEFAULT_STATE alone) so first paint
-  // and mount-time effects already see the user's rateMode/rate/theme. Without this the boot
-  // live-rate fetch races async hydrate and can overwrite a fixed pre-trip rate.
-  const stored = sanitizeSnapshot(loadStoredSnapshot(scope));
+  // Do NOT load the stored snapshot here: first paint must wait for hydrateScope's
+  // canonical localStorage+IndexedDB merge (security: no poisoned pre-hydrate snapshot).
+  // rateMode/rate races are handled by waiting for isStorageReady before the boot
+  // live-rate fetch, and by settingsUpdatedAt field merge inside hydrateScope.
   return sanitizePublicDemoState(normalizeState(migrateAppState({
     ...DEFAULT_STATE,
-    ...(stored || {}),
     ...credentials,
   })), scope, userEmail);
 }
