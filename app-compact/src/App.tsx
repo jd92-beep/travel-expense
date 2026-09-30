@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
@@ -87,7 +87,12 @@ function storedSupabaseSession(): Session | null {
 
 export function App() {
   const supabaseAuth = useSupabaseAuth();
-  const localSupabaseSession = storedSupabaseSession();
+  // Memoize the localStorage+JSON parse — it was previously recomputed on every render.
+  const localSupabaseSession = useMemo(
+    () => storedSupabaseSession(),
+    // Recompute only when supabase-js resolves/changes the session.
+    [supabaseAuth.session, supabaseAuth.loading],
+  );
   // Trust the local hint only until supabase-js has resolved: once auth settles, a null session
   // means the refresh_token is genuinely dead → drop the hint so the login screen shows instead
   // of a broken "authenticated" state whose API calls all 401.
@@ -213,7 +218,9 @@ export function App() {
         : trip;
       const now = Date.now();
       const queue: SyncQueueItem = {
-        id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+        id: `sync_${now}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : Math.random().toString(16).slice(2)}`,
         type: 'trip',
         entityId: trip.id,
         op: 'upsert',
@@ -712,7 +719,9 @@ export function App() {
               target.spots = [...target.spots, spot].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
               const trips = (prev.trips || []).map((item) => item.id === trip.id ? { ...item, itinerary, version: item.version + 1, updatedAt: now } : item);
               const queue: SyncQueueItem = {
-                id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+                id: `sync_${now}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : Math.random().toString(16).slice(2)}`,
                 type: 'trip',
                 entityId: trip.id,
                 op: 'update',

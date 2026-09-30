@@ -116,27 +116,35 @@ export function generateMockReceipts(count: number): Receipt[] {
   });
 }
 
-// Global fetch hijacking setup
-if (typeof window !== 'undefined' && !(window as any).__stressFetchHijacked) {
-  (window as any).__stressFetchHijacked = true;
-  const originalFetch = window.fetch;
+// Fetch hijack is install-only: never patch window.fetch at module load. Settings
+// calls installStressFetchHijack()/uninstallStressFetchHijack() only when the boss
+// stress tools are explicitly enabled/disabled (or a stress panel action runs).
+type FetchFn = typeof window.fetch;
+let originalFetch: FetchFn | null = null;
 
-  window.fetch = async function (input: RequestInfo | URL, init?: RequestInit) {
-    let url = '';
-    if (typeof input === 'string') {
-      url = input;
-    } else if (input instanceof URL) {
-      url = input.toString();
-    } else if (input && (input as any).url) {
-      url = (input as any).url;
-    }
+function stressRequestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.toString();
+  if (input && (input as Request).url) return (input as Request).url;
+  return '';
+}
 
-    const isNotionRequest =
-      url.includes('notion') ||
-      url.includes('credential-broker') ||
-      url.includes('rare-duck-29.jd92-beep.deno.net');
+function isStressNotionRequest(url: string): boolean {
+  return (
+    url.includes('notion') ||
+    url.includes('credential-broker') ||
+    url.includes('rare-duck-29.jd92-beep.deno.net')
+  );
+}
 
-    if (isNotionRequest) {
+export function installStressFetchHijack(): void {
+  if (typeof window === 'undefined' || originalFetch) return;
+  originalFetch = window.fetch.bind(window);
+
+  window.fetch = async function stressFetch(input: RequestInfo | URL, init?: RequestInit) {
+    const url = stressRequestUrl(input);
+
+    if (isStressNotionRequest(url)) {
       // 1. Simulate Latency (5s delay)
       const latencyEnabled = localStorage.getItem('__stress_latency') === 'true';
       if (latencyEnabled) {
@@ -160,8 +168,14 @@ if (typeof window !== 'undefined' && !(window as any).__stressFetchHijacked) {
       }
     }
 
-    return originalFetch.apply(this, [input, init]);
+    return originalFetch!(input, init);
   };
+}
+
+export function uninstallStressFetchHijack(): void {
+  if (typeof window === 'undefined' || !originalFetch) return;
+  window.fetch = originalFetch;
+  originalFetch = null;
 }
 
 /**

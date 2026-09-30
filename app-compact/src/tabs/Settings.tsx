@@ -45,7 +45,6 @@ import { clearTrustedDevice } from '../security/trustedDevice';
 import { GlassCard, SegmentedControl, StatusPill, Toast } from '../components/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { GradientButton } from '../components/ui/gradient-button';
-import { generateMockReceipts, simulateTabSwitching } from '../lib/stressTest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
 import { THEME_OPTIONS, TRIP_THEMES, useTripTheme } from '../theme/tripTheme';
 
@@ -1401,6 +1400,26 @@ export function Settings({
   const [stressLatency, setStressLatency] = useState(() => localStorage.getItem('__stress_latency') === 'true');
   const [stressFault, setStressFault] = useState(() => localStorage.getItem('__stress_fault') === 'true');
 
+  // Lazy chunk: only loaded when a boss stress action/toggle runs, so importing
+  // Settings can never install the stress fetch hijack as a module side effect.
+  const loadStressTest = () => import('../lib/stressTest');
+
+  const syncStressFetchHijack = async () => {
+    const enabled = localStorage.getItem('__stress_latency') === 'true' || localStorage.getItem('__stress_fault') === 'true';
+    const stress = await loadStressTest();
+    if (enabled) stress.installStressFetchHijack();
+    else stress.uninstallStressFetchHijack();
+  };
+
+  // Restore the hijack only when a previous stress toggle is still explicitly enabled.
+  useEffect(() => {
+    if (!stressToolsUnlocked) return;
+    if (localStorage.getItem('__stress_latency') === 'true' || localStorage.getItem('__stress_fault') === 'true') {
+      void syncStressFetchHijack();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stressToolsUnlocked]);
+
   const handleVersionClick = () => {
     if (!stressToolsUnlocked) return;
     setClickCount((prev) => {
@@ -1419,6 +1438,7 @@ export function Settings({
     if (!stressToolsUnlocked) return;
     localStorage.setItem('__stress_latency', String(val));
     setStressLatency(val);
+    void syncStressFetchHijack();
     setStatus(val ? '⏳ 已開啟 5 秒同步網絡延遲模擬' : '⚡ 已關閉同步網絡延遲模擬');
   };
 
@@ -1426,12 +1446,14 @@ export function Settings({
     if (!stressToolsUnlocked) return;
     localStorage.setItem('__stress_fault', String(val));
     setStressFault(val);
+    void syncStressFetchHijack();
     setStatus(val ? '⚠️ 已開啟 Notion 同步 500 伺服器故障模擬' : '✅ 已關閉 Notion 同步故障模擬');
   };
 
   const handleMassInject = () => {
     if (!stressToolsUnlocked) return;
     void run('瞬間導入 1000 筆名古屋消費', async () => {
+      const { generateMockReceipts } = await loadStressTest();
       const mockReceipts = generateMockReceipts(1000);
       setState((prev) => migrateAppState({
         ...prev,
@@ -1451,6 +1473,7 @@ export function Settings({
       return new Promise<string>((resolve) => resolve('changeTab is missing'));
     }
     return run('自動高頻 Tab 切換壓力測試', async () => {
+      const { simulateTabSwitching } = await loadStressTest();
       return new Promise((resolve) => {
         simulateTabSwitching(changeTab, () => {
           resolve('🎉 自動 Tab 極速切換壓力測試完成！WebGL 內存已強制回收，React 狀態穩定！');

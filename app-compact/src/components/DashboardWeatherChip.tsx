@@ -79,16 +79,25 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
   const fetchedKeyRef = useRef('');
 
   useEffect(() => {
-    if (!activeDay) return;
-    const cached = getCachedWeatherRows()?.[activeDay.date];
-    const cachedSlots = cached?.find((row) => row.slots?.length)?.slots;
-    if (cachedSlots?.length) {
-      setSlots(cachedSlots);
+    if (!activeDay) {
+      setSlots(null);
+      fetchedKeyRef.current = '';
       return;
     }
-    const key = `${activeDay.date}:${forecastDate}`;
+    const cached = getCachedWeatherRows()?.[activeDay.date];
+    const cachedSlots = cached?.find((row) => row.slots?.length)?.slots;
+    // Key includes trip id so a same-date trip switch cannot reuse the old fetch guard.
+    const key = `${trip.id || ''}:${activeDay.date}:${forecastDate}`;
+    if (cachedSlots?.length) {
+      setSlots(cachedSlots);
+      fetchedKeyRef.current = key;
+      return;
+    }
     if (fetchedKeyRef.current === key) return;
     fetchedKeyRef.current = key;
+    // Drop the previous trip/day's slots immediately so a failed fetch can never keep
+    // the wrong city's temps; the quiet "天氣 --" fallback renders instead.
+    setSlots(null);
     let cancelled = false;
     (async () => {
       try {
@@ -96,7 +105,10 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
         if (coord.missing) {
           const resolved = await resolveCoordsForDay(activeDay, 1);
           const found = resolved.find((c) => !c.missing && Number.isFinite(c.lat) && Number.isFinite(c.lon));
-          if (!found) return;
+          if (!found) {
+            if (!cancelled) setSlots(null);
+            return;
+          }
           coord = found;
         }
         const officialProvider = resolveOfficialWeatherProvider(coord, { country: activeDay.country, region: activeDay.region, city: activeDay.city });
@@ -104,7 +116,8 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
         if (cancelled) return;
         setSlots(slotsForDate(result.data as Parameters<typeof slotsForDate>[0], forecastDate));
       } catch {
-        // Fetch failed — leave slots null so the quiet "天氣 --" fallback renders below.
+        // Fetch failed — keep slots null so the quiet "天氣 --" fallback renders below.
+        if (!cancelled) setSlots(null);
       }
     })();
     return () => {
@@ -115,7 +128,7 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
       fetchedKeyRef.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDay?.date, forecastDate]);
+  }, [trip.id, activeDay?.date, forecastDate]);
 
   const liveHour = activeDay ? liveSlotHour(forecastDate, activeDay.timezone || timezone) : null;
   const slot = slots ? pickSlot(slots, liveHour) : undefined;

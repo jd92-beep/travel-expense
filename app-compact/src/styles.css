@@ -10494,7 +10494,7 @@ textarea,
 
   .preview-dashboard-currency button {
     min-width: 48px;
-    min-height: 38px;
+    min-height: 44px;
     padding: 8px 12px;
     border: 0;
     border-radius: 999px;
@@ -12310,7 +12310,8 @@ textarea,
   }
 
   .preview-dashboard-currency button {
-    min-width: 38px;
+    min-width: 44px;
+    min-height: 44px;
     padding: 7px 8px;
     font-size: 12px;
   }

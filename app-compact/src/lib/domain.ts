@@ -160,13 +160,54 @@ export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
+function isoAddDays(date: string, days: number): string {
+  const parsed = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
 export function todayForReceipts(state: AppState, precomputedItinerary?: ItineraryDay[]): string {
-  const hkt = todayYmd('Asia/Hong_Kong');
   const trip = activeTrip(state);
   const start = trip.startDate || state.tripDateRange.start;
   const end = trip.endDate || state.tripDateRange.end;
-  if (hkt >= start && hkt <= end) return todayYmd(trip.timezones?.[0] || (precomputedItinerary || getItinerary(state))[0]?.timezone || 'Asia/Hong_Kong');
-  return hkt;
+  const zone = trip.timezones?.[0]
+    || (precomputedItinerary || getItinerary(state))[0]?.timezone
+    || '';
+  // Keep HKT as fallback when no trip timezone.
+  if (!zone) return todayYmd('Asia/Hong_Kong');
+
+  // Derive and gate on the same trip-local calendar date. The old HKT gate with a
+  // trip-local return opened a ~1h hole for UTC+9 trips: Day-1 early morning fell
+  // outside the HKT window, and end-day night returned a post-endDate date.
+  const localToday = todayYmd(zone);
+  if (isIsoDate(start) && isIsoDate(end) && end >= start) {
+    if (localToday >= start && localToday <= end) return localToday;
+    // Clamp only the timezone-drift boundary back into [start,end]; true prep/post
+    // days keep the real trip-local date so callers can label the phase and keep
+    // money on the same real day.
+    if (localToday < start && isoAddDays(localToday, 1) === start) return start;
+    if (localToday > end && isoAddDays(localToday, -1) === end) return end;
+  }
+  return localToday;
+}
+
+/** Shared daily-budget divisor: itinerary days, else trip date-span, else trend days. */
+export function budgetDayCount(state: AppState, itinerary: ItineraryDay[], trendLength = 0): number {
+  if (itinerary.length) return Math.max(1, itinerary.length);
+  const trip = activeTrip(state);
+  const start = trip.startDate || state.tripDateRange?.start;
+  const end = trip.endDate || state.tripDateRange?.end;
+  if (isIsoDate(start) && isIsoDate(end) && end >= start) {
+    const span = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+    if (span > 0) return span;
+  }
+  return Math.max(1, trendLength || 1);
+}
+
+/** Shared daily-budget amount so Home and Stats always show the same number. */
+export function dailyBudgetAmount(state: AppState, itinerary: ItineraryDay[], trendLength = 0): number {
+  return Math.round((Number(state.budget) || 0) / budgetDayCount(state, itinerary, trendLength));
 }
 
 export function getTripPhase(state: AppState, date?: string): TripPhase {

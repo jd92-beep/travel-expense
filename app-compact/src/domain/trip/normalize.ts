@@ -255,7 +255,8 @@ export function switchTrip(state: AppState, tripId: string): Partial<AppState> |
     activeTripId: tripId,
     trips: (state.trips || []).map((item) => ({ ...item, active: item.id === tripId && !item.archived })),
     tripName: target.name,
-    budget: target.budget ?? state.budget,
+    // 冇 budget 嘅旅程唔可以靜靜雞繼承上一個旅程嘅預算（Home 會顯示成總預算）。
+    budget: Number.isFinite(Number(target.budget)) ? Number(target.budget) : 0,
     tripCurrency: target.currencies?.find((c) => c !== 'HKD') || state.tripCurrency,
     customItinerary: target.itinerary || [],
     tripDateRange: { start: target.startDate, end: target.endDate },
@@ -293,18 +294,20 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
 
   // 一張收據如果已經有「明確且有效」嘅 tripId（例如用戶喺 editor 入面建立/編輯過），
   // 就必須尊重佢 — 改其他欄位（例如日期）唔可以靜靜雞將佢搬去另一個旅程。
-  // 只有當 tripId 缺失 / 係 default / 失效（Notion 拉回、歷史數據）先做智能歸位。
+  // 只有當 tripId 缺失 / 係 default / 真正未知（Notion 拉回、歷史數據）先做智能歸位。
+  // archived trip 仍然係「已知」旅程：收據必須保留喺佢哋原本嘅 trip，唔可以偷走。
+  const knownTrip = originalTripId ? trips.find((t) => t.id === originalTripId) : undefined;
   const isDefaultOrEmptyTripId = !originalTripId
     || originalTripId === 'trip_default'
     || originalTripId === 'default'
-    || !trips.some((t) => t.id === originalTripId && !t.archived);
+    || !knownTrip;
 
   let trip: TripProfile | undefined;
 
-  // 1) 尊重明確且有效嘅 tripId（最高優先）
-  if (!isDefaultOrEmptyTripId) {
-    trip = trips.find((t) => t.id === originalTripId && !t.archived);
-    if (trip) tripLinkSource = receipt.tripLinkSource || 'explicit';
+  // 1) 尊重明確且有效嘅 tripId（最高優先）— 包括 archived，禁止 re-home
+  if (!isDefaultOrEmptyTripId && knownTrip) {
+    trip = knownTrip;
+    tripLinkSource = receipt.tripLinkSource || 'explicit';
   }
 
   // 2) 冇明確 tripId 先按日期歸位（Notion 拉回的無 TripId 數據、或歷史 default 數據）
@@ -344,18 +347,20 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
       || perHkdForCurrency(state, currency),
   );
 
-  // 增加強大嘅港幣折算自我修復 (Self-Healing) 校驗
+  // 港幣折算自我修復：只修「缺失」同真正矛盾嘅行內數據。
+  // 用戶釘死匯率 / 已有正數 hkdAmount 嘅歷史單，唔可以因為今日市場匯率漂移而被改寫。
   let hkdAmt = Number(receipt.hkdAmount) || 0;
-  let isHkdAmountValid = false;
-  if (hkdAmt > 0 && receipt.total) {
-    const ratio = Number(receipt.total) / hkdAmt;
+  const total = Number(receipt.total) || 0;
+  const hasPinnedRate = Number.isFinite(pinnedRate) && pinnedRate > 0;
+  if (hkdAmt <= 0) {
+    hkdAmt = Math.round(total / rate);
+  } else if (!hasPinnedRate && total > 0 && !Number.isFinite(Number(receipt.exchangeRate))) {
+    // 行內冇匯率紀錄先做寬鬆校驗；有 exchangeRate 就信任當時折算。
+    const ratio = total / hkdAmt;
     const percentDiff = Math.abs(ratio - rate) / rate;
-    if (percentDiff < 0.1) {
-      isHkdAmountValid = true;
+    if (percentDiff >= 0.1) {
+      hkdAmt = Math.round(total / rate);
     }
-  }
-  if (!isHkdAmountValid || hkdAmt <= 0) {
-    hkdAmt = Math.round((Number(receipt.total) || 0) / rate);
   }
 
   return {

@@ -53,6 +53,8 @@ function mergeItineraryDay(remote: TripProfile['itinerary'][number] | undefined,
     day: Number(remote?.day || local?.day || base.day) || 1,
     region: remote?.region || local?.region || base.region,
     lodging: remote?.lodging?.name ? remote.lodging : local?.lodging,
+    // Explicit empty remote spots are an intentional clear (same contract as the
+    // itinerary-sync-merge test: "explicit empty remote spots delete stale local scenery").
     spots: remote ? remote.spots || [] : local?.spots || [],
   };
 }

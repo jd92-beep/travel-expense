@@ -4,7 +4,7 @@ import { BarChart3, ChevronRight, Info, Pencil, PieChart, ReceiptText, TrendingU
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { enqueueChange } from '../lib/changeJournal';
-import { categoryById, computeSettlements, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, todayForReceipts } from '../lib/domain';
+import { budgetDayCount, categoryById, computeSettlements, dailyBudgetAmount, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, todayForReceipts } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
 import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
@@ -126,8 +126,9 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
     acc[r.date] = (acc[r.date] || 0) + getReceiptTripAmount(r, state, resolvedTripCurrency);
     return acc;
   }, {})).sort(([a], [b]) => a.localeCompare(b));
-  const tripDayCount = Math.max(1, itinerary.length || trend.length);
-  const dailyBudget = Math.round((Number(state.budget) || 0) / tripDayCount);
+  // Shared with Dashboard via domain.ts so Home and Stats always show the same dailyBudget.
+  const tripDayCount = budgetDayCount(state, itinerary, trend.length);
+  const dailyBudget = dailyBudgetAmount(state, itinerary, trend.length);
   const dailyAverage = Math.round(trueTotal / tripDayCount);
   const overBudgetDays = trend.filter(([, total]) => dailyBudget > 0 && total > dailyBudget).length;
   const budgetStory = buildBudgetStoryCards({

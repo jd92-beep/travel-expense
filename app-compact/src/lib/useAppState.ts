@@ -12,7 +12,7 @@ import { clearCurrencyCache } from './currency';
 import { enqueueChange } from './changeJournal';
 import { receiptSourceTombstoneKey } from './syncMerge';
 import { saveStoredSnapshot } from './storage';
-import type { AppState, Receipt, SyncQueueItem } from './types';
+import type { AppState, Receipt, SyncQueueItem, TripProfile } from './types';
 
 const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'budget',
@@ -78,6 +78,59 @@ function mergeByKey<T>(base: T[], overlay: T[], keyOf: (item: T) => string): T[]
 
 const syncQueueKey = (item: SyncQueueItem) => `${item.type}:${item.entityId}`;
 
+function jsonKey(value: unknown): string {
+  try {
+    return JSON.stringify(value ?? null);
+  } catch {
+    return String(value);
+  }
+}
+
+function tripContentKey(trip: unknown): string {
+  if (!trip || typeof trip !== 'object') return jsonKey(trip);
+  const { active: _active, ...rest } = trip as Record<string, unknown>;
+  return jsonKey(rest);
+}
+
+// Late hydrate: keep every field the user already changed pre-hydrate (budget edit,
+// trip switch, wizard-created trip, currency toggle…), and fill only untouched fields
+// from storage. `initial` is the pre-hydrate safeInitialState snapshot.
+function preferPreHydrateEdits(prev: AppState, hydrated: AppState, initial: AppState): AppState {
+  const keep = <K extends keyof AppState>(key: K): AppState[K] =>
+    jsonKey(prev[key]) !== jsonKey(initial[key]) ? prev[key] : hydrated[key];
+
+  const tripsById = new Map<string, TripProfile>();
+  for (const trip of hydrated.trips || []) if (trip?.id) tripsById.set(trip.id, trip);
+  const initialTripsById = new Map((initial.trips || []).map((trip) => [trip.id, trip]));
+  for (const trip of prev.trips || []) {
+    if (!trip?.id) continue;
+    const initialTrip = initialTripsById.get(trip.id);
+    // Wizard-created trip, or a trip whose content the user edited (e.g. budget).
+    if (!initialTrip || tripContentKey(trip) !== tripContentKey(initialTrip)) {
+      tripsById.set(trip.id, trip);
+    }
+  }
+
+  return {
+    ...hydrated,
+    lastTab: keep('lastTab'),
+    activeTripId: keep('activeTripId'),
+    budget: keep('budget'),
+    tripName: keep('tripName'),
+    tripCurrency: keep('tripCurrency'),
+    displayCurrency: keep('displayCurrency'),
+    customItinerary: keep('customItinerary'),
+    tripDateRange: keep('tripDateRange'),
+    persons: keep('persons'),
+    shareRatios: keep('shareRatios'),
+    peopleByTripId: keep('peopleByTripId'),
+    shareRatiosByTripId: keep('shareRatiosByTripId'),
+    trips: [...tripsById.values()],
+    receipts: mergeByKey(hydrated.receipts || [], prev.receipts || [], (r) => r.id),
+    syncQueue: mergeByKey(hydrated.syncQueue || [], prev.syncQueue || [], syncQueueKey),
+  };
+}
+
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
   const [state, setState] = useState<AppState>(() => safeInitialState(storageScope, userEmail));
   const [hydratedScope, setHydratedScope] = useState('');
@@ -87,6 +140,9 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   // Bumped on every user mutation so a late IndexedDB hydrate cannot clobber live edits
   // (e.g. History "Keep local" racing an in-flight hydrateScope).
   const mutationSeqRef = useRef(0);
+  // Snapshot of the pre-hydrate initial state so a late hydrate can tell which fields
+  // the user actually changed (budget/trip switch/wizard) vs still default.
+  const preHydrateInitialRef = useRef<AppState>(state);
 
   // Coalesce the expensive IndexedDB structured-clone write (photo thumbs included) at
   // PERSIST_DEBOUNCE_MS. The localStorage mirror is written through on every commit so
@@ -151,12 +207,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
           // Boot: apply storage. If the user already edited after mount, keep their
           // navigation and any data fields they changed, but fill the rest from storage.
           if (mutationSeqRef.current === seqAtStart) return hydrated;
-          return {
-            ...hydrated,
-            lastTab: prev.lastTab !== hydrated.lastTab ? prev.lastTab : hydrated.lastTab,
-            receipts: mergeByKey(hydrated.receipts || [], prev.receipts || [], (r) => r.id),
-            syncQueue: mergeByKey(hydrated.syncQueue || [], prev.syncQueue || [], syncQueueKey),
-          };
+          return preferPreHydrateEdits(prev, hydrated, preHydrateInitialRef.current);
         });
         setHydratedScope(storageScope);
         setIndexedReadyScope(storageScope);

@@ -180,7 +180,9 @@ export function useSyncEngine(
       receipts: current.receipts.map((candidate) => {
         if (candidate.id !== receipt.id) return candidate;
         const queueUpdatedAt = Number(item.payload?.updatedAt || receipt.updatedAt || receipt.createdAt || 0);
-        const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || Date.now());
+        // Missing local timestamps must not look "newer than the queue item" (was Date.now()).
+        // Treat them as 0 so only a real mid-flight edit takes the keep-local branch.
+        const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || 0);
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
           return {
             ...candidate,
@@ -209,7 +211,8 @@ export function useSyncEngine(
       trips: (current.trips || []).map((candidate) => {
         if (candidate.id !== trip.id) return candidate;
         const queueUpdatedAt = Number(item.payload?.updatedAt || trip.updatedAt || trip.createdAt || 0);
-        const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || Date.now());
+        // Same missing-timestamp rule as receipts: never invent Date.now() as "local newer".
+        const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || 0);
         // Mid-flight trip edit: keep local newer content; only adopt cloud identity.
         // Next local edit re-queues a fresh payload (same contract as before).
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
@@ -245,10 +248,9 @@ export function useSyncEngine(
       resolve();
       return;
     }
-    const timer = window.setTimeout(() => {
-      resolve();
-    }, 0);
-    return () => window.clearTimeout(timer);
+    // One-macrotask yield so in-flight setState can flush. Not cancellable — do not
+    // return a cleanup from this executor (the return value is ignored).
+    window.setTimeout(resolve, 0);
   }), []);
 
   const processItem = useCallback(async (item: SyncQueueItem): Promise<JournalOutcome | undefined> => {
@@ -258,7 +260,10 @@ export function useSyncEngine(
     const hasNotionSync = canUseNotionMirror(current, !!supabaseSession, session?.user?.email || null);
     if (item.type === 'receipt') {
       const receipt = current.receipts.find((candidate) => candidate.id === item.entityId);
-      if (!receipt) return;
+      if (!receipt) {
+        // Entity vanished before push. Do NOT record a false "succeeded" — keep it visible.
+        return { kind: 'terminal-error', error: 'Local receipt missing at push time' };
+      }
       const sharedLedger = usesSharedLedger(current, receipt);
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
@@ -662,7 +667,8 @@ export function useSyncEngine(
           // Server truth beats the local flag: if this pull shows no storage photo for a
           // receipt we thought was uploaded, the object was deleted server-side (storage wipe,
           // account migration). Clear the flag so the sweep re-uploads from photoThumb.
-          if (cloudPullOk) {
+          // Empty pulls are ambiguous (cold start / RLS glitch) — same guard as purge.
+          if (cloudPullAuthoritative && (supabaseData.receipts?.length || 0) > 0) {
             const serverPhotoSupabaseIds = new Set(
               supabaseData.receipts
                 .filter((receipt) => receipt.supabasePhotoPath && receipt.supabaseId)

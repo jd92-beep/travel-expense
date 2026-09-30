@@ -29,10 +29,12 @@ import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-
 import { amountToHkd, currencyPrefix, formatCurrencyAmount, perHkdForCurrency } from '../lib/currency';
 import {
   categoryById,
+  dailyBudgetAmount,
   displayStore,
   fmt,
   getItinerary,
   getPersons,
+  getTripPhase,
   isPendingReceipt,
   mapsUrl,
   openMapExternal,
@@ -868,14 +870,22 @@ export function Dashboard({
   const rawBudgetPct = currentBudget > 0 ? (currentSpent / currentBudget) * 100 : 0;
   const budgetPct = Math.min(100, rawBudgetPct);
 
-  const dailyBudget = Math.round((Number(state.budget) || 0) / Math.max(1, itinerary.length));
+  const dailyBudget = dailyBudgetAmount(state, itinerary);
   const todayBudgetPct = dailyBudget > 0 ? (todayTotal / dailyBudget) * 100 : 0;
   const todayBudgetPctCapped = Math.min(100, Math.max(0, Math.round(todayBudgetPct)));
   const dailyBudgetHkd = Math.round(amountToHkd(dailyBudget, resolvedTripCurrency, state));
   const dayRemainingTrip = Math.max(0, Math.round(dailyBudget - todayTotal));
   const day = itinerary.find((d) => d.date === today) || itinerary[0];
   const length = tripLength(trip.startDate, trip.endDate, itinerary.length);
-  const displayDayDate = day?.date || today;
+  // When today is outside the trip window, the date label must mean the same day as
+  // the money (real today + phase), not silently fall back to Day-1's date.
+  const tripStart = trip.startDate || state.tripDateRange?.start || '';
+  const tripEnd = trip.endDate || state.tripDateRange?.end || '';
+  const todayOutsideTrip = !!tripStart && !!tripEnd && (today < tripStart || today > tripEnd);
+  const todayPhaseLabel = todayOutsideTrip
+    ? (getTripPhase(state, today) === 'prep' ? '準備階段' : '旅程外')
+    : '';
+  const displayDayDate = todayOutsideTrip ? today : (day?.date || today);
   const currentDayNumber = Math.max(1, Math.min(length, day?.day || tripDayNumber(trip.startDate, displayDayDate, 1)));
   const remainingBudgetHkd = Math.max(0, budgetHkd - spentHkd);
   const dayRemainingHkd = Math.max(0, Math.round(amountToHkd(dailyBudget - todayTotal, resolvedTripCurrency, state)));
@@ -1079,7 +1089,7 @@ export function Dashboard({
                       />
                       <button
                         type="button"
-                        className="text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
+                        className="compact-touch-action text-xs bg-slate-800 text-white px-2 py-0.5 rounded"
                         onClick={() => {
                           handleUpdateBudget(editBudgetVal);
                         }}
@@ -1090,7 +1100,7 @@ export function Dashboard({
                   ) : (
                     <>
                       <strong>{showTripCurrency ? displayMoney(state.budget, resolvedTripCurrency) : displayMoney(budgetHkd, 'HKD')}</strong>
-                      <button type="button" onClick={() => {
+                      <button type="button" className="compact-touch-action" onClick={() => {
                         setEditBudgetVal(String(showTripCurrency || resolvedTripCurrency === 'HKD'
                           ? (state.budget || '')
                           : String(Math.round(budgetHkd || 0))));
@@ -1146,7 +1156,7 @@ export function Dashboard({
       <GlassCard as="div" className="washi-today-stats-card dashboard-magic-today preview-dashboard-today relative overflow-hidden z-10">
         <div className="preview-dashboard-today-head">
           <h3>今日狀態</h3>
-          <span><CalendarDays size={18} /> {chineseDateLabel(displayDayDate)}</span>
+          <span><CalendarDays size={18} /> {chineseDateLabel(displayDayDate)}{todayPhaseLabel ? `（${todayPhaseLabel}）` : ''}</span>
           <div className="preview-dashboard-currency preview-dashboard-today-currency" role="group" aria-label="今日狀態顯示貨幣">
             <button
               type="button"
@@ -1274,7 +1284,7 @@ export function Dashboard({
                         onOpen(matchedReceipt);
                       }}
                     >
-                      {currencyPrefix(matchedReceipt.currency || 'JPY')}{fmt(matchedReceipt.total)}
+                      {currencyPrefix(matchedReceipt.currency || matchedReceipt.originalCurrency || resolvedTripCurrency)}{fmt(matchedReceipt.total)}
                     </button>
                   ) : null}
                 </div>
@@ -1497,9 +1507,10 @@ export function Dashboard({
               <button
                 type="button"
                 onClick={closeWizard}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center transition-all border-none focus:outline-none cursor-pointer"
+                aria-label="關閉"
+                className="compact-touch-action rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 transition-all border-none focus:outline-none cursor-pointer"
               >
-                ✕
+                <span aria-hidden="true">✕</span>
               </button>
             </div>
 
