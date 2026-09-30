@@ -60,10 +60,17 @@ function dedupeQueue(queue: SyncQueueItem[]) {
     if (item.status === 'synced') continue;
     const prev = latest.get(queueKey(item));
     // Keep the newest op but preserve earlier payload metadata (notionPageId/supabaseId/sourceId)
-    // so a fresh re-enqueue doesn't drop the link info an earlier item had captured.
-    latest.set(queueKey(item), prev
-      ? { ...item, payload: { ...prev.payload, ...item.payload } }
-      : item);
+    // so a fresh re-enqueue doesn't drop the link info an earlier item had captured. Explicit
+    // `undefined` values in the newer payload must not wipe that metadata either.
+    if (prev) {
+      const merged: Record<string, unknown> = { ...(prev.payload || {}) };
+      for (const [key, value] of Object.entries(item.payload || {})) {
+        if (value !== undefined) merged[key] = value;
+      }
+      latest.set(queueKey(item), { ...item, payload: merged as SyncQueueItem['payload'] });
+    } else {
+      latest.set(queueKey(item), item);
+    }
   }
   return [...latest.values()].sort((a, b) => a.createdAt - b.createdAt);
 }
@@ -440,7 +447,11 @@ export function useSyncEngine(
 
           failures += 1;
           const safeMessage = isVersionConflict
-            ? '有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。'
+            // Prefix with 版本衝突 so changeJournal's terminalError() and History's
+            // isVersionConflictError() both match the STORED message — without it the
+            // Cantonese copy below lacks 40001/版本衝突 and restoreJournal resurrects the
+            // conflict on reload while History never shows the conflict resolver.
+            ? '版本衝突：有人啱啱改咗呢筆單，你嘅修改未有套用。請下拉同步後再改一次。'
             : lastError;
           settleQueueItem(item, {
             kind: 'terminal-error',
@@ -535,7 +546,9 @@ export function useSyncEngine(
       for (const remote of receipts) {
         const local = stateRef.current.receipts.find((r) => r.id === remote.id);
         if (!local) continue;
-        const localUpdated = Number(local.updatedAt || local.createdAt || Date.now());
+        // Missing local timestamps must not look "newer than the queue item" — same 0 rule as
+        // applyReceiptSyncResult/mergePulledReceipts (was Date.now(), which hid real overwrites).
+        const localUpdated = Number(local.updatedAt || local.createdAt || 0);
         const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
         const remoteHasMissingLink = (!local.notionPageId && !!remote.notionPageId) || (!local.sourceId && !!remote.sourceId);
         if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
@@ -612,7 +625,15 @@ export function useSyncEngine(
                 googleBackupModel: settings.googleBackupModel ?? finalState.googleBackupModel,
                 themePreference: settings.themePreference ?? finalState.themePreference,
                 credentialBrokerUrl: settings.credentialBrokerUrl ?? finalState.credentialBrokerUrl,
-                notionDeletedSourceIds: settings.notionDeletedSourceIds ?? finalState.notionDeletedSourceIds,
+                // Deletion tombstones are an append-only log, not a last-writer-wins setting:
+                // union both sides or a newer settings push from another device silently drops
+                // this device's deletes and a Notion pull resurrects them.
+                notionDeletedSourceIds: settings.notionDeletedSourceIds
+                  ? Array.from(new Set([
+                      ...(finalState.notionDeletedSourceIds || []),
+                      ...settings.notionDeletedSourceIds,
+                    ])).slice(-500)
+                  : finalState.notionDeletedSourceIds,
                 settingsUpdatedAt: remoteTs,
                 settingsPulledAt: mergedAt,
               };

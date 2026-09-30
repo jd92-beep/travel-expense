@@ -361,7 +361,11 @@ function buildProps(state: AppState, receipt: Receipt, schema: SchemaMap) {
     [propName(schema, 'objectType')]: { select: { name: 'receipt' } },
     [propName(schema, 'store')]: { title: [{ text: { content: displayStore(receipt) || '未命名' } }] },
     [propName(schema, 'amount')]: { number: Number(receipt.total) || 0 },
-    [propName(schema, 'date')]: { date: { start: receipt.date } },
+    // Notion rejects `{ start: '' }` and fails the WHOLE page write. An empty
+    // date must omit the property instead of poisoning the entire receipt push.
+    ...(receipt.date
+      ? { [propName(schema, 'date')]: { date: { start: receipt.date } } }
+      : {}),
     [propName(schema, 'time')]: { rich_text: [{ text: { content: receipt.time || '' } }] },
     [propName(schema, 'cat')]: { select: { name: cat?.name || '其他' } },
     [propName(schema, 'pay')]: { select: { name: pay?.name || '現金' } },
@@ -913,6 +917,20 @@ function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
   const raw = readAllText(readProp(props, 'tripJson', schema), 'rich_text');
   try {
     const parsed = JSON.parse(raw) as TripProfile;
+    // tripJson is untrusted mirror data (anyone with DB access can edit the row).
+    // Accept it only when the required TripProfile fields are actually present;
+    // otherwise fall through to the property-based reconstruction below so a
+    // corrupted snapshot cannot inject a half-empty trip into app state.
+    const shapeOk = !!parsed
+      && typeof parsed === 'object'
+      && !Array.isArray(parsed)
+      && typeof parsed.id === 'string'
+      && !!parsed.id
+      && typeof parsed.name === 'string'
+      && typeof parsed.startDate === 'string'
+      && typeof parsed.endDate === 'string'
+      && Array.isArray(parsed.itinerary);
+    if (shapeOk) {
       return {
         ...parsed,
         notionPageId: page.id,
@@ -921,7 +939,11 @@ function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
         version: readNumberProp(props, 'tripVersion', schema) || parsed.version || 1,
         updatedAt: page.last_edited_time ? new Date(page.last_edited_time).getTime() : parsed.updatedAt,
       };
+    }
   } catch {
+    // Unparseable tripJson — fall through to the property-based reconstruction.
+  }
+  {
     const id = readText(readProp(props, 'tripId', schema), 'rich_text') || sourceId.replace(/^trip_/, '') || `trip_${page.id}`;
     return {
       id,
@@ -1629,8 +1651,15 @@ export async function archiveReceipt(state: AppState, receipt: Receipt) {
 export async function pushAll(state: AppState) {
   let ok = 0;
   const failures: Array<{ id: string; error: string }> = [];
+  // One failing trip must not abort the whole backup sweep: receipts and the
+  // settings row still have to reach Notion, and the trip failure must be
+  // reported in `failures` instead of silently dropping every later record.
   for (const trip of state.trips || []) {
-    await pushTripPage(state, trip);
+    try {
+      await pushTripPage(state, trip);
+    } catch (err) {
+      failures.push({ id: trip.id, error: String(err) });
+    }
   }
   for (const receipt of state.receipts) {
     try {
@@ -1650,7 +1679,7 @@ export async function pullAll(state: AppState): Promise<Receipt[]> {
   const schema = await ensureSchema(state);
   const rows: Receipt[] = [];
   let cursor: string | undefined;
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < 50; i += 1) {
     const page = await notionFetch<{ results?: any[]; has_more?: boolean; next_cursor?: string }>(state, `/databases/${activeDb}/query`, {
       method: 'POST',
       body: JSON.stringify(cursor ? { page_size: 100, start_cursor: cursor } : { page_size: 100 }),
@@ -1662,8 +1691,15 @@ export async function pullAll(state: AppState): Promise<Receipt[]> {
         && !isReceiptTombstoned(state, receipt)
       ) rows.push(receipt);
     }
-    if (!page.has_more) break;
+    // has_more without a cursor would re-query page 1 forever and duplicate rows.
+    if (!page.has_more || !page.next_cursor) {
+      if (page.has_more && !page.next_cursor) {
+        console.warn('[notion] pullAll: has_more set but next_cursor missing; stopping to avoid duplicate pages');
+      }
+      break;
+    }
     cursor = page.next_cursor;
+    if (i === 49) console.warn('[notion] pullAll: hit 50-page safety cap; rows beyond this are not pulled');
   }
   return rows;
 }
@@ -1674,7 +1710,7 @@ export async function pullTrips(state: AppState): Promise<TripProfile[]> {
   const schema = await ensureSchema(state);
   const rows: TripProfile[] = [];
   let cursor: string | undefined;
-  for (let i = 0; i < 20; i += 1) {
+  for (let i = 0; i < 50; i += 1) {
     const page = await notionFetch<{ results?: any[]; has_more?: boolean; next_cursor?: string }>(state, `/databases/${activeDb}/query`, {
       method: 'POST',
       body: JSON.stringify(cursor ? { page_size: 100, start_cursor: cursor } : { page_size: 100 }),
@@ -1683,8 +1719,14 @@ export async function pullTrips(state: AppState): Promise<TripProfile[]> {
       const trip = tripFromPage(item, schema);
       if (trip) rows.push(trip);
     }
-    if (!page.has_more) break;
+    if (!page.has_more || !page.next_cursor) {
+      if (page.has_more && !page.next_cursor) {
+        console.warn('[notion] pullTrips: has_more set but next_cursor missing; stopping to avoid duplicate pages');
+      }
+      break;
+    }
     cursor = page.next_cursor;
+    if (i === 49) console.warn('[notion] pullTrips: hit 50-page safety cap; rows beyond this are not pulled');
   }
   return rows;
 }

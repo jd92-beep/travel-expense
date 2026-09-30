@@ -5,7 +5,7 @@ import { AccordionCard } from '../components/AccordionCard';
 import { AvatarBadge } from '../components/AvatarBadge';
 import { parseTripParagraph, testGoogleBackupConnection, testKimiConnection } from '../lib/ai';
 import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
-import { AI_MODELS, APP_VERSION, DEFAULT_KIMI_PRIMARY_MODEL_ID, isBoss, ITINERARY } from '../lib/constants';
+import { AI_MODELS, APP_VERSION, DEFAULT_TRIP_UPDATE_MODEL_ID, isBoss, ITINERARY } from '../lib/constants';
 import {
   brokerHealth,
   disconnectPersonalNotionIntegration,
@@ -113,6 +113,15 @@ function sanitizeImportedReceipts(input: unknown, fallbackDate: string, allowedT
         photoUrl: _photoUrl,
         _photoSyncedToNotion,
         _photoBodyBlockAdded,
+        // Cloud photo identity/sync flags must never arrive from a file: a crafted backup
+        // with `_photoSyncedToSupabase: true` or a foreign `supabasePhotoPath` would either
+        // suppress the local re-upload or point sync at another account's storage object.
+        supabasePhotoPath: _supabasePhotoPath,
+        _photoSyncedToSupabase: _photoSyncedToSupabase,
+        _photoSyncAttempts: _photoSyncAttempts,
+        // Ownership markers would freeze restored receipts into read-only foreign rows.
+        ownerId: _ownerId,
+        createdByLabel: _createdByLabel,
         ...localReceipt
       } = receipt as Partial<Receipt> & { notionDb?: unknown };
       const totalNum = Number(receipt.total);
@@ -249,7 +258,7 @@ function compactTripDoctor(
 }
 
 function aiModelLabel(modelId: string | undefined): string {
-  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  const id = modelId || DEFAULT_TRIP_UPDATE_MODEL_ID;
   return AI_MODELS.find((model) => model.id === id)?.name || id;
 }
 
@@ -514,6 +523,8 @@ type BackupImportPreview = {
   safePayload: Partial<AppState>;
   importedTrips?: TripProfile[];
   receipts: Receipt[];
+  /** True when the backup file itself carried a receipts key (even if empty). */
+  receiptsProvided: boolean;
   tripCount: number;
   receiptCount: number;
   targetTripName: string;
@@ -821,6 +832,9 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
     notionDeletedIds: _notionDeletedIds,
     notionDeletedSourceIds: _notionDeletedSourceIds,
     deletedTripIds: _deletedTripIds,
+    // Tombstones carry supabaseId + delete markers; importing them would suppress
+    // legitimate local receipts after the next merge. Never accept them from a file.
+    receiptTombstones: _receiptTombstones,
     lastSyncedAt: _lastSyncedAt,
     globalSyncStatus: _globalSyncStatus,
     syncError: _syncError,
@@ -861,6 +875,7 @@ function buildBackupImportPreview(fileName: string, payload: Partial<AppState>, 
     safePayload,
     importedTrips,
     receipts,
+    receiptsProvided: Array.isArray(payload.receipts),
     tripCount: importedTrips?.length || 0,
     receiptCount: receipts.length,
     targetTripName: targetTrip.name || currentTrip.name || 'Current trip',
@@ -1064,7 +1079,7 @@ export function Settings({
   const [sharingInviteRole, setSharingInviteRole] = useState<TripSharingInviteDraft['role']>('editor');
   const [sharingInvitePerson, setSharingInvitePerson] = useState(true);
   const [createdInviteLinks, setCreatedInviteLinks] = useState<Array<{ email: string; link: string }>>([]);
-  const tripUpdateModelId = state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID;
+  const tripUpdateModelId = state.tripUpdateModel || DEFAULT_TRIP_UPDATE_MODEL_ID;
   const tripUpdateModelName = aiModelLabel(tripUpdateModelId);
   const tripPreviewStats = tripDraft ? tripDraftPreviewStats(tripDraft) : null;
   const tripReviewDraft = editableTripDraft || tripDraft;
@@ -2296,7 +2311,8 @@ export function Settings({
       startDate: mgrStart || target.startDate,
       endDate: mgrEnd || target.endDate,
       budget: nextBudget,
-      currencies: Array.from(new Set(['HKD', mgrCurrency])),
+      // Keep currencies already in use (receipts may be in USD etc.); only add the edited one.
+      currencies: Array.from(new Set(['HKD', mgrCurrency, ...(target.currencies || [])])),
       intelligence: nextIntelligence,
       archived: mgrArchived,
       version: target.version + 1,
@@ -2323,12 +2339,26 @@ export function Settings({
       if (isActive && mgrArchived) {
         const nextActive = updatedTrips.find((t) => !t.archived && t.id !== managerTripId) || updatedTrips.find((t) => !t.archived);
         if (nextActive) {
+          // Mirror switchTrip: snapshot the outgoing trip's people and restore the
+          // destination trip's — otherwise the archived trip's companions leak onto it.
+          const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+          const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+          if (prev.persons?.length) {
+            peopleByTripId[managerTripId] = prev.persons;
+            if (prev.shareRatios) shareRatiosByTripId[managerTripId] = prev.shareRatios;
+          }
+          const targetPeople = peopleByTripId[nextActive.id];
+          const targetShares = shareRatiosByTripId[nextActive.id];
           patch.activeTripId = nextActive.id;
           patch.tripName = nextActive.name;
           patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
           patch.tripCurrency = nonHomeCurrencyForTrip(nextActive, prev.tripCurrency);
           patch.budget = nextActive.budget || 0;
           patch.customItinerary = nextActive.itinerary;
+          patch.persons = targetPeople?.length ? targetPeople : prev.persons;
+          patch.shareRatios = targetShares || prev.shareRatios;
+          patch.peopleByTripId = peopleByTripId;
+          patch.shareRatiosByTripId = shareRatiosByTripId;
           patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
         }
       }
@@ -2390,15 +2420,34 @@ export function Settings({
       if (isActive) {
         const nextActive = updatedTrips.find((t) => !t.archived) || updatedTrips[0];
         if (nextActive) {
+          // Same person snapshot/restore as switchTrip — deleting the active trip must not
+          // leave the deleted trip's companions on the trip that becomes active.
+          const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+          const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+          if (prev.persons?.length) {
+            peopleByTripId[managerTripId] = prev.persons;
+            if (prev.shareRatios) shareRatiosByTripId[managerTripId] = prev.shareRatios;
+          }
+          const targetPeople = peopleByTripId[nextActive.id];
+          const targetShares = shareRatiosByTripId[nextActive.id];
           patch.activeTripId = nextActive.id;
           patch.tripName = nextActive.name;
           patch.tripDateRange = { start: nextActive.startDate, end: nextActive.endDate };
           patch.tripCurrency = nonHomeCurrencyForTrip(nextActive, prev.tripCurrency);
           patch.budget = nextActive.budget || 0;
           patch.customItinerary = nextActive.itinerary;
+          patch.persons = targetPeople?.length ? targetPeople : prev.persons;
+          patch.shareRatios = targetShares || prev.shareRatios;
+          patch.peopleByTripId = peopleByTripId;
+          patch.shareRatiosByTripId = shareRatiosByTripId;
           patch.trips = updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id }));
         }
       }
+
+      // Drop the deleted trip's per-trip people/share snapshots so they can't resurface
+      // if a later restore or pull re-introduces a trip with the same id.
+      delete (patch.peopleByTripId || (patch.peopleByTripId = { ...(prev.peopleByTripId || {}) }))[managerTripId];
+      delete (patch.shareRatiosByTripId || (patch.shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) }))[managerTripId];
 
       const currentQueue = prev.syncQueue || [];
       patch.receiptTombstones = {
@@ -2466,14 +2515,29 @@ export function Settings({
       destinationSummary: newManagedTripDest || 'Japan',
       startDate: newManagedTripStart,
       endDate: newManagedTripEnd,
-      budget: newManagedTripBudget.trim() ? Number(newManagedTripBudget) : 150000,
+      // Number('') is 0 and Number('abc') is NaN — clamp both to a safe budget.
+      budget: clampFinite(newManagedTripBudget.trim() === '' ? 150000 : newManagedTripBudget, 150000),
       currency: newManagedTripCurrency,
       now,
     });
     setState((prev) => {
       const prevTrips = prev.trips?.length ? prev.trips : [activeTrip(prev)];
+      // Mirror switchTrip: snapshot the outgoing trip's people so switching back restores
+      // them, and give the brand-new trip a clean companion list instead of inheriting.
+      const peopleByTripId = { ...(prev.peopleByTripId || {}) };
+      const shareRatiosByTripId = { ...(prev.shareRatiosByTripId || {}) };
+      const prevTripId = prev.activeTripId;
+      if (prevTripId && prevTripId !== newTrip.id && prev.persons?.length) {
+        peopleByTripId[prevTripId] = prev.persons;
+        if (prev.shareRatios) shareRatiosByTripId[prevTripId] = prev.shareRatios;
+      }
+      const freshPersons: Person[] = [{ id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' }];
       return migrateAppState({
         ...prev,
+        peopleByTripId,
+        shareRatiosByTripId,
+        persons: freshPersons,
+        shareRatios: {},
         trips: [...prevTrips.map((trip) => ({ ...trip, active: false })), newTrip],
         activeTripId: newTrip.id,
         tripName: newTrip.name,
@@ -2652,7 +2716,10 @@ export function Settings({
       ...prev,
       ...preview.safePayload,
       trips: preview.importedTrips || prev.trips,
-      receipts: preview.receipts.length ? preview.receipts : prev.receipts,
+      // An explicitly empty receipts array in the backup must win — keeping prev.receipts
+      // would silently re-attach other-trip rows to the restored trips (partial restore).
+      // Only when the file has no receipts key at all do we leave local receipts alone.
+      receipts: preview.receiptsProvided || preview.receipts.length ? preview.receipts : prev.receipts,
       // Restore contract: activeTripId must reference an imported/existing trip — never an
       // unknown foreign id from the backup file.
       activeTripId: preview.nextActiveTripId || prev.activeTripId,
@@ -2958,7 +3025,7 @@ export function Settings({
           <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
           <AiModelField label="語音模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
           <AiModelField label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />
-          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_KIMI_PRIMARY_MODEL_ID} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
+          <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_TRIP_UPDATE_MODEL_ID} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
         </div>
         {showStressPanel && (
           <>

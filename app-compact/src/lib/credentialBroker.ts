@@ -71,11 +71,23 @@ export function brokerUrl(state?: Pick<AppState, 'credentialBrokerUrl'>): string
 export function currentBrokerSession(state?: Pick<AppState, 'credentialSession' | 'credentialSessionExpiresAt'>): BrokerSession | null {
   // Always consider the persisted session as a fallback so in-memory AppState
   // without a token does not disable broker-backed Notion/AI paths.
+  //
+  // Token and expiry MUST come from the same source: mixing an expired
+  // in-memory token with a renewed stored expiry (or vice versa) both rejects a
+  // perfectly valid session and sends the wrong credential to the broker.
+  const now = Date.now();
   const stored = loadCredentialSession();
-  const token = state?.credentialSession || stored.credentialSession || '';
-  const exp = Number(state?.credentialSessionExpiresAt || stored.credentialSessionExpiresAt || 0);
-  if (!token || exp <= Date.now()) return null;
-  return { credentialSession: token, credentialSessionExpiresAt: exp };
+  const stateToken = String(state?.credentialSession || '');
+  const stateExp = Number(state?.credentialSessionExpiresAt || 0);
+  if (stateToken && stateExp > now) {
+    return { credentialSession: stateToken, credentialSessionExpiresAt: stateExp };
+  }
+  const storedToken = String(stored.credentialSession || '');
+  const storedExp = Number(stored.credentialSessionExpiresAt || 0);
+  if (storedToken && storedExp > now) {
+    return { credentialSession: storedToken, credentialSessionExpiresAt: storedExp };
+  }
+  return null;
 }
 
 export function hasCredentialBrokerSession(state: Pick<AppState, 'credentialSession' | 'credentialSessionExpiresAt'>): boolean {

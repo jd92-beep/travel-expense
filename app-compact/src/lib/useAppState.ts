@@ -305,11 +305,13 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
     commitState((prev) => ({
       ...prev,
       receipts: prev.receipts.filter((r) => r.id !== receipt.id),
+      // Dedupe before the 500-cap slice: repeated deletes of the same key must not push
+      // unique tombstone keys out of the window.
       notionDeletedIds: receipt.notionPageId
-        ? [...(prev.notionDeletedIds || []), receipt.notionPageId].slice(-500)
+        ? [...new Set([...(prev.notionDeletedIds || []), receipt.notionPageId])].slice(-500)
         : prev.notionDeletedIds,
       notionDeletedSourceIds: tombstoneKey
-        ? [...(prev.notionDeletedSourceIds || []), tombstoneKey].slice(-500)
+        ? [...new Set([...(prev.notionDeletedSourceIds || []), tombstoneKey])].slice(-500)
         : prev.notionDeletedSourceIds,
       receiptTombstones: {
         ...(prev.receiptTombstones || {}),

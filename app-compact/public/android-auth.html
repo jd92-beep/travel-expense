@@ -40,34 +40,8 @@
       Tokens arrive in the hash (implicit flow). We pass them to the native app via
       intent extras (S.*) and keep a query copy only for older native handlers, then
       immediately scrub the browser URL so tokens do not linger in history/referrer.
+      Logic lives in android-auth-boot.js — production CSP is script-src 'self'.
     -->
-    <script>
-      (function () {
-        var PKG = 'com.ftjdfr.travelexpensecompact';
-        var HOST = location.host;
-        var params = new URLSearchParams((location.search || '').replace(/^\?/, ''));
-        var hash = (location.hash || '').replace(/^#/, '');
-        if (hash) {
-          new URLSearchParams(hash).forEach(function (value, key) {
-            if (!params.has(key)) params.set(key, value);
-          });
-        }
-        var extras = '';
-        var qs = '';
-        params.forEach(function (value, key) {
-          // Native extras for new handlers; query retained for compatibility.
-          extras += ';S.' + encodeURIComponent(key) + '=' + encodeURIComponent(value);
-          qs += (qs ? '&' : '') + encodeURIComponent(key) + '=' + encodeURIComponent(value);
-        });
-        var appUrl = 'intent://' + HOST + '/android-auth' + (qs ? '?' + qs : '') +
-          '#Intent;scheme=https;package=' + PKG + extras + ';end';
-        document.getElementById('open').setAttribute('href', appUrl);
-        // Scrub the browser address bar immediately — tokens must not stay in history.
-        try {
-          history.replaceState(null, '', location.pathname);
-        } catch (e) { /* ignore */ }
-        try { window.location.href = appUrl; } catch (e) { /* manual button remains */ }
-      })();
-    </script>
+    <script src="android-auth-boot.js"></script>
   </body>
 </html>

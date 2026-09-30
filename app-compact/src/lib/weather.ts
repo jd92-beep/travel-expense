@@ -305,6 +305,17 @@ function weatherCacheKey(coord: WeatherCoord) {
   return `wx_react_v3_${coord.lat.toFixed(3)}_${coord.lon.toFixed(3)}`;
 }
 
+// Cache writes are best-effort: Safari private mode and a full localStorage
+// quota throw on setItem. A successful forecast must never be discarded just
+// because it could not be memoized.
+function safeCacheWrite(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Ignore quota/private-mode failures — the fetch result is still returned.
+  }
+}
+
 function weatherDataIncludesDate(data: unknown, targetDate?: string): boolean {
   if (!targetDate) return true;
   const time = (data as { hourly?: { time?: unknown } } | null)?.hourly?.time;
@@ -401,7 +412,7 @@ async function geocodeWeatherLocation(query: string, country?: string, limit = 2
       origin: 'city-geocode' as const,
       query,
     }));
-  localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), coords }));
+  safeCacheWrite(cacheKey, { ts: Date.now(), coords });
   return coords;
 }
 
@@ -1182,7 +1193,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
     try {
       officialResult = await fetchOfficialWeather(officialProvider, coord, safeTimezone, targetDate);
       if (!weatherDataHasGaps(officialResult.data)) {
-        if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: officialResult.source }));
+        if (cacheKey) safeCacheWrite(cacheKey, { ts: Date.now(), data: officialResult.data, source: officialResult.source });
         return officialResult;
       }
     } catch (error) {
@@ -1197,7 +1208,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
       const reason = fallbackResult.provider
         ? `${officialResult.provider} missing some hourly fields; filled by ${fallbackResult.provider}`
         : undefined;
-      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data, source: officialResult.source }));
+      if (cacheKey) safeCacheWrite(cacheKey, { ts: Date.now(), data, source: officialResult.source });
       return {
         data,
         source: officialResult.source,
@@ -1207,7 +1218,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
         fallbackReason: reason,
       };
     } catch (error) {
-      if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: officialResult.data, source: officialResult.source }));
+      if (cacheKey) safeCacheWrite(cacheKey, { ts: Date.now(), data: officialResult.data, source: officialResult.source });
       return {
         ...officialResult,
         fallbackReason: `${officialResult.provider} served; fallback supplement unavailable: ${weatherErrorLabel(error)}`,
@@ -1215,7 +1226,7 @@ export async function fetchWeather(coord: WeatherCoord, timezone = 'auto', offic
     }
   }
   const fallbackResult = await fetchFallbackWeather(coord, safeTimezone, officialProvider, state, targetDate, officialFallbackReason);
-  if (cacheKey) localStorage.setItem(cacheKey, JSON.stringify({ ts: Date.now(), data: fallbackResult.data, source: fallbackResult.source }));
+  if (cacheKey) safeCacheWrite(cacheKey, { ts: Date.now(), data: fallbackResult.data, source: fallbackResult.source });
   return fallbackResult;
 }
 

@@ -39,6 +39,45 @@ let state = await persistence.hydrateScope('supabase:user-1', 'member@example.co
 assert.equal(state.activeTripId, 'cloud-trip');
 assert.equal(state.trips.some((trip) => trip.id === DEFAULT_STATE.activeTripId), false);
 
+// Demo-key scrub: per-trip maps and date range keyed by the demo trip must not leak to
+// non-boss supabase users even when the demo trip itself is filtered out.
+const demoMaps = memoryAdapter({
+  ...DEFAULT_STATE,
+  peopleByTripId: {
+    [DEFAULT_STATE.activeTripId]: [{ id: 'p_demo', name: 'Demo Person', emoji: '👤', color: '#000' }],
+    'cloud-trip': [{ id: 'p_real', name: 'Real Person', emoji: '👤', color: '#111' }],
+  },
+  shareRatiosByTripId: {
+    [DEFAULT_STATE.activeTripId]: { p_demo: 50 },
+    'cloud-trip': { p_real: 100 },
+  },
+  trips: [{ ...DEFAULT_STATE.trips[0], id: 'cloud-trip', name: 'Cloud Trip', active: true }],
+  activeTripId: 'cloud-trip',
+});
+persistence = createScopedPersistence(demoMaps.adapter, memoryAdapter().adapter);
+state = await persistence.hydrateScope('supabase:user-1', 'member@example.com');
+assert.equal(DEFAULT_STATE.activeTripId in (state.peopleByTripId || {}), false);
+assert.equal(DEFAULT_STATE.activeTripId in (state.shareRatiosByTripId || {}), false);
+assert.equal(state.peopleByTripId?.['cloud-trip']?.[0]?.id, 'p_real');
+
+const demoOnlyMaps = memoryAdapter({
+  ...DEFAULT_STATE,
+  peopleByTripId: { [DEFAULT_STATE.activeTripId]: [{ id: 'p_demo', name: 'Demo Person', emoji: '👤', color: '#000' }] },
+  shareRatiosByTripId: { [DEFAULT_STATE.activeTripId]: { p_demo: 50 } },
+  trips: [DEFAULT_STATE.trips[0]],
+  activeTripId: DEFAULT_STATE.activeTripId,
+  tripDateRange: { start: '2026-04-20', end: '2026-04-25' },
+  tripName: '名古屋 2026',
+  customItinerary: DEFAULT_STATE.trips[0].itinerary,
+});
+persistence = createScopedPersistence(demoOnlyMaps.adapter, memoryAdapter().adapter);
+state = await persistence.hydrateScope('supabase:user-1', 'member@example.com');
+assert.equal(state.trips.length, 0);
+assert.equal(state.tripName, '');
+assert.deepEqual(state.tripDateRange, { start: '', end: '' });
+assert.equal(state.customItinerary, null);
+assert.equal(DEFAULT_STATE.activeTripId in (state.peopleByTripId || {}), false);
+
 const localNewer = memoryAdapter({
   ...DEFAULT_STATE,
   settingsUpdatedAt: 30,

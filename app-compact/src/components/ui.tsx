@@ -272,6 +272,17 @@ export function EmptyState({
   );
 }
 
+// Stable message identity for the auto-dismiss timer. Parent re-renders create a new
+// `children` element every time (e.g. `天氣拉取失敗：{error}`), so keying the effect on
+// `children` would reset the 4.5s timer forever and the toast would never close.
+function toastText(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(toastText).join('\u0000');
+  if (typeof node === 'object' && 'props' in node) return toastText((node as { props?: { children?: ReactNode } }).props?.children);
+  return '';
+}
+
 export function Toast({
   tone = 'info',
   children,
@@ -280,11 +291,12 @@ export function Toast({
   children: ReactNode;
 }) {
   const [dismissed, setDismissed] = useState(false);
+  const messageKey = toastText(children);
   useEffect(() => {
     setDismissed(false);
     const timer = window.setTimeout(() => setDismissed(true), 4500);
     return () => window.clearTimeout(timer);
-  }, [children]);
+  }, [messageKey]);
   if (dismissed) return null;
   return <div className={`toast ${tone}`} role="status">{children}</div>;
 }

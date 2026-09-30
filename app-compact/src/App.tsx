@@ -335,10 +335,15 @@ export function App() {
       })
       .catch((inviteError) => {
         console.error('[TripInvite] accept failed:', inviteError);
-        try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
+        const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
+        // Only drop the stashed token on definitive failure (expired/invalid). A transient
+        // network/5xx error must keep it so the session-ready effect can retry after reload.
+        const definitive = /expired|invalid|not accepted|already|revoked/i.test(msg);
+        if (definitive) {
+          try { localStorage.removeItem('travel-expense:pending-invite-token'); } catch { /* best effort */ }
+        }
         // Clear the stranded hash so re-clicking the invite link triggers a fresh attempt.
         clearHash();
-        const msg = inviteError instanceof Error ? inviteError.message : 'Trip invite accept failed';
         updateState({
           syncError: /expired/i.test(msg)
             ? '邀請已過期，請聯絡旅程管理員重新發送邀請。'

@@ -402,9 +402,14 @@ export function migrateAppState(input: unknown): AppState {
         ...item,
         active: item.id === nextActiveId && !item.archived || (!nextActiveId && !parsed.activeTripId && idx === 0),
         notionDb: item.notionDb || (item.id === 'trip_2026_04_nagoya' ? (parsed.notionDb || DEFAULT_STATE.notionDb) : undefined),
+        // Missing per-trip budget means "no budget" (0) — never DEFAULT_STATE.budget's demo
+        // 101800, which silently becomes a phantom total on every budget-less trip. Only the
+        // active/legacy trip may inherit the top-level budget, and 0 must survive (no `||`).
         budget: Math.max(0, typeof item.budget === 'number' && !Number.isNaN(item.budget)
           ? item.budget
-          : (item.id === trip.id ? (Number(parsed.budget) || DEFAULT_STATE.budget || 0) : DEFAULT_STATE.budget || 0)),
+          : ((item.id === nextActiveId || item.id === trip.id) && Number.isFinite(Number(parsed.budget))
+            ? Number(parsed.budget)
+            : 0)),
         itinerary: normalizeItinerary(
           item.itinerary?.length ? item.itinerary : Array.isArray(parsed.customItinerary) ? parsed.customItinerary : [],
           item.id,
@@ -425,7 +430,10 @@ export function migrateAppState(input: unknown): AppState {
   const currentActiveTrip = trips.find((t) => t.id === nextActiveId) || trips.find((t) => t.active) || trips[0];
   const resolvedBudget = (parsed.budget !== undefined && parsed.budget !== null && !Number.isNaN(Number(parsed.budget)))
     ? Math.max(0, Number(parsed.budget))
-    : (currentActiveTrip ? (Number(currentActiveTrip.budget) || DEFAULT_STATE.budget || 0) : DEFAULT_STATE.budget || 0);
+    // Explicit 0 is "no budget" — `Number(x) || DEFAULT` would resurrect the demo 101800.
+    : (currentActiveTrip && Number.isFinite(Number(currentActiveTrip.budget))
+      ? Math.max(0, Number(currentActiveTrip.budget))
+      : 0);
 
   const finalTrips = trips.map((t) =>
     (t.id === nextActiveId || t.active)

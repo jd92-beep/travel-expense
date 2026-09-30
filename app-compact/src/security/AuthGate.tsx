@@ -153,9 +153,17 @@ export function AuthGate({
         devicePublicKey: trustedDevice.devicePublicKey,
         deviceName: trustedDevice.deviceName,
       });
-      if (!brokerSession.device) throw new Error('Credential Broker did not register this device');
-      await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
-      setDeviceTrust(brokerSession.device.deviceId);
+      // Persisting device trust is best-effort: a quota/IndexedDB failure after a SUCCESSFUL
+      // unlock must not leave the user locked out with a false "wrong password" error.
+      if (brokerSession.device) {
+        try {
+          await saveTrustedDevice(brokerSession.device, trustedDevice.privateKey);
+          setDeviceTrust(brokerSession.device.deviceId);
+        } catch (trustSaveError) {
+          console.warn('Trusted device persist failed (continuing unlocked):', redactedError(trustSaveError));
+          clearDeviceTrust();
+        }
+      }
       try { sessionStorage.removeItem(FLAG_ONLY_SESSION); } catch { /* best effort */ }
       onBrokerSession?.(brokerSession);
       setUnlocked(true);

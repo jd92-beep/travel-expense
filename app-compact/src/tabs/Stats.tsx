@@ -6,7 +6,7 @@ import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { enqueueChange } from '../lib/changeJournal';
 import { budgetDayCount, categoryById, computeSettlements, dailyBudgetAmount, displayStore, fmt, getItinerary, getPersons, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, todayForReceipts } from '../lib/domain';
 import type { AppState, CategoryId, PaymentId, Receipt } from '../lib/types';
-import { amountToHkd, formatCurrencyAmount, hkdToCurrency, perHkdForCurrency } from '../lib/currency';
+import { amountToHkd, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
 import { needsTranslation, splitInlineTranslation, translateStoreNames } from '../lib/storeTranslation';
 import { EmptyState, GlassCard, StatusPill, TickerMoney } from '../components/ui';
 import { AvatarBadge } from '../components/AvatarBadge';
@@ -23,11 +23,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   const persons = getPersons(state);
   const itinerary = getItinerary(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
-  const toHkd = (amt: number) => {
-    if (resolvedTripCurrency === 'HKD') return amt;
-    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
-    return Math.round(amt / rate);
-  };
+  const toHkd = (amt: number) => Math.round(amountToHkd(amt, resolvedTripCurrency, state));
   const analysisReceipts = scopedState.receipts.filter((r) => state.statsIncludeTransportLodging || !isBigTripItem(r));
   const catTotals = categoryTotals(analysisReceipts, state, resolvedTripCurrency);
   const payTotals = paymentTotals(analysisReceipts, state, resolvedTripCurrency);
@@ -415,9 +411,17 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
     // The budget is stored denominated in the trip currency; convert the input from
     // whatever display currency is active (identity for the trip currency, HKD-anchored
     // round-trip for HKD and any third currency chip).
-    const newBudget = displayCurrency === resolvedTripCurrency
-      ? rawInput
-      : Math.round(hkdToCurrency(amountToHkd(rawInput, displayCurrency, state), resolvedTripCurrency, state));
+    let newBudget: number;
+    if (displayCurrency === resolvedTripCurrency) {
+      newBudget = rawInput;
+    } else {
+      // No-op edit (typed equals the displayed rounded figure) keeps the stored budget —
+      // a display-rounded round-trip would otherwise drift it on every save.
+      const displayed = Math.round(tripAmtToDisplay(Number(state.budget) || 0));
+      newBudget = rawInput === displayed
+        ? (Number(state.budget) || 0)
+        : Math.round(hkdToCurrency(amountToHkd(rawInput, displayCurrency, state), resolvedTripCurrency, state));
+    }
     if (setState) {
       const now = Date.now();
       const nextTrip = {
@@ -493,6 +497,7 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                 <input
                   type="number"
                   className="w-20 text-sm px-1 py-0.5 rounded border border-gray-300 text-slate-800"
+                  aria-label="預算金額"
                   value={editBudgetVal}
                   onChange={(e) => setEditBudgetVal(e.target.value)}
                   onKeyDown={(e) => {
@@ -519,10 +524,12 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
                   type="button"
                   aria-label="編輯預算"
                   onClick={() => {
-                    // Show the value in the currently active display currency
-                    const initVal = showTripCurrency
+                    // Show the value in the currently active display currency. `showTripCurrency`
+                    // is only "not HKD" — a third-currency chip (e.g. USD on a JPY trip) must
+                    // show a converted figure, not the raw trip-currency budget.
+                    const initVal = displayCurrency === resolvedTripCurrency
                       ? String(state.budget || '')
-                      : String(Math.round(amountToHkd(Number(state.budget) || 0, resolvedTripCurrency, state)) || '');
+                      : String(Math.round(tripAmtToDisplay(Number(state.budget) || 0)) || '');
                     setEditBudgetVal(initVal);
                     setIsEditingBudget(true);
                   }}
@@ -685,11 +692,7 @@ function DataPanel({ icon, title, status, children, className = '' }: { icon: Re
 function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: Array<[string, number]>; dailyBudget: number; dailyAverage: number; state: AppState }) {
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
-  const toHkd = (amt: number) => {
-    if (resolvedTripCurrency === 'HKD') return amt;
-    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
-    return Math.round(amt / rate);
-  };
+  const toHkd = (amt: number) => Math.round(amountToHkd(amt, resolvedTripCurrency, state));
   const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
 
   const max = Math.max(1, dailyBudget, ...trend.map(([, total]) => total));
@@ -793,13 +796,7 @@ function Bar({ label, leading, value, state, color, max }: { label: string; lead
   const trip = activeTrip(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
 
-  let valueHkd = 0;
-  if (resolvedTripCurrency === 'HKD') {
-    valueHkd = value;
-  } else {
-    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
-    valueHkd = Math.round(value / rate);
-  }
+  const valueHkd = Math.round(amountToHkd(value, resolvedTripCurrency, state));
 
   const currencySymbol = resolvedTripCurrency === 'JPY' ? '¥' : resolvedTripCurrency + ' ';
   const summary = `${label}: ${currencySymbol}${fmt(value)} / HK$ ${fmt(valueHkd)}`;

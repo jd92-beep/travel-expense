@@ -58,6 +58,12 @@ export function enqueueChange(
   const requeueAfterEdit = wasTerminal && nextPayloadUpdatedAt > previousPayloadUpdatedAt;
   const keepTerminal = wasTerminal && !requeueAfterEdit;
   const updatedAt = Math.max(now, (previous?.updatedAt || 0) + 1);
+  // Explicit `undefined` payload values must not wipe link metadata an earlier item captured
+  // (call sites pass `supabaseId: receipt.supabaseId` even when it is undefined).
+  const mergedPayload: Record<string, unknown> = { ...(previous?.payload || {}) };
+  for (const [key, value] of Object.entries(change.payload || {})) {
+    if (value !== undefined) mergedPayload[key] = value;
+  }
   const next: SyncQueueItem = {
     ...previous,
     ...change,
@@ -67,7 +73,7 @@ export function enqueueChange(
     error: keepTerminal ? previous.error : undefined,
     createdAt: previous?.createdAt || now,
     updatedAt,
-    payload: { ...previous?.payload, ...change.payload },
+    payload: mergedPayload as SyncQueueItem['payload'],
   };
   return [...(queue || []).filter((item) => queueKey(item) !== queueKey(change)), next]
     .slice(-500);

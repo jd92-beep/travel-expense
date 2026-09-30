@@ -260,6 +260,9 @@ export function History({
       const updatedReceipt: Receipt = {
         ...currentReceipt,
         syncStatus: 'queued',
+        // Clear the ledger-level conflict flag too — receiptHasTrueConflict() keys off it,
+        // so leaving it set made the resolver card reappear forever after a resolution.
+        ledgerSyncStatus: 'queued',
         updatedAt: now,
       };
       let matched = false;
@@ -309,7 +312,6 @@ export function History({
 
   function handleKeepCloud(conflict: ReceiptConflictItem) {
     if (!setState) return;
-    const now = Date.now();
     setState((prev) => {
       const currentReceipt = prev.receipts.find((receipt) => receipt.id === conflict.receipt.id) || conflict.receipt;
       const cloudStatus = currentReceipt.supabaseId || currentReceipt.notionPageId ? 'synced' : 'local';
@@ -322,7 +324,10 @@ export function History({
         receipts: prev.receipts.map((receipt) => receipt.id === currentReceipt.id ? {
           ...receipt,
           syncStatus: cloudStatus,
-          updatedAt: now,
+          ledgerSyncStatus: cloudStatus === 'synced' ? 'synced' : undefined,
+          // Do NOT stamp updatedAt: now — that made the stale local copy win every future
+          // merge against the cloud version the user just chose to trust. Keep the existing
+          // timestamp so the next pull can overwrite with the remote row.
         } : receipt),
         syncQueue: nextQueue,
         globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : (nextQueue.length ? 'queued' : 'idle'),
@@ -491,7 +496,7 @@ export function History({
                     )}
                   </span>
                   <span className="amount history-ledger-amount">
-                    <strong>{currencyPrefix(r.currency || 'JPY')}{fmt(r.total)}</strong>
+                    <strong>{currencyPrefix(r.currency || r.originalCurrency || 'JPY')}{fmt(r.total)}</strong>
                     <small>HKD ${fmt(getReceiptHkdAmount(r, state))}</small>
                   </span>
                   <ChevronRight className="history-row-chevron" size={21} aria-hidden="true" />

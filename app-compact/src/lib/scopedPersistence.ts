@@ -41,13 +41,21 @@ function sanitizeSnapshot(value: unknown): Partial<AppState> | null {
   return safe;
 }
 
-const freshness = (state: Partial<AppState>) => Math.max(
-  Number(state.settingsUpdatedAt || 0),
-  Number(state.lastSyncedAt || 0),
-  ...receiptsOf(state).map((receipt) =>
-    Number(receipt.updatedAt || receipt.createdAt || 0)),
-  ...tombstonesOf(state).map((tombstone) => Number(tombstone.deletedAt || 0)),
-);
+// Loop instead of Math.max(...spread): a snapshot with tens of thousands of receipts
+// exceeds the argument-count limit and throws RangeError, failing hydration entirely.
+const freshness = (state: Partial<AppState>) => {
+  let newest = Math.max(
+    Number(state.settingsUpdatedAt || 0),
+    Number(state.lastSyncedAt || 0),
+  );
+  for (const receipt of receiptsOf(state)) {
+    newest = Math.max(newest, Number(receipt.updatedAt || receipt.createdAt || 0));
+  }
+  for (const tombstone of tombstonesOf(state)) {
+    newest = Math.max(newest, Number(tombstone.deletedAt || 0));
+  }
+  return newest;
+};
 
 function mergeReceipts(primary: Receipt[], secondary: Receipt[]): Receipt[] {
   const merged = new Map(primary.map((receipt) => [receipt.id, receipt]));
@@ -109,25 +117,42 @@ function resolveReceiptTombstones(
 
 export function sanitizePublicDemoState(state: AppState, scope: string, userEmail: string | null): AppState {
   if (!scope.startsWith('supabase:') || isBoss(userEmail)) return state;
-  const trips = (state.trips || []).filter((trip) => trip.id !== DEFAULT_STATE.activeTripId);
+  const demoTripId: string = DEFAULT_STATE.activeTripId || 'trip_2026_04_nagoya';
+  const trips = (state.trips || []).filter((trip) => trip.id !== demoTripId);
   const activeTripId = trips.find((trip) => trip.id === state.activeTripId && !trip.archived)?.id
     || trips.find((trip) => trip.active && !trip.archived)?.id
     || trips.find((trip) => !trip.archived)?.id
     || '';
   const active = trips.find((trip) => trip.id === activeTripId);
+  // Per-trip maps keyed by the demo trip id carry the demo roster/ratios — drop those keys
+  // too, not just the trips array, or public users inherit demo persons on the demo trip.
+  const stripDemoKey = <T,>(map: Record<string, T> | undefined): Record<string, T> | undefined => {
+    if (!map || typeof map !== 'object') return map;
+    if (!(demoTripId in map)) return map;
+    const next = { ...map };
+    delete next[demoTripId];
+    return next;
+  };
   return {
     ...state,
     trips: trips.map((trip) => ({
       ...trip,
       active: trip.id === activeTripId && !trip.archived,
     })),
-    receipts: state.receipts.filter((receipt) => receipt.tripId !== DEFAULT_STATE.activeTripId),
+    receipts: state.receipts.filter((receipt) => receipt.tripId !== demoTripId),
+    peopleByTripId: stripDemoKey(state.peopleByTripId),
+    shareRatiosByTripId: stripDemoKey(state.shareRatiosByTripId),
     activeTripId,
     tripName: active?.name || (trips.length ? state.tripName : ''),
     tripDateRange: active
       ? { start: active.startDate, end: active.endDate }
-      : state.tripDateRange,
-    customItinerary: active?.itinerary || (trips.length ? state.customItinerary : null),
+      : trips.length
+        ? state.tripDateRange
+        // No surviving trip at all: never keep the demo name/date range/itinerary.
+        : { start: '', end: '' },
+    customItinerary: active
+      ? (active.itinerary || null)
+      : (trips.length ? state.customItinerary : null),
   };
 }
 

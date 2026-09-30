@@ -7,7 +7,7 @@ import type { AppState, CategoryId, PaymentId, Receipt, ReceiptLineItem, SplitMo
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 import { GradientButton } from './ui/gradient-button';
 
-const newId = () => `manual_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const newId = () => `manual_${Date.now()}_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
 
 function validAmount(value: unknown): number | null {
@@ -283,30 +283,38 @@ export function ReceiptEditor({
 
   async function attachPhoto(file?: File) {
     if (!file) return;
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result || ''));
-      reader.onerror = () => reject(reader.error || new Error('讀取相片失敗'));
-      reader.readAsDataURL(file);
-    });
-    if (!mountedRef.current) return;
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('讀取相片失敗'));
+        reader.readAsDataURL(file);
+      });
+      if (!mountedRef.current) return;
 
-    const [, mime = '', base64 = ''] = dataUrl.match(/^data:([^;]+);base64,(.*)$/) || [];
+      const [, mime = '', base64 = ''] = dataUrl.match(/^data:([^;]+);base64,(.*)$/) || [];
 
-    // Auto compress to 800px width to keep localStorage lightweight (~50-80KB) and prevent size limit crashes
-    const compressed = await compressPhoto(base64, mime, 800);
-    if (!mountedRef.current) return;
-    // Replacing the photo must clear the cloud path/synced flags, otherwise sync skips upload.
-    setDraft((d) => ({
-      ...d,
-      photoThumb: compressed || base64,
-      photoUrl: '',
-      _photoSyncedToSupabase: false,
-      supabasePhotoPath: undefined,
-      _photoSyncAttempts: 0,
-    }));
-
-    if (photoRef.current) photoRef.current.value = '';
+      // Auto compress to 800px width to keep localStorage lightweight (~50-80KB) and prevent size limit crashes
+      const compressed = await compressPhoto(base64, mime, 800);
+      if (!mountedRef.current) return;
+      // Replacing the photo must clear BOTH cloud paths/synced flags (Supabase and Notion),
+      // otherwise sync sees the old flags and skips the re-upload of the new image.
+      setDraft((d) => ({
+        ...d,
+        photoThumb: compressed || base64,
+        photoUrl: '',
+        _photoSyncedToSupabase: false,
+        supabasePhotoPath: undefined,
+        _photoSyncAttempts: 0,
+        _photoSyncedToNotion: false,
+        _photoBodyBlockAdded: false,
+        notionFileUploadId: undefined,
+      }));
+    } catch (error) {
+      console.warn('[ReceiptEditor] attachPhoto failed:', error);
+    } finally {
+      if (photoRef.current) photoRef.current.value = '';
+    }
   }
 
 
@@ -365,6 +373,9 @@ export function ReceiptEditor({
                 _photoSyncedToSupabase: false,
                 supabasePhotoPath: undefined,
                 _photoSyncAttempts: 0,
+                _photoSyncedToNotion: false,
+                _photoBodyBlockAdded: false,
+                notionFileUploadId: undefined,
               }
               : {}),
             lineItems: finalLineItems.length ? finalLineItems : undefined,
@@ -559,6 +570,9 @@ export function ReceiptEditor({
               _photoSyncedToSupabase: false,
               supabasePhotoPath: undefined,
               _photoSyncAttempts: 0,
+              _photoSyncedToNotion: false,
+              _photoBodyBlockAdded: false,
+              notionFileUploadId: undefined,
             }))}>刪除相片</button>}
             {!readOnly && <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>}
             {onAddToItinerary && <button type="button" className="secondary" onClick={() => {

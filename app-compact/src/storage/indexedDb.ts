@@ -9,14 +9,31 @@ const SNAPSHOT_KEY = 'app-state';
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
+    let settled = false;
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(STATE_STORE)) db.createObjectStore(STATE_STORE);
     };
     req.onblocked = () => {
-      const timer = setTimeout(() => reject(new Error('IndexedDB open blocked — timeout after 3s')), 3000);
-      req.onsuccess = () => { clearTimeout(timer); resolve(req.result); };
-      req.onerror = () => { clearTimeout(timer); reject(req.error || new Error('IndexedDB open failed')); };
+      const timer = setTimeout(() => {
+        settled = true;
+        reject(new Error('IndexedDB open blocked — timeout after 3s'));
+      }, 3000);
+      req.onsuccess = () => {
+        clearTimeout(timer);
+        if (settled) {
+          // Timed out earlier — don't leak the late connection.
+          req.result.close();
+          return;
+        }
+        resolve(req.result);
+      };
+      req.onerror = () => {
+        clearTimeout(timer);
+        if (settled) return;
+        settled = true;
+        reject(req.error || new Error('IndexedDB open failed'));
+      };
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error || new Error('IndexedDB open failed'));
@@ -27,36 +44,57 @@ function scopedSnapshotKey(scope?: string): string {
   return scope && scope !== 'local' ? `${SNAPSHOT_KEY}:${scope}` : SNAPSHOT_KEY;
 }
 
+// Both onerror and onabort must settle the promise: quota exhaustion and version-change
+// aborts fire `abort` without a request `error`, and a hanging write freezes persistScope.
+function runTx<T>(db: IDBDatabase, mode: IDBTransactionMode, exec: (store: IDBObjectStore) => IDBRequest): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let result: T;
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
+    const tx = db.transaction(STATE_STORE, mode);
+    const req = exec(tx.objectStore(STATE_STORE));
+    req.onsuccess = () => { result = req.result as T; };
+    req.onerror = () => settle(() => reject(req.error || new Error('IndexedDB request failed')));
+    // Resolve on oncomplete (not req.onsuccess): writes must reach commit, and a late
+    // abort (quota at commit) still rejects below.
+    tx.oncomplete = () => settle(() => resolve(result as T));
+    tx.onabort = () => settle(() => reject(tx.error || new Error('IndexedDB transaction aborted')));
+    tx.onerror = () => settle(() => reject(tx.error || new Error('IndexedDB transaction failed')));
+  });
+}
+
 export async function loadIndexedState(scope?: string): Promise<Partial<AppState> | null> {
   if (!('indexedDB' in window)) return null;
   const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STATE_STORE, 'readonly');
-    const req = tx.objectStore(STATE_STORE).get(scopedSnapshotKey(scope));
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error || new Error('IndexedDB read failed'));
-  }).finally(() => db.close()) as Promise<Partial<AppState> | null>;
+  try {
+    const result = await runTx<unknown>(db, 'readonly', (store) => store.get(scopedSnapshotKey(scope)));
+    return (result && typeof result === 'object' ? result : null) as Partial<AppState> | null;
+  } finally {
+    db.close();
+  }
 }
 
 export async function saveIndexedState(state: AppState, scope?: string): Promise<void> {
   if (!('indexedDB' in window)) return;
   const db = await openDb();
-  const safe = stripSensitiveState(state);
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STATE_STORE, 'readwrite');
-    tx.objectStore(STATE_STORE).put(safe, scopedSnapshotKey(scope));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
-  }).finally(() => db.close());
+  try {
+    const safe = stripSensitiveState(state);
+    await runTx<void>(db, 'readwrite', (store) => store.put(safe, scopedSnapshotKey(scope)));
+  } finally {
+    db.close();
+  }
 }
 
 export async function clearIndexedState(scope?: string): Promise<void> {
   if (!('indexedDB' in window)) return;
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STATE_STORE, 'readwrite');
-    tx.objectStore(STATE_STORE).delete(scopedSnapshotKey(scope));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || new Error('IndexedDB clear failed'));
-  }).finally(() => db.close());
+  try {
+    await runTx<void>(db, 'readwrite', (store) => store.delete(scopedSnapshotKey(scope)));
+  } finally {
+    db.close();
+  }
 }

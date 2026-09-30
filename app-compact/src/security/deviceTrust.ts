@@ -30,9 +30,17 @@ export function loadDeviceTrustMeta(): DeviceTrustMeta | null {
 
 export function setDeviceTrust(deviceId?: string | null): void {
   const exp = Date.now() + 1000 * 60 * 60 * 24 * 365;
-  localStorage.setItem(TRUST_KEY, JSON.stringify({ ok: true, exp, deviceId: deviceId || null }));
+  try {
+    localStorage.setItem(TRUST_KEY, JSON.stringify({ ok: true, exp, deviceId: deviceId || null }));
+  } catch {
+    // Quota/private-mode: trust is best-effort — never throw into the unlock flow.
+  }
 }
 
 export function clearDeviceTrust(): void {
-  localStorage.removeItem(TRUST_KEY);
+  try {
+    localStorage.removeItem(TRUST_KEY);
+  } catch {
+    // Best effort only.
+  }
 }

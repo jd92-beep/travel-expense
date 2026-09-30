@@ -26,7 +26,7 @@ import { DashboardWeatherChip } from '../components/DashboardWeatherChip';
 import { GlassCard, Reveal, TickerMoney } from '../components/ui';
 import { BorderBeam } from '../components/ui/border-beam';
 import { AnimatedCircularProgressBar } from '../components/ui/animated-circular-progress-bar';
-import { amountToHkd, currencyPrefix, formatCurrencyAmount, perHkdForCurrency } from '../lib/currency';
+import { amountToHkd, currencyPrefix, formatCurrencyAmount, hkdToCurrency } from '../lib/currency';
 import {
   categoryById,
   dailyBudgetAmount,
@@ -738,7 +738,9 @@ export function Dashboard({
     };
 
     const queueItem: SyncQueueItem = {
-      id: `sync_${updatedAt}_${Math.random().toString(16).slice(2)}`,
+      id: `sync_${updatedAt}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : Math.random().toString(16).slice(2)}`,
       type: 'trip',
       entityId: finalTrip.id,
       op: 'create',
@@ -804,12 +806,18 @@ export function Dashboard({
 
   const handleUpdateBudget = (newBudgetVal: string) => {
     const typed = Number(newBudgetVal) || 0;
+    const current = Number(state.budget) || 0;
     // Budget is always stored in trip currency. If the user is editing the HKD view,
     // convert HKD → trip currency so they never overwrite JPY with an HKD figure.
-    const rate = Math.max(0.1, perHkdForCurrency(state, resolvedTripCurrency));
-    const newBudget = showTripCurrency || resolvedTripCurrency === 'HKD'
-      ? typed
-      : Math.round(typed * rate);
+    let newBudget: number;
+    if (showTripCurrency || resolvedTripCurrency === 'HKD') {
+      newBudget = typed;
+    } else {
+      // No-op edit (typed equals the displayed rounded HKD) must keep the stored
+      // trip-currency budget — a rounded HKD round-trip would drift it every save.
+      const displayedHkd = Math.round(amountToHkd(current, resolvedTripCurrency, state));
+      newBudget = typed === displayedHkd ? current : Math.round(hkdToCurrency(typed, resolvedTripCurrency, state));
+    }
     if (setState) {
       const now = Date.now();
       const nextTrip = {
@@ -1078,6 +1086,7 @@ export function Dashboard({
                       <input
                         type="number"
                         className="w-20 text-sm px-1 py-0.5 rounded border border-gray-300 text-slate-800"
+                        aria-label="預算金額"
                         value={editBudgetVal}
                         onChange={(e) => setEditBudgetVal(e.target.value)}
                         onKeyDown={(e) => {

@@ -23,8 +23,11 @@ export function hasUserScopedNotionDatabase(state: AppState): boolean {
 export function extractNotionDatabaseId(input: string): string | null {
   const value = String(input || '').trim();
   if (!value) return null;
-  const match = value.match(/[0-9a-f]{32}/i);
-  return match ? match[0] : null;
+  // Notion accepts both the 32-char hex form and the hyphenated UUID form —
+  // strip hyphens first so a pasted `3438d94d-5f7c-...` URL still resolves.
+  const flattened = value.replace(/-/g, '');
+  const match = flattened.match(/[0-9a-f]{32}/i);
+  return match ? match[0].toLowerCase() : null;
 }
 
 export function canUseNotionMirror(state: AppState, cloudSyncAvailable = false, userEmail: string | null = null): boolean {

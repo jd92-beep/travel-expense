@@ -72,7 +72,11 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
   const forecastDate = activeDay ? (activeDay.date < today ? today : activeDay.date) : today;
 
   const [slots, setSlots] = useState<WeatherSlot[] | null>(() => {
-    const cached = activeDay ? getCachedWeatherRows()?.[activeDay.date] : null;
+    // Cache is keyed by the forecast target date (what fetchWeather writes); fall back to
+    // activeDay.date for older entries. Looking up only activeDay.date showed stale slots
+    // whenever forecastDate !== activeDay.date (e.g. trip-ended "today" refresh).
+    const rows = getCachedWeatherRows();
+    const cached = activeDay ? (rows?.[forecastDate] || rows?.[activeDay.date]) : null;
     const found = cached?.find((row: DayWeather) => row.slots?.length);
     return found?.slots || null;
   });
@@ -84,7 +88,8 @@ export function DashboardWeatherChip({ state, variant = 'mini' }: { state: AppSt
       fetchedKeyRef.current = '';
       return;
     }
-    const cached = getCachedWeatherRows()?.[activeDay.date];
+    const cacheRows = getCachedWeatherRows();
+    const cached = cacheRows?.[forecastDate] || cacheRows?.[activeDay.date];
     const cachedSlots = cached?.find((row) => row.slots?.length)?.slots;
     // Key includes trip id so a same-date trip switch cannot reuse the old fetch guard.
     const key = `${trip.id || ''}:${activeDay.date}:${forecastDate}`;

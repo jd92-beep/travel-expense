@@ -169,8 +169,9 @@ function isoAddDays(date: string, days: number): string {
 
 export function todayForReceipts(state: AppState, precomputedItinerary?: ItineraryDay[]): string {
   const trip = activeTrip(state);
-  const start = trip.startDate || state.tripDateRange.start;
-  const end = trip.endDate || state.tripDateRange.end;
+  // Optional access: a partially-hydrated state may lack tripDateRange; never crash the Home render.
+  const start = trip.startDate || state.tripDateRange?.start;
+  const end = trip.endDate || state.tripDateRange?.end;
   const zone = trip.timezones?.[0]
     || (precomputedItinerary || getItinerary(state))[0]?.timezone
     || '';
@@ -213,17 +214,19 @@ export function dailyBudgetAmount(state: AppState, itinerary: ItineraryDay[], tr
 export function getTripPhase(state: AppState, date?: string): TripPhase {
   if (!date) return 'trip';
   const trip = activeTrip(state);
-  const start = trip.startDate || state.tripDateRange.start;
-  const end = trip.endDate || state.tripDateRange.end;
-  if (date < start) return 'prep';
-  if (date > end) return 'post';
+  const start = trip.startDate || state.tripDateRange?.start || '';
+  const end = trip.endDate || state.tripDateRange?.end || '';
+  // Empty bounds must not classify every date as 'post' (date > '' is always true).
+  if (start && date < start) return 'prep';
+  if (end && date > end) return 'post';
   return 'trip';
 }
 
 export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
   if (receipt.phase === 'prep' || receipt.phase === 'trip' || receipt.phase === 'post') return receipt.phase;
-  const tripStartMs = new Date(`${state.tripDateRange.start}T00:00:00+08:00`).getTime();
-  if (receipt.createdAt && receipt.createdAt < tripStartMs) return 'prep';
+  const tripStartIso = state.tripDateRange?.start;
+  const tripStartMs = tripStartIso ? new Date(`${tripStartIso}T00:00:00+08:00`).getTime() : NaN;
+  if (receipt.createdAt && Number.isFinite(tripStartMs) && receipt.createdAt < tripStartMs) return 'prep';
   return getTripPhase(state, receipt.date);
 }
 
@@ -287,20 +290,24 @@ export function isPendingReceipt(receipt: Receipt): boolean {
 }
 
 export function jpyToHkd(jpy: number, state: AppState): number {
-  const rate = Math.max(0.1, perHkdForCurrency(state, 'JPY'));
+  // Floor is 0.01 to match amountToHkd: a 0.1 floor corrupts currencies whose per-HKD
+  // rate sits below 0.1 (e.g. live GBP ≈ 0.095).
+  const rate = Math.max(0.01, perHkdForCurrency(state, 'JPY'));
   return Math.round((Number(jpy) || 0) / rate);
 }
 
 export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
-  const cur = r.currency || 'JPY';
+  // Normalize case once: stored 'hkd'/'jpy' must not miss the identity/branch checks.
+  const cur = String(r.currency || 'JPY').toUpperCase();
   if (cur === 'HKD') {
     return Number(r.total) || 0;
   }
 
   // 鎖定匯率：用户手動釘死嘅匯率永遠優先，唔做自我修復、唔用而家嘅匯率覆蓋。
+  // Floor 0.01 (not 0.1) so pinned rates under 0.1 (GBP-class) convert correctly.
   const pinnedRate = r.exchangeRatePinned ? Number(r.exchangeRate) : 0;
   if (pinnedRate > 0 && Number.isFinite(pinnedRate)) {
-    return Math.round((Number(r.total) || 0) / Math.max(0.1, pinnedRate));
+    return Math.round((Number(r.total) || 0) / Math.max(0.01, pinnedRate));
   }
 
   const storedRate = Number(r.exchangeRate);
@@ -312,33 +319,36 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   // 金額 —— 市場波動唔等於舊數據被污染。
   if (storedHkd > 0) {
     if (!hasStoredRate) return storedHkd;
-    const rate = Math.max(0.1, storedRate);
+    const rate = Math.max(0.01, storedRate);
     const ratio = (Number(r.total) || 0) / storedHkd;
     const percentDiff = Math.abs(ratio - rate) / rate;
     return percentDiff < 0.10 ? storedHkd : Math.round((Number(r.total) || 0) / rate);
   }
 
-  const rate = Math.max(0.1, hasStoredRate ? storedRate : perHkdForCurrency(state, cur));
+  const rate = Math.max(0.01, hasStoredRate ? storedRate : perHkdForCurrency(state, cur));
   return Math.round((Number(r.total) || 0) / rate);
 }
 
 export function getReceiptTripAmount(r: Receipt, state: AppState, resolvedTripCurrency: string): number {
-  const cur = r.currency || 'JPY';
-  if (cur === resolvedTripCurrency) {
+  const cur = String(r.currency || 'JPY').toUpperCase();
+  const target = String(resolvedTripCurrency || 'JPY').toUpperCase();
+  if (cur === target) {
     return Number(r.total) || 0;
   }
   const hkdAmt = getReceiptHkdAmount(r, state);
-  return Math.round(hkdToCurrency(hkdAmt, resolvedTripCurrency, state));
+  return Math.round(hkdToCurrency(hkdAmt, target, state));
 }
 
 export function getResolvedTripCurrency(state: AppState, trip: any): string {
+  // Case-insensitive skip of HKD: a lowercase 'hkd' entry must not win the
+  // "first non-HKD currency" pick and then fail every === 'HKD' comparison.
   if (trip.currencies && trip.currencies.length > 0) {
-    const cur = trip.currencies.find((c: string) => c !== 'HKD');
-    if (cur) return cur;
+    const cur = trip.currencies.find((c: string) => String(c || '').toUpperCase() !== 'HKD');
+    if (cur) return String(cur).toUpperCase();
   }
   const intelligentCurrency = String(trip.intelligence?.primaryCurrency || '').toUpperCase();
   if (intelligentCurrency && intelligentCurrency !== 'HKD') return intelligentCurrency;
-  return state.tripCurrency || 'JPY';
+  return String(state.tripCurrency || 'JPY').toUpperCase();
 }
 
 export function receiptRegion(state: AppState, receipt: Receipt): string {
@@ -387,7 +397,9 @@ export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[
     ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))
     : [...baseTrips, nextTrip];
   const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
-    id: `sync_${now}_${Math.random().toString(16).slice(2)}`,
+    id: `sync_${now}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : Math.random().toString(16).slice(2)}`,
     type,
     entityId,
     op: 'update',
@@ -644,7 +656,9 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
 
   for (const r of tripReceipts) {
     const amount = getReceiptTripAmount(r, state, resolvedTripCurrency);
-    if (amount <= 0) continue;
+    // Skip only true zero. Negative totals (refunds/adjustments) must net against the
+    // shared pot — dropping them made settlement over-collect versus Home/History totals.
+    if (!amount) continue;
     const payerIdx = idxOf(r.personId || firstId);
     if (payerIdx < 0) {
       console.warn(`[settlement] receipt ${r.id} payer ${r.personId} not found — excluded from settlement`);

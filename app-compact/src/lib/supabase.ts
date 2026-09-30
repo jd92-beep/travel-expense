@@ -28,6 +28,36 @@ function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
   ]);
 }
 
+// PostgREST/Supabase silently caps unpaginated `select('*')` (default max-rows = 1000).
+// Long-lived accounts would lose rows on pull, so every bulk pull walks pages until exhausted.
+const SUPABASE_PULL_PAGE_SIZE = 1000;
+const SUPABASE_PULL_MAX_ROWS = 20000;
+
+async function selectAllPaged<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>,
+  label: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await withTimeout(fetchPage(from, from + SUPABASE_PULL_PAGE_SIZE - 1));
+    if (error) {
+      const wrapped = error as Error & { code?: string };
+      if (!wrapped.message) wrapped.message = `${label} pull failed`;
+      throw wrapped;
+    }
+    const chunk = data || [];
+    rows.push(...chunk);
+    if (chunk.length < SUPABASE_PULL_PAGE_SIZE) break;
+    if (rows.length >= SUPABASE_PULL_MAX_ROWS) {
+      console.warn(`[supabase] ${label} pull hit row cap ${SUPABASE_PULL_MAX_ROWS}; remaining rows will come on the next pull`);
+      break;
+    }
+    from += SUPABASE_PULL_PAGE_SIZE;
+  }
+  return rows;
+}
+
 function safeCategoryId(value: unknown): CategoryId {
   const v = String(value || 'other').toLowerCase();
   return VALID_CATEGORIES.has(v) ? v as CategoryId : 'other';
@@ -247,6 +277,19 @@ function isMissingSharingTableError(error: unknown): boolean {
   return item?.code === '42P01'
     || item?.code === 'PGRST205'
     || /schema cache|does not exist|Could not find the table/i.test(item?.message || '');
+}
+
+// Optional sharing/legacy tables may be absent on older schemas — treat 42P01 as empty.
+async function selectAllPagedOptionalMissingTable<T>(
+  fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message?: string; code?: string } | null }>,
+  label: string,
+): Promise<T[]> {
+  try {
+    return await selectAllPaged(fetchPage, label);
+  } catch (error) {
+    if (isMissingSharingTableError(error)) return [];
+    throw error;
+  }
 }
 
 function isMissingItineraryContractError(error: unknown): boolean {
@@ -1484,52 +1527,76 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const supabase = getSupabaseClient();
   if (!supabase) return { trips: [], receipts: [], tombstones: [] };
   await ensureSupabaseProfile(session, state);
-  const [profileResult, tripsResult] = await withTimeout(Promise.all([
+  // Page every bulk table: PostgREST silently truncates unpaginated selects at max-rows (1000).
+  const [profileResult, tripRows] = await withTimeout(Promise.all([
     supabase.from('profiles').select('app_settings').eq('id', session.user.id).maybeSingle(),
-    supabase.from('trips').select('*').order('start_date', { ascending: true }),
+    selectAllPaged<SupabaseTripRow>(
+      (from, to) => supabase.from('trips').select('*').order('start_date', { ascending: true }).order('id', { ascending: true }).range(from, to),
+      'trips',
+    ),
   ]));
   if (profileResult.error) throw profileResult.error;
-  if (tripsResult.error) throw tripsResult.error;
-  const tripRows = (tripsResult.data || []) as SupabaseTripRow[];
   const tripIds = tripRows.map((row) => row.id).filter(Boolean);
-  const emptyResult = { data: [], error: null };
-  const [receiptsResult, membersResult, invitesResult, backendResult, peopleResult, profilesResult] = await withTimeout(Promise.all([
+  const emptyRows = async <T,>() => [] as T[];
+  const [receiptRows, memberRowsRaw, inviteRowsRaw, backendRowsRaw, peopleRowsRaw, profilesRaw] = await withTimeout(Promise.all([
     tripIds.length
-      ? supabase.from('receipts').select('*').in('trip_id', tripIds).order('record_date', { ascending: false })
-      : Promise.resolve(emptyResult),
+      ? selectAllPaged<SupabaseReceiptRow>(
+        (from, to) => supabase.from('receipts').select('*').in('trip_id', tripIds)
+          .order('record_date', { ascending: false }).order('id', { ascending: true }).range(from, to),
+        'receipts',
+      )
+      : emptyRows<SupabaseReceiptRow>(),
     tripIds.length
-      ? supabase.from('trip_members').select('trip_id,user_id,role,status,created_at,updated_at').in('trip_id', tripIds)
-      : Promise.resolve(emptyResult),
+      ? selectAllPagedOptionalMissingTable<SupabaseTripMemberRow>(
+        (from, to) => supabase.from('trip_members').select('trip_id,user_id,role,status,created_at,updated_at')
+          .in('trip_id', tripIds).order('trip_id', { ascending: true }).order('user_id', { ascending: true }).range(from, to),
+        'trip_members',
+      )
+      : emptyRows<SupabaseTripMemberRow>(),
     tripIds.length
-      ? supabase.from('trip_invites').select('id,trip_id,email_normalized,role,status,expires_at,created_at').in('trip_id', tripIds).eq('status', 'pending')
-      : Promise.resolve(emptyResult),
+      ? selectAllPagedOptionalMissingTable<SupabaseTripInviteRow>(
+        (from, to) => supabase.from('trip_invites').select('id,trip_id,email_normalized,role,status,expires_at,created_at')
+          .in('trip_id', tripIds).eq('status', 'pending').order('created_at', { ascending: true }).range(from, to),
+        'trip_invites',
+      )
+      : emptyRows<SupabaseTripInviteRow>(),
     tripIds.length
-      ? supabase.from('trip_backend_links').select('trip_id,sync_mode,status,last_health_at,last_error').in('trip_id', tripIds)
-      : Promise.resolve(emptyResult),
+      ? selectAllPagedOptionalMissingTable<SupabaseTripBackendLinkRow>(
+        (from, to) => supabase.from('trip_backend_links').select('trip_id,sync_mode,status,last_health_at,last_error')
+          .in('trip_id', tripIds).order('trip_id', { ascending: true }).range(from, to),
+        'trip_backend_links',
+      )
+      : emptyRows<SupabaseTripBackendLinkRow>(),
     tripIds.length
-      ? supabase.from('trip_accounting_people').select('trip_id,person_id,name,emoji,color,share_ratio,archived').in('trip_id', tripIds).eq('archived', false)
-      : Promise.resolve(emptyResult),
+      ? selectAllPagedOptionalMissingTable<SupabaseAccountingPersonRow>(
+        (from, to) => supabase.from('trip_accounting_people').select('trip_id,person_id,name,emoji,color,share_ratio,archived')
+          .in('trip_id', tripIds).eq('archived', false).order('trip_id', { ascending: true }).order('person_id', { ascending: true }).range(from, to),
+        'trip_accounting_people',
+      )
+      : emptyRows<SupabaseAccountingPersonRow>(),
     tripIds.length
-      ? supabase.from('profiles').select('id,display_name').in('id', [...new Set(tripRows.flatMap((row) => [row.owner_id]))])
-      : Promise.resolve(emptyResult),
+      ? selectAllPaged<{ id: string; display_name: string }>(
+        (from, to) => supabase.from('profiles').select('id,display_name')
+          .in('id', [...new Set(tripRows.flatMap((row) => [row.owner_id]))]).order('id', { ascending: true }).range(from, to),
+        'profiles',
+      )
+      : emptyRows<{ id: string; display_name: string }>(),
   ]));
-  if (receiptsResult.error) throw receiptsResult.error;
-  if (membersResult.error && !isMissingSharingTableError(membersResult.error)) throw membersResult.error;
-  if (invitesResult.error && !isMissingSharingTableError(invitesResult.error)) throw invitesResult.error;
-  if (backendResult.error && !isMissingSharingTableError(backendResult.error)) throw backendResult.error;
-  if (peopleResult.error && !isMissingSharingTableError(peopleResult.error)) throw peopleResult.error;
-  const memberRows = (membersResult.error ? [] : membersResult.data || []) as SupabaseTripMemberRow[];
-  const inviteRows = (invitesResult.error ? [] : invitesResult.data || []) as SupabaseTripInviteRow[];
-  const backendRows = (backendResult.error ? [] : backendResult.data || []) as SupabaseTripBackendLinkRow[];
+  const memberRows = memberRowsRaw as SupabaseTripMemberRow[];
+  const inviteRows = inviteRowsRaw as SupabaseTripInviteRow[];
+  const backendRows = backendRowsRaw as SupabaseTripBackendLinkRow[];
   const allMemberUserIds = [...new Set(memberRows.map((m) => m.user_id))];
   const memberProfilesResult = allMemberUserIds.length
-    ? await withTimeout(supabase.from('profiles').select('id,display_name').in('id', allMemberUserIds))
-    : emptyResult;
+    ? await withTimeout(selectAllPaged<{ id: string; display_name: string }>(
+      (from, to) => supabase.from('profiles').select('id,display_name').in('id', allMemberUserIds).order('id', { ascending: true }).range(from, to),
+      'member_profiles',
+    ))
+    : [];
   const profileNames = new Map<string, string>();
-  for (const row of (profilesResult.error ? [] : profilesResult.data || []) as { id: string; display_name: string }[]) {
+  for (const row of profilesRaw as { id: string; display_name: string }[]) {
     if (row.display_name) profileNames.set(row.id, row.display_name);
   }
-  for (const row of (memberProfilesResult as { data?: { id: string; display_name: string }[] | null }).data || []) {
+  for (const row of memberProfilesResult) {
     if (row.display_name) profileNames.set(row.id, row.display_name);
   }
   // Co-member names: profiles RLS only returns the caller's own row, so fetch the rest via a
@@ -1543,47 +1610,45 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       }
     } catch { /* non-critical — fall back to generic member labels */ }
   }
-  const peopleRows = (peopleResult.error ? [] : peopleResult.data || []) as SupabaseAccountingPersonRow[];
+  const peopleRows = peopleRowsRaw as SupabaseAccountingPersonRow[];
   const trips = tripRows.map((row) => rowToTrip(row, state, sharingForTrip(row, session.user.id, memberRows, inviteRows, backendRows, profileNames)));
   const tripBySupabaseId = new Map<string, TripProfile>();
   for (const trip of trips) {
     if (trip.supabaseId) tripBySupabaseId.set(trip.supabaseId, trip);
   }
-  const receiptRows = (receiptsResult.data || []) as SupabaseReceiptRow[];
   const activeReceiptRows = receiptRows.filter((row) => !row.deleted_at);
   const deletedReceiptRows = receiptRows.filter((row) => !!row.deleted_at);
   const receiptIds = activeReceiptRows.map((row) => row.id).filter(Boolean);
   let photoMap = new Map<string, string>();
   const signedPhotoUrlByPath = new Map<string, string>();
   if (receiptIds.length) {
-    const { data: photoData, error: photoError } = await withTimeout(
-      supabase.from('receipt_photos').select('receipt_id,storage_path').in('receipt_id', receiptIds),
+    const photoRows = await selectAllPagedOptionalMissingTable<{ receipt_id: string; storage_path: string }>(
+      (from, to) => supabase.from('receipt_photos').select('receipt_id,storage_path')
+        .in('receipt_id', receiptIds).order('receipt_id', { ascending: true }).range(from, to),
+      'receipt_photos',
     );
-    if (photoError && !isMissingSharingTableError(photoError)) throw photoError;
-    if (photoData) {
-      for (const row of photoData as { receipt_id: string; storage_path: string }[]) {
-        if (row.receipt_id && row.storage_path) photoMap.set(row.receipt_id, row.storage_path);
-      }
-      const storagePaths = [...new Set(photoMap.values())];
-      if (storagePaths.length) {
-        try {
-          const { data: signedRows, error: signedUrlError } = await withTimeout(
-            supabase.storage.from('receipt-photos').createSignedUrls(
-              storagePaths,
-              RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS,
-            ),
-          );
-          if (signedUrlError) throw signedUrlError;
-          for (const signedRow of signedRows || []) {
-            if (!signedRow.error && signedRow.path && signedRow.signedUrl) {
-              signedPhotoUrlByPath.set(signedRow.path, signedRow.signedUrl);
-            }
+    for (const row of photoRows) {
+      if (row.receipt_id && row.storage_path) photoMap.set(row.receipt_id, row.storage_path);
+    }
+    const storagePaths = [...new Set(photoMap.values())];
+    if (storagePaths.length) {
+      try {
+        const { data: signedRows, error: signedUrlError } = await withTimeout(
+          supabase.storage.from('receipt-photos').createSignedUrls(
+            storagePaths,
+            RECEIPT_PHOTO_SIGNED_URL_TTL_SECONDS,
+          ),
+        );
+        if (signedUrlError) throw signedUrlError;
+        for (const signedRow of signedRows || []) {
+          if (!signedRow.error && signedRow.path && signedRow.signedUrl) {
+            signedPhotoUrlByPath.set(signedRow.path, signedRow.signedUrl);
           }
-        } catch (signedUrlError) {
-          // Receipt data remains usable if Storage is temporarily unavailable.
-          // The next cloud pull refreshes the short-lived URLs.
-          console.warn('[Supabase] receipt photo signed URL refresh failed:', signedUrlError);
         }
+      } catch (signedUrlError) {
+        // Receipt data remains usable if Storage is temporarily unavailable.
+        // The next cloud pull refreshes the short-lived URLs.
+        console.warn('[Supabase] receipt photo signed URL refresh failed:', signedUrlError);
       }
     }
   }

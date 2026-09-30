@@ -102,14 +102,19 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
   const hasExistingTripsRef = useRef(hasExistingTrips);
   hasExistingTripsRef.current = hasExistingTrips;
   onDismissRef.current = onDismiss;
+  // Every exit path (Escape, backdrop, skip button) must share the same first-run guard —
+  // a bare onDismiss on the backdrop used to skip the "未建立旅程就離開？" confirm.
+  const guardedDismiss = () => {
+    if (!hasExistingTripsRef.current && !window.confirm('未建立旅程就離開？之後可以喺設定重新開啟指南。')) return;
+    onDismissRef.current();
+  };
   useEffect(() => {
     prevFocusRef.current = document.activeElement as HTMLElement;
     modalRef.current?.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (!hasExistingTripsRef.current && !window.confirm('未建立旅程就離開？之後可以喺設定重新開啟指南。')) return;
-        onDismissRef.current();
+        guardedDismiss();
       }
       if (e.key === 'Tab' && modalRef.current) {
         const focusable = modalRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
@@ -347,7 +352,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
   // The welcome-guide-* classes carry no CSS rules; they are kept as stable selectors for the
   // welcome-guide smoke test (tests/welcome-guide-smoke.spec.cjs).
   return (
-    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }} onClick={onDismiss}>
+    <div className="modal-backdrop welcome-guide-backdrop" style={{ display: 'grid', placeItems: 'center', background: 'rgba(23, 18, 12, 0.6)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', zIndex: 1500 }} onClick={guardedDismiss}>
       <div
         ref={modalRef}
         role="dialog"
@@ -886,10 +891,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
         {/* Actions / Dismiss Button */}
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(139, 115, 85, 0.08)' }}>
           <button
-            onClick={() => {
-              if (!hasExistingTrips && !window.confirm('未建立旅程就離開？之後可以喺設定重新開啟指南。')) return;
-              onDismiss();
-            }}
+            onClick={guardedDismiss}
             type="button"
             style={{
               border: 0,
