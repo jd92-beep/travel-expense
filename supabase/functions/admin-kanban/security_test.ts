@@ -219,3 +219,48 @@ Deno.test("request id only accepts UUID input", () => {
   );
   assertMatch(replaced.requestId, /^[0-9a-f-]{36}$/i);
 });
+
+Deno.test("addressed entity routes require a full UUID segment", () => {
+  const strictUuid = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/trips/97000000-0000-4000-8000-000000000001",
+    ),
+    "deny_all",
+  );
+  assertEquals(strictUuid.allowed, true);
+
+  // [0-9a-f-]+ used to accept this; full UUID_RE must reject it.
+  const looseHex = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/trips/not-a-uuid-but-hex-and-dashes",
+    ),
+    "deny_all",
+  );
+  assertEquals(looseHex.allowed, false);
+
+  const wrongVariant = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/receipts/97000000-0000-4000-c000-000000000001/photo",
+    ),
+    "deny_all",
+  );
+  assertEquals(wrongVariant.allowed, false);
+
+  const writeCommit = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/operations/97000000-0000-4000-8000-000000000001/commit",
+      { method: "POST" },
+    ),
+    "allowlisted",
+  );
+  assertEquals(writeCommit.allowed, true);
+
+  const looseCommit = evaluateAdminRequest(
+    new Request(
+      "https://edge.example/functions/v1/admin-kanban/api/operations/deadbeef/commit",
+      { method: "POST" },
+    ),
+    "allowlisted",
+  );
+  assertEquals(looseCommit.allowed, false);
+});

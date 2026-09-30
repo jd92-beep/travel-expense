@@ -27,18 +27,22 @@ export function rejectedSignatureIdentity(_headers: Headers) {
 
 const SAFE_REQUEST_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Full UUID shape (matches operations.ts UUID_RE) so path segments cannot
+// smuggle non-UUID hex/dash strings through the route allowlist.
+const UUID_SEGMENT = "[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+
 const READ_ROUTE_MAP: ReadonlyArray<RegExp> = [
   /^\/api\/overview$/,
   /^\/api\/search$/,
   /^\/api\/accounts$/,
-  /^\/api\/accounts\/[0-9a-f-]+$/i,
-  /^\/api\/accounts\/[0-9a-f-]+\/installations$/i,
+  new RegExp(`^/api/accounts/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/api/accounts/${UUID_SEGMENT}/installations$`, "i"),
   /^\/api\/trips$/,
-  /^\/api\/trips\/[0-9a-f-]+$/i,
-  /^\/api\/trips\/[0-9a-f-]+\/itinerary$/i,
-  /^\/api\/trips\/[0-9a-f-]+\/itinerary\/versions$/i,
+  new RegExp(`^/api/trips/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/api/trips/${UUID_SEGMENT}/itinerary$`, "i"),
+  new RegExp(`^/api/trips/${UUID_SEGMENT}/itinerary/versions$`, "i"),
   /^\/api\/receipts$/,
-  /^\/api\/receipts\/[0-9a-f-]+$/i,
+  new RegExp(`^/api/receipts/${UUID_SEGMENT}$`, "i"),
   /^\/api\/incidents$/,
   /^\/api\/sync-jobs$/,
   /^\/api\/integrity$/,
@@ -46,17 +50,17 @@ const READ_ROUTE_MAP: ReadonlyArray<RegExp> = [
   /^\/api\/providers$/,
   /^\/api\/runtime$/,
   /^\/api\/audit$/,
-  /^\/api\/audit\/[0-9a-f-]+$/i,
-  /^\/api\/receipts\/[0-9a-f-]+\/photo$/i,
+  new RegExp(`^/api/audit/${UUID_SEGMENT}$`, "i"),
+  new RegExp(`^/api/receipts/${UUID_SEGMENT}/photo$`, "i"),
   /^\/api\/operations$/,
-  /^\/api\/operations\/[0-9a-f-]+$/i,
+  new RegExp(`^/api/operations/${UUID_SEGMENT}$`, "i"),
 ];
 
 // The generic kernel is the only mutation surface. Its action allowlist is
 // enforced again inside Edge and the private database RPCs.
 const WRITE_ROUTE_MAP: ReadonlyArray<RegExp> = [
   /^\/api\/operations\/preview$/,
-  /^\/api\/operations\/[0-9a-f-]+\/commit$/i,
+  new RegExp(`^/api/operations/${UUID_SEGMENT}/commit$`, "i"),
 ];
 
 function matchesRoute(route: string, routeMap: ReadonlyArray<RegExp>): boolean {

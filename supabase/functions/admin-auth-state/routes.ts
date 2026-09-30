@@ -5,9 +5,17 @@ export type AuthStateRpcRequest = {
 
 type JsonObject = Record<string, unknown>;
 
+/** Known validation failure: message may reach the client; unexpected errors may not. */
+export class AuthStateValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AuthStateValidationError";
+  }
+}
+
 function object(value: unknown): JsonObject {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("JSON object required");
+    throw new AuthStateValidationError("JSON object required");
   }
   return value as JsonObject;
 }
@@ -15,7 +23,7 @@ function object(value: unknown): JsonObject {
 function text(body: JsonObject, key: string, max = 4096): string {
   const value = body[key];
   if (typeof value !== "string" || value.length === 0 || value.length > max) {
-    throw new Error(`${key} is invalid`);
+    throw new AuthStateValidationError(`${key} is invalid`);
   }
   return value;
 }
@@ -23,18 +31,22 @@ function text(body: JsonObject, key: string, max = 4096): string {
 function optionalText(body: JsonObject, key: string, max = 256): string | null {
   const value = body[key];
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string" || value.length > max) throw new Error(`${key} is invalid`);
+  if (typeof value !== "string" || value.length > max) {
+    throw new AuthStateValidationError(`${key} is invalid`);
+  }
   return value;
 }
 
 function integer(body: JsonObject, key: string): number {
   const value = body[key];
-  if (!Number.isSafeInteger(value) || Number(value) < 0) throw new Error(`${key} is invalid`);
+  if (!Number.isSafeInteger(value) || Number(value) < 0) {
+    throw new AuthStateValidationError(`${key} is invalid`);
+  }
   return Number(value);
 }
 
 function boolean(body: JsonObject, key: string): boolean {
-  if (typeof body[key] !== "boolean") throw new Error(`${key} is invalid`);
+  if (typeof body[key] !== "boolean") throw new AuthStateValidationError(`${key} is invalid`);
   return body[key] as boolean;
 }
 
@@ -44,7 +56,7 @@ function textArray(body: JsonObject, key: string): string[] {
     !Array.isArray(value) || value.length > 8 ||
     value.some((item) => typeof item !== "string" || item.length > 64)
   ) {
-    throw new Error(`${key} is invalid`);
+    throw new AuthStateValidationError(`${key} is invalid`);
   }
   return value;
 }
@@ -52,7 +64,7 @@ function textArray(body: JsonObject, key: string): string[] {
 function uuid(body: JsonObject, key: string): string {
   const value = text(body, key, 36);
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
-    throw new Error(`${key} is invalid`);
+    throw new AuthStateValidationError(`${key} is invalid`);
   }
   return value;
 }

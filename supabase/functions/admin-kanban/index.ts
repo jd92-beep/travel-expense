@@ -156,6 +156,8 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
       headers: {
         "Origin": "https://travel-expense-compact.vercel.app",
         "X-Admin-Internal": Deno.env.get("EDGE_BROKER_KEY") || "",
+        // Broker ignores unknown headers; this only marks the caller for audit.
+        "X-Admin-Source": "admin-kanban-edge",
       },
     }, 5000);
     const payload = await response.json();
@@ -473,6 +475,10 @@ Deno.serve(async (req) => {
         return data === true;
       },
     });
+    // Authorization is solely the BFF HMAC signature verified above; this
+    // sessionHash check only rejects the unauthenticated identity placeholder.
+    // Do not expand it into a second authorization gate — the release-readiness
+    // signer binds a token hash here without an interactive admin session.
     if (signed.sessionHash === "unauthenticated") {
       throw new BffVerificationError("UNAUTHORIZED", 401, "Admin session required");
     }
@@ -726,20 +732,38 @@ Deno.serve(async (req) => {
       });
     }
     const message = redact(error instanceof Error ? error.message : error);
+    // Never discard the diagnostic: generic catches must still leave a server log.
+    console.error(JSON.stringify({
+      event: "admin_request_failed",
+      method: req.method.toUpperCase(),
+      message,
+      requestId: requestDecision.requestId,
+      route: requestDecision.route || "invalid",
+    }));
     const explicitStatus = error instanceof HttpError ? error.status : 0;
+    // Only explicit auth/session/CSRF failures become 401; unrecognized
+    // constraint/DB text stays 500 rather than masquerading as UNAUTHORIZED.
+    const isAuthFailure = !explicitStatus &&
+      /session required|unauthenticated|unauthorized|csrf|authentication required|invalid session/i
+        .test(message);
+    const isValidation = !explicitStatus && /confirm phrase|mismatch/i.test(message);
+    const isNotFound = !explicitStatus && /not found/i.test(message);
     const status = explicitStatus ||
-      (/session|auth|login|buffer|byte length|invalid/i.test(message)
-        ? 401
-        : /confirm phrase|mismatch/i.test(message)
-        ? 400
-        : /not found/i.test(message)
-        ? 404
-        : 500);
+      (isAuthFailure ? 401 : isValidation ? 400 : isNotFound ? 404 : 500);
+    const code = error instanceof HttpError
+      ? "VALIDATION_FAILED"
+      : isAuthFailure
+      ? "UNAUTHORIZED"
+      : isValidation
+      ? "VALIDATION_FAILED"
+      : isNotFound
+      ? "NOT_FOUND"
+      : "INTERNAL_ERROR";
     return json(req, status, {
       ok: false,
       data: null,
       error: {
-        code: error instanceof HttpError ? "VALIDATION_FAILED" : "INTERNAL_ERROR",
+        code,
         message: error instanceof HttpError ? message : "Admin request failed",
         retryable: status >= 500,
       },

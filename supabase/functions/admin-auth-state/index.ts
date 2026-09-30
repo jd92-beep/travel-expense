@@ -2,7 +2,7 @@ import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "@supabase/supabase-js";
 
 import { BffVerificationError, verifySignedBffRequest } from "../_shared/admin_bff.ts";
-import { authStateRpcFor, routeBindsSessionHash } from "./routes.ts";
+import { authStateRpcFor, AuthStateValidationError, routeBindsSessionHash } from "./routes.ts";
 import { recordAuthStateSignatureRejection } from "./security.ts";
 
 export const config = { verify_jwt: false };
@@ -148,11 +148,24 @@ Deno.serve(async (req) => {
         error: { code: error.code, message: error.message, retryable: false },
       });
     }
+    if (error instanceof AuthStateValidationError) {
+      return response(400, requestId, {
+        ok: false,
+        error: { code: "VALIDATION_FAILED", message: error.message, retryable: false },
+      });
+    }
+    // Unexpected errors never return their text to the browser; keep the
+    // redacted diagnostic in the server log only.
+    console.error(JSON.stringify({
+      event: "admin_auth_state_error",
+      message: safeMessage(error),
+      requestId,
+    }));
     return response(503, requestId, {
       ok: false,
       error: {
         code: "UPSTREAM_UNAVAILABLE",
-        message: safeMessage(error),
+        message: "Admin session store unavailable",
         retryable: true,
       },
     });

@@ -1,5 +1,5 @@
 import { adminAuthStateUrl, callSignedEdge } from './edge.js';
-import { HttpError } from './http.js';
+import { HttpError, redact } from './http.js';
 
 export async function authStateCall(route, body = {}, context = {}) {
   let response;
@@ -13,7 +13,13 @@ export async function authStateCall(route, body = {}, context = {}) {
       sessionHash: context.sessionHash || 'unauthenticated',
       timeoutMs: 10_000,
     });
-  } catch {
+  } catch (error) {
+    // Fail closed to the client, but keep the transport cause in the server log.
+    console.error(JSON.stringify({
+      event: 'admin_auth_state_transport_failed',
+      message: redact(error instanceof Error ? error.message : error),
+      route,
+    }));
     throw new HttpError('UPSTREAM_UNAVAILABLE', 'Admin session store unavailable', 503, { retryable: true });
   }
 

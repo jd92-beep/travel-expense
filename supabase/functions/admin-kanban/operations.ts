@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { providerProbeSucceeded } from "./provider_status.ts";
 import { PROVIDER_MODELS } from "./provider_catalog.ts";
+import { EDGE_SOURCE_SHA } from "./source_provenance.ts";
 
 type AdminClient = SupabaseClient;
 
@@ -273,11 +274,13 @@ function normalizePreviewInput(body: unknown): PreviewInput {
 
 function rpcResult<T>(result: { data: T | null; error?: unknown }, message: string): T {
   if (result.error) {
+    const err = result.error as { code?: unknown; message?: unknown };
     const detail = typeof result.error === "object" && result.error !== null &&
         "message" in result.error
       ? (result.error as { message?: unknown }).message
       : result.error;
     const raw = redact(detail);
+    const sqlState = typeof err.code === "string" ? err.code : "";
     if (/PREVIEW_STALE/i.test(raw)) {
       throw new AdminOperationError("PREVIEW_STALE", "Operation preview is stale", 409);
     }
@@ -298,16 +301,27 @@ function rpcResult<T>(result: { data: T | null; error?: unknown }, message: stri
     if (/version conflict/i.test(raw)) {
       throw new AdminOperationError("VERSION_CONFLICT", "The record changed after preview", 409);
     }
-    if (/not found/i.test(raw)) {
+    if (/not found/i.test(raw) || sqlState === "P0002") {
       throw new AdminOperationError("NOT_FOUND", message, 404);
     }
-    if (/eligible|cannot be|expired|executing/i.test(raw)) {
+    if (/eligible|cannot be|expired|executing/i.test(raw) || sqlState === "55000") {
       throw new AdminOperationError("DEPENDENCY_CONFLICT", raw || message, 409);
     }
-    if (/active admin session|required|permission/i.test(raw)) {
+    // Auth mapping only for explicit session/auth phrases or authorization
+    // SQLSTATEs — generic constraint/DB text must not become UNAUTHORIZED.
+    if (
+      /active admin session|authentication required|not authenticated|unauthorized|csrf/i
+          .test(raw) ||
+      sqlState === "28000" || sqlState === "42501"
+    ) {
       throw new AdminOperationError("UNAUTHORIZED", "Admin session is not authorized", 401);
     }
-    if (/invalid|required|cannot be amended|already in trash|not in trash/i.test(raw)) {
+    // Validation mapping only for true validation phrases or parameter/check
+    // SQLSTATEs; everything unrecognized falls through to INTERNAL_ERROR.
+    if (
+      /invalid|required|cannot be amended|already in trash|not in trash/i.test(raw) ||
+      sqlState.startsWith("22") || sqlState === "23514"
+    ) {
       throw new AdminOperationError(
         "VALIDATION_FAILED",
         "Operation violates the current data contract",
@@ -475,6 +489,15 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
           "Resolve the cross-person beneficiary before making this receipt private",
           409,
         );
+      }
+      // Private→trip has no product-policy guard yet (per-member privacy is
+      // deferred); leave the transition allowed but keep it visible in logs.
+      if (current.visibility === "private" && visibility === "trip") {
+        console.warn(JSON.stringify({
+          event: "admin_receipt_private_to_trip_visibility",
+          receiptId: input.targetId,
+          requestId: context.requestId,
+        }));
       }
       normalized.visibility = visibility;
     }
@@ -1416,6 +1439,8 @@ async function probeProvider(context: OperationContext, provider: string, model:
           "Content-Type": "application/json",
           "Origin": "https://travel-expense-compact.vercel.app",
           "X-Admin-Internal": context.brokerKey,
+          // Broker ignores unknown headers; this only marks the caller for audit.
+          "X-Admin-Source": "admin-kanban-edge",
         },
         body: JSON.stringify({ provider, model }),
       },
@@ -1464,7 +1489,8 @@ async function supportBundle(context: OperationContext, payload: Record<string, 
     runtime: {
       contractVersion: "admin-operation-v1",
       edgeDeployment: Deno.env.get("DENO_DEPLOYMENT_ID") || "unknown",
-      edgeSourceSha: Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown",
+      // Same authoritative SHA policy as /api/runtime (baked first, env fallback).
+      edgeSourceSha: EDGE_SOURCE_SHA || Deno.env.get("ADMIN_EDGE_SOURCE_SHA") || "unknown",
       schemaVersion: Deno.env.get("ADMIN_EXPECTED_SCHEMA_VERSION") || "20260712123000",
     },
   };
@@ -1718,7 +1744,17 @@ export async function commitAdminOperation(
         retryable: true,
       });
     const status = known.code === "OUTCOME_UNKNOWN" ? "outcome_unknown" : "failed";
-    await finishExternal(context, operationId, status, null, known).catch(() => null);
+    // A failed terminal write must not be silent: log it so the operation stays
+    // visible in its non-terminal state instead of being silently orphaned.
+    await finishExternal(context, operationId, status, null, known).catch((finishError) => {
+      console.error(JSON.stringify({
+        event: "admin_operation_finish_failed",
+        intendedStatus: status,
+        message: redact(finishError instanceof Error ? finishError.message : finishError),
+        operationId,
+        requestId: context.requestId,
+      }));
+    });
     throw known;
   }
 }

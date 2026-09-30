@@ -85,7 +85,7 @@ export function requireSameOriginMutation(req) {
   }
 }
 
-function redact(value) {
+export function redact(value) {
   return String(value || '')
     .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
     .replace(/(?:sk-|ntn_|secret_)[A-Za-z0-9_-]+/g, '[redacted]')

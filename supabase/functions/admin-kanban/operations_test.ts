@@ -6,6 +6,7 @@ import {
   canonicalJson,
   commitAdminOperation,
   detectReceiptPhotoMime,
+  getAdminOperation,
   type OperationContext,
   previewAdminOperation,
   receiptPhotoMimeMatches,
@@ -931,4 +932,68 @@ Deno.test("member add fails closed when the bounded account directory is incompl
   assertEquals(error.code, "UPSTREAM_UNAVAILABLE");
   assertEquals(directoryCalls, 10);
   assertEquals(inviteLookup, false);
+});
+
+async function rpcErrorCode(
+  error: { message: string; code?: string },
+): Promise<string> {
+  try {
+    await getAdminOperation({
+      actor: "boss",
+      brokerKey: "test-broker-key-that-is-not-a-secret",
+      brokerUrl: "https://broker.example",
+      client: asClient({
+        rpc() {
+          return Promise.resolve({ data: null, error });
+        },
+      }),
+      requestId: "97000000-0000-4000-8000-000000000001",
+      sessionHash: "a".repeat(64),
+    }, "97300000-0000-4000-8000-000000000001");
+    return "NO_ERROR";
+  } catch (err) {
+    if (err instanceof AdminOperationError) return err.code;
+    return "UNEXPECTED";
+  }
+}
+
+Deno.test("RPC errors map required/validation text to VALIDATION_FAILED, not UNAUTHORIZED", async () => {
+  assertEquals(await rpcErrorCode({ message: "Receipt store is required" }), "VALIDATION_FAILED");
+  assertEquals(await rpcErrorCode({ message: "Expected receipt version required" }), "VALIDATION_FAILED");
+  assertEquals(await rpcErrorCode({ message: "Receipt date is invalid" }), "VALIDATION_FAILED");
+  // Generic constraint/DB text must not become UNAUTHORIZED.
+  assertEquals(await rpcErrorCode({ message: "permission denied for table receipts" }), "INTERNAL_ERROR");
+  assertEquals(
+    await rpcErrorCode({
+      message: 'duplicate key value violates unique constraint "receipts_pkey"',
+    }),
+    "INTERNAL_ERROR",
+  );
+});
+
+Deno.test("RPC errors map explicit auth phrases and SQLSTATEs to UNAUTHORIZED", async () => {
+  assertEquals(
+    await rpcErrorCode({ message: "Active admin session required", code: "28000" }),
+    "UNAUTHORIZED",
+  );
+  assertEquals(
+    await rpcErrorCode({ message: "Authentication required", code: "28000" }),
+    "UNAUTHORIZED",
+  );
+  assertEquals(
+    await rpcErrorCode({ message: "Trip editor role required", code: "42501" }),
+    "UNAUTHORIZED",
+  );
+});
+
+Deno.test("RPC SQLSTATE still drives not-found, dependency and validation families", async () => {
+  assertEquals(await rpcErrorCode({ message: "Target user not found", code: "P0002" }), "NOT_FOUND");
+  assertEquals(
+    await rpcErrorCode({ message: "operation cannot be committed", code: "55000" }),
+    "DEPENDENCY_CONFLICT",
+  );
+  assertEquals(
+    await rpcErrorCode({ message: "Receipt amount is invalid", code: "22023" }),
+    "VALIDATION_FAILED",
+  );
 });
