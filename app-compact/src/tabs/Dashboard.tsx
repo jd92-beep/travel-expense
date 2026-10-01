@@ -798,9 +798,12 @@ export function Dashboard({
   const tripReceipts = useMemo(() => scopedReceiptsForTrip(state, trip), [state, trip]);
   const today = todayForReceipts(state);
   const resolvedTripCurrency = getResolvedTripCurrency(state, trip);
+  // Binary toggle (HKD / trip currency). A third displayCurrency left over from Stats'
+  // multi-currency chips must still light one of the two chips — amounts below already
+  // render in the trip currency whenever the selection isn't HKD.
   const activeDisplayCurrency = !state.displayCurrency || state.displayCurrency === 'HKD'
     ? 'HKD'
-    : state.displayCurrency;
+    : resolvedTripCurrency;
   const showTripCurrency = activeDisplayCurrency !== 'HKD';
   const displayMoney = (amount: number, currency = activeDisplayCurrency || 'HKD') => formatCurrencyAmount(amount, currency);
 

@@ -170,9 +170,7 @@ export function useSyncEngine(
 
   const settleQueueItem = useCallback((item: SyncQueueItem, outcome: JournalOutcome) => {
     if (!aliveRef.current) return;
-    const guardedOutcome = outcome.kind === 'syncing' || outcome.kind === 'manual-retry'
-      ? outcome
-      : { ...outcome, expectedUpdatedAt: item.updatedAt };
+    const guardedOutcome = { ...outcome, expectedUpdatedAt: item.updatedAt };
     setState((current) => ({
       ...current,
       syncQueue: settleChange(current.syncQueue || [], item.id, guardedOutcome).queue,
@@ -191,12 +189,19 @@ export function useSyncEngine(
         // Treat them as 0 so only a real mid-flight edit takes the keep-local branch.
         const currentUpdatedAt = Number(candidate.updatedAt || candidate.createdAt || 0);
         if (queueUpdatedAt && currentUpdatedAt > queueUpdatedAt) {
+          // Mid-flight local edit wins content. The photo flag must follow the LOCAL photo:
+          // a push that just synced the OLD photo must not mark a newly-replaced photo as
+          // synced (same contract as mergePulledReceipts). `false || true` used to clear the
+          // re-upload need and silently drop the new image.
+          const localPhotoUnsynced = !!candidate.photoThumb && !candidate._photoSyncedToSupabase;
           return {
             ...candidate,
             supabaseId: receipt.supabaseId || candidate.supabaseId,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
-            _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase,
+            _photoSyncedToSupabase: localPhotoUnsynced
+              ? false
+              : (candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase),
             supabasePhotoPath: receipt.supabasePhotoPath || candidate.supabasePhotoPath,
             syncStatus: hasSupabaseSession(capturedSession) || canUseNotionMirror(current, false, (capturedSession as any)?.user?.email || null) ? 'queued' : 'local',
           };
@@ -475,10 +480,14 @@ export function useSyncEngine(
             }
           }
           const durableFailures = before.filter((item) => item.status === 'error' || item.status === 'failed');
-          const activeQueue = before.filter((item) => item.status !== 'error' && item.status !== 'failed').slice(-500);
+          const activeItems = before.filter((item) => item.status !== 'error' && item.status !== 'failed');
+          // 500-cap must not evict terminal failures: keep every durable error and trim
+          // only the oldest active work (matches enqueueChange's cap policy).
+          const durableKept = durableFailures.slice(-500);
+          const activeQueue = activeItems.slice(-Math.max(0, 500 - durableKept.length));
           return {
             ...current,
-            syncQueue: [...durableFailures, ...activeQueue],
+            syncQueue: [...durableKept, ...activeQueue],
           };
         });
       }
@@ -542,19 +551,13 @@ export function useSyncEngine(
       // and self-heals on the next interval/reconnect tick.
       const hardPullError = pullRejections.some((reason) => !isTransientSyncError(reason));
       const mergedAt = Date.now();
-      const overwrittenIds = new Set<string>();
-      for (const remote of receipts) {
-        const local = stateRef.current.receipts.find((r) => r.id === remote.id);
-        if (!local) continue;
-        // Missing local timestamps must not look "newer than the queue item" — same 0 rule as
-        // applyReceiptSyncResult/mergePulledReceipts (was Date.now(), which hid real overwrites).
-        const localUpdated = Number(local.updatedAt || local.createdAt || 0);
-        const remoteUpdated = Number(remote.updatedAt || remote.createdAt || 0);
-        const remoteHasMissingLink = (!local.notionPageId && !!remote.notionPageId) || (!local.sourceId && !!remote.sourceId);
-        if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
-          overwrittenIds.add(remote.id);
-        }
-      }
+      // Queue drops must not use a pre-merge snapshot keyed only by remote.id:
+      // (1) stateRef.current can be stale when a local edit is batched with this setState,
+      //     so a still-live edit gets its queue item dropped and never pushes;
+      // (2) mergePulledReceipts matches by supabaseId/sourceId/trip+source and KEEPS the
+      //     local id, so remote.id never equals item.entityId for those rows.
+      // Instead, after merge, drop only receipt queue items whose payload is strictly
+      // older than the merged receipt (remote won). A payload with no updatedAt is left alone.
       const nextSyncedAt = pullErrors.length ? stateRef.current.lastSyncedAt || 0 : mergedAt;
       // Removed-member / deleted-trip purge: only when the Supabase pull SUCCEEDED, treat its
       // trip list as authoritative. A locally cached cloud-backed trip (has supabaseId) that is
@@ -705,12 +708,24 @@ export function useSyncEngine(
           }
           const serverTombstoneKeys = new Set(supabaseData.tombstones.map((tombstone) =>
             receiptSourceTombstoneKey({ id: tombstone.supabaseId, sourceId: tombstone.sourceId, tripId: tombstone.tripId })));
+          const mergedReceiptById = new Map((finalState.receipts || []).map((receipt) => [receipt.id, receipt]));
           let freshQueue = filterSupersededTripQueue(
             finalState.syncQueue || [],
             current.trips || [],
             trips,
           )
-            .filter((item) => !overwrittenIds.has(item.entityId))
+            .filter((item) => {
+              // Stale-payload drop (replaces the pre-merge overwrittenIds snapshot): only when
+              // the post-merge receipt is strictly newer than the queued payload. A live local
+              // edit keeps payload.updatedAt === receipt.updatedAt and is never dropped.
+              if (item.type !== 'receipt') return true;
+              const payloadUpdatedAt = Number(item.payload?.updatedAt || 0);
+              if (!payloadUpdatedAt) return true;
+              const merged = mergedReceiptById.get(item.entityId);
+              if (!merged) return true;
+              const mergedUpdatedAt = Number(merged.updatedAt || merged.createdAt || 0);
+              return !(mergedUpdatedAt > payloadUpdatedAt);
+            })
             .filter((item) => {
               if (item.type !== 'receipt' && item.type !== 'delete-receipt') return true;
               const key = item.payload?.tombstoneKey || receiptSourceTombstoneKey({

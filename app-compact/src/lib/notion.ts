@@ -15,7 +15,7 @@ export function hasDirectNotionToken(): boolean {
   if ((window as any).__disable_supabase_configured === true) return false;
   return !!((window as any).DEV_SECRETS?.notionToken || getDirectNotionToken());
 }
-import type { AppState, CategoryId, PaymentId, Receipt, TripProfile } from './types';
+import type { AppState, CategoryId, ItinerarySpot, PaymentId, Person, Receipt, TripProfile } from './types';
 
 const NOTION_VERSION = '2022-06-28';
 
@@ -1594,6 +1594,57 @@ export async function pushBackupSnapshot(
   return { pageId, chars: json.length, receipts: payload.receipts?.length || 0, photosOmitted };
 }
 
+/** settings-meta JSON is untrusted mirror data — same trust level as tripJson in tripFromPage. */
+function sanitizeSettingsTrips(raw: unknown): TripProfile[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const trips = raw.filter((item): item is TripProfile => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+    const t = item as Record<string, unknown>;
+    return typeof t.id === 'string' && !!t.id
+      && typeof t.name === 'string'
+      && typeof t.startDate === 'string'
+      && typeof t.endDate === 'string'
+      && Array.isArray(t.itinerary);
+  });
+  return trips.length ? trips : undefined;
+}
+
+function sanitizeSettingsPersons(raw: unknown): Person[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const persons = raw
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item))
+    .filter((item) => typeof item.id === 'string' && !!item.id && typeof item.name === 'string')
+    .map((item) => ({
+      id: item.id as string,
+      name: item.name as string,
+      emoji: typeof item.emoji === 'string' ? item.emoji : '👤',
+      color: typeof item.color === 'string' ? item.color : '#888888',
+    }));
+  return persons.length ? persons : undefined;
+}
+
+function sanitizeSettingsShareRatios(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const n = Number(value);
+    if (Number.isFinite(n)) out[key] = n;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function sanitizeSettingsItineraryOverrides(raw: unknown): Record<string, Partial<ItinerarySpot> | null> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const out: Record<string, Partial<ItinerarySpot> | null> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (value === null) out[key] = null;
+    else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      out[key] = value as Partial<ItinerarySpot>;
+    }
+  }
+  return out;
+}
+
 export async function pullSettingsMeta(state: AppState): Promise<Partial<AppState> | null> {
   const activeDb = getActiveNotionDb(state);
   if (!activeDb) return null;
@@ -1619,10 +1670,10 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         tripCurrency: payload.tripCurrency,
         autoSync: payload.autoSync,
         activeTripId: payload.activeTripId,
-        trips: Array.isArray(payload.trips) ? payload.trips : undefined,
-        persons: payload.persons,
-        shareRatios: payload.shareRatios,
-        itineraryOverrides: payload.itineraryOverrides || {},
+        trips: sanitizeSettingsTrips(payload.trips),
+        persons: sanitizeSettingsPersons(payload.persons),
+        shareRatios: sanitizeSettingsShareRatios(payload.shareRatios),
+        itineraryOverrides: sanitizeSettingsItineraryOverrides(payload.itineraryOverrides),
         settingsUpdatedAt: payload.settingsUpdatedAt || payload.updatedAt || Date.now(),
         scanModel: payload.scanModel,
         voiceModel: payload.voiceModel,

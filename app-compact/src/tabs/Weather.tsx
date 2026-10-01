@@ -539,6 +539,18 @@ function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: st
   return `${scope} · ${visible}${labels.length > 3 ? ` +${labels.length - 3}` : ''}`;
 }
 
+function weatherCoordsMatch(
+  a: { lat?: number; lon?: number },
+  b: { lat?: number; lon?: number },
+): boolean {
+  // Missing coords can't disprove a match — fall back to the label comparison.
+  if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon) || !Number.isFinite(b.lat) || !Number.isFinite(b.lon)) {
+    return true;
+  }
+  return Math.abs((a.lat as number) - (b.lat as number)) < 0.01
+    && Math.abs((a.lon as number) - (b.lon as number)) < 0.01;
+}
+
 function cachedRowsMatchItinerary(
   cached: Record<string, DayWeather[]> | null,
   days: ItineraryDay[],
@@ -546,12 +558,14 @@ function cachedRowsMatchItinerary(
 ): cached is Record<string, DayWeather[]> {
   if (!cached || !days.length) return false;
   return days.every((day) => {
-    const expectedLabels = (groupedCoordsByDay.get(day.date) || [])
-      .filter((group) => !group.missing)
-      .map((group) => group.label);
-    if (!expectedLabels.length) return true;
-    const actualLabels = (cached[day.date] || []).map((row) => row.coord?.label).filter(Boolean);
-    return expectedLabels.every((label) => actualLabels.includes(label));
+    // Label-only matching accepted a cache whose coords pointed at a different place
+    // after an itinerary edit (same display name, new lat/lon) or a geocode upgrade.
+    const expected = (groupedCoordsByDay.get(day.date) || []).filter((group) => !group.missing);
+    if (!expected.length) return true;
+    const rows = cached[day.date] || [];
+    return expected.every((group) => rows.some((row) =>
+      row.coord?.label === group.label && weatherCoordsMatch(row.coord || {}, group),
+    ));
   });
 }
 

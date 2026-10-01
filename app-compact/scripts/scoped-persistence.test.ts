@@ -252,6 +252,62 @@ assert.deepEqual(degraded, {
 });
 assert.ok(healthy.read());
 
+// persistScope must scrub demo state like hydrate — a public supabase user's snapshot
+// never carries the demo trip, roster, or itinerary.
+const persistScrub = memoryAdapter();
+const persistScrubIndexed = memoryAdapter();
+persistence = createScopedPersistence(persistScrub.adapter, persistScrubIndexed.adapter);
+await persistence.persistScope('supabase:user-1', 'member@example.com', {
+  ...DEFAULT_STATE,
+  peopleByTripId: {
+    [DEFAULT_STATE.activeTripId]: [{ id: 'p_demo', name: 'Demo Person', emoji: '👤', color: '#000' }],
+    'cloud-trip': [{ id: 'p_real', name: 'Real Person', emoji: '👤', color: '#111' }],
+  },
+  shareRatiosByTripId: {
+    [DEFAULT_STATE.activeTripId]: { p_demo: 50 },
+    'cloud-trip': { p_real: 100 },
+  },
+  trips: [
+    { ...DEFAULT_STATE.trips[0] },
+    { ...DEFAULT_STATE.trips[0], id: 'cloud-trip', name: 'Cloud Trip', active: true },
+  ],
+  activeTripId: 'cloud-trip',
+});
+const scrubbedLocal = persistScrub.read() as typeof DEFAULT_STATE;
+const scrubbedIndexed = persistScrubIndexed.read() as typeof DEFAULT_STATE;
+for (const snapshot of [scrubbedLocal, scrubbedIndexed]) {
+  assert.equal(snapshot.trips.some((trip) => trip.id === DEFAULT_STATE.activeTripId), false);
+  assert.equal(DEFAULT_STATE.activeTripId in (snapshot.peopleByTripId || {}), false);
+  assert.equal(DEFAULT_STATE.activeTripId in (snapshot.shareRatiosByTripId || {}), false);
+  assert.ok((snapshot.receipts || []).every((receipt) => receipt.tripId !== DEFAULT_STATE.activeTripId));
+}
+
+// A partial snapshot with the HIGHER settingsUpdatedAt but missing displayCurrency must
+// not blank the value the other side holds (undefined-injection via settingsPatch).
+// Real localStorage/IDB snapshots omit the key (JSON.stringify drops undefined).
+const partialSettingsSnapshot = {
+  ...DEFAULT_STATE,
+  settingsUpdatedAt: 30,
+  receipts: [],
+} as Record<string, unknown>;
+delete partialSettingsSnapshot.displayCurrency;
+const fullSettingsSnapshot = {
+  ...DEFAULT_STATE,
+  settingsUpdatedAt: 10,
+  displayCurrency: 'JPY',
+  receipts: [],
+};
+const partialSettings = memoryAdapter(partialSettingsSnapshot);
+const fullSettings = memoryAdapter(fullSettingsSnapshot);
+persistence = createScopedPersistence(fullSettings.adapter, partialSettings.adapter);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.displayCurrency, 'JPY', 'missing settings field must not blank the other side');
+
+// The same guard applies in the other direction (local partial, indexed full).
+persistence = createScopedPersistence(partialSettings.adapter, fullSettings.adapter);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.displayCurrency, 'JPY');
+
 const failed = await createScopedPersistence(
   memoryAdapter(null, 'write').adapter,
   memoryAdapter(null, 'write').adapter,

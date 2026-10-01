@@ -142,11 +142,11 @@ export function downloadJson(filename: string, value: unknown): void {
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
 }
 
-export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
+export function todayYmd(timeZone = 'Asia/Hong_Kong', atMs: number = Date.now()): string {
   const zone = normalizeZone(timeZone) || 'Asia/Hong_Kong';
   let safeZone = zone;
   try {
-    new Intl.DateTimeFormat('en', { timeZone: safeZone }).format(new Date());
+    new Intl.DateTimeFormat('en', { timeZone: safeZone }).format(new Date(atMs));
   } catch {
     safeZone = 'Asia/Hong_Kong';
   }
@@ -155,7 +155,7 @@ export function todayYmd(timeZone = 'Asia/Hong_Kong'): string {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).formatToParts(new Date());
+  }).formatToParts(new Date(atMs));
   const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
@@ -225,8 +225,15 @@ export function getTripPhase(state: AppState, date?: string): TripPhase {
 export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
   if (receipt.phase === 'prep' || receipt.phase === 'trip' || receipt.phase === 'post') return receipt.phase;
   const tripStartIso = state.tripDateRange?.start;
-  const tripStartMs = tripStartIso ? new Date(`${tripStartIso}T00:00:00+08:00`).getTime() : NaN;
-  if (receipt.createdAt && Number.isFinite(tripStartMs) && receipt.createdAt < tripStartMs) return 'prep';
+  // Compare trip-local calendar dates, not a hardcoded +08:00 midnight: a UTC+9 trip's
+  // Day-1 00:30 receipt is still Day 1 in Tokyo but sits before the HKT-midnight cutoff,
+  // and a UTC+7 evening receipt is still prep but lands after it.
+  if (receipt.createdAt && tripStartIso) {
+    const trip = activeTrip(state);
+    const zone = trip.timezones?.[0] || getItinerary(state)[0]?.timezone || 'Asia/Hong_Kong';
+    const createdYmd = todayYmd(zone, receipt.createdAt);
+    if (createdYmd < tripStartIso) return 'prep';
+  }
   return getTripPhase(state, receipt.date);
 }
 

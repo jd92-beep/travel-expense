@@ -151,4 +151,57 @@ assert.equal(bounded.length, 500);
 assert.equal(bounded[0].entityId, 'r1');
 assert.equal(restoreJournal(bounded).pendingCount, 500);
 
+// 500-cap must not evict terminal failures (40001 / exhausted) — visibility contract.
+let capped: SyncQueueItem[] = [];
+for (let index = 0; index < 499; index += 1) {
+  capped = enqueueChange(capped, receipt(`live${index}`));
+}
+capped = enqueueChange(capped, receipt('doomed', { updatedAt: 5 }));
+capped = settleChange(capped, capped.find((item) => item.entityId === 'doomed')!.id, {
+  kind: 'terminal-error',
+  error: '40001 version conflict',
+}).queue;
+assert.equal(capped.find((item) => item.entityId === 'doomed')?.status, 'error');
+// Overflow with more active work: the terminal error stays, oldest actives go first.
+for (let index = 0; index < 20; index += 1) {
+  capped = enqueueChange(capped, receipt(`overflow${index}`));
+}
+assert.equal(capped.length, 500);
+assert.ok(capped.some((item) => item.entityId === 'doomed' && item.status === 'error'),
+  'terminal failure survives the 500-cap');
+assert.ok(!capped.some((item) => item.entityId === 'live0'), 'oldest active work is trimmed first');
+
+// 'syncing' settle carrying a stale expectedUpdatedAt must not stick the superseded item.
+let stuckSyncing = enqueueChange([], receipt('stuck', { updatedAt: 10 }));
+const stuckSnapshot = stuckSyncing[0];
+stuckSyncing = settleChange(stuckSyncing, stuckSnapshot.id, {
+  kind: 'syncing',
+  expectedUpdatedAt: stuckSnapshot.updatedAt,
+}).queue;
+assert.equal(stuckSyncing[0].status, 'syncing');
+// Mid-flight local edit supersedes (same id, bumped updatedAt).
+stuckSyncing = enqueueChange(stuckSyncing, receipt('stuck', { updatedAt: 20 }));
+assert.equal(stuckSyncing[0].status, 'queued');
+// The in-flight push's now-stale settles (both syncing and succeeded) must be no-ops.
+stuckSyncing = settleChange(stuckSyncing, stuckSnapshot.id, {
+  kind: 'syncing',
+  expectedUpdatedAt: stuckSnapshot.updatedAt,
+}).queue;
+stuckSyncing = settleChange(stuckSyncing, stuckSnapshot.id, {
+  kind: 'succeeded',
+  expectedUpdatedAt: stuckSnapshot.updatedAt,
+}).queue;
+assert.equal(stuckSyncing.length, 1);
+assert.equal(stuckSyncing[0].status, 'queued', 'superseded item is not left stuck in syncing');
+assert.equal(stuckSyncing[0].payload?.updatedAt, 20);
+
+// A settled 'syncing' with CURRENT expectedUpdatedAt still applies.
+const currentSync = enqueueChange([], receipt('current-sync', { updatedAt: 30 }));
+const currentSyncItem = currentSync[0];
+const applied = settleChange(currentSync, currentSyncItem.id, {
+  kind: 'syncing',
+  expectedUpdatedAt: currentSyncItem.updatedAt,
+}).queue;
+assert.equal(applied[0].status, 'syncing');
+
 console.log('change journal tests passed');

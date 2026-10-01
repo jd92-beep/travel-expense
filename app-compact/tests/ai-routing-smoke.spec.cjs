@@ -229,7 +229,8 @@ test('AI routing keeps user-selected primary models ahead of fallbacks', async (
   await page.getByRole('button', { name: 'Email' }).click();
   await page.getByPlaceholder('貼 booking confirmation / email 文字').fill('2026-05-08 at Email Lunch 888 yen booking REF55555');
   await page.getByRole('button', { name: '解析文字' }).click();
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  // UI heading is Chinese (批次確認); the old English name made this smoke fail.
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 
@@ -458,7 +459,8 @@ test('Trip update does not treat the current itinerary as a successful extractio
   await expect(tripConfirm.getByRole('heading', { name: 'Mimo Jeju Trip' })).toBeVisible();
   await expect(tripConfirm).toContainText('Dongmun Market');
   await expect(tripConfirm).toContainText('Dongmun Market lat/lon');
-  await expect(page.getByText('Old Current Spot')).toHaveCount(0);
+  // Scope to the confirm dialog: the old trip row can still appear in Settings behind the modal.
+  await expect(tripConfirm.getByText('Old Current Spot')).toHaveCount(0);
   expect(calls).toEqual(expect.arrayContaining([
     expect.objectContaining({ provider: 'google', kind: 'trip', model: 'gemini-3.1-flash' }),
     expect.objectContaining({ provider: 'mimo', kind: 'trip', model: 'mimo-v2.5-pro' }),
@@ -899,7 +901,7 @@ test('Supabase users can call required AI primaries without a broker password se
   await page.getByRole('button', { name: 'Email' }).click();
   await page.getByPlaceholder('貼 booking confirmation / email 文字').fill('2026-05-08 at Supabase Email 888 yen');
   await page.getByRole('button', { name: '解析文字' }).click();
-  await expect(page.getByRole('heading', { name: 'Batch Confirm' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '批次確認' })).toBeVisible();
   await page.getByRole('button', { name: /全部儲存/ }).click();
   await expect(page.getByText('已儲存 1 筆 email 待確認紀錄。')).toBeVisible();
 

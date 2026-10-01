@@ -1,12 +1,12 @@
 import { TRIP_THEME_KEYS } from '../domain/trip/context';
 import type { AppState, ItineraryDay, ThemePreference, TripThemeKey } from './types';
 // @ts-expect-error TS5097: Node's strip-types runner needs the extension.
-import { COMPACT_AI_MODELS } from './providerCatalog.ts';
+import { COMPACT_AI_MODELS, resolveCatalogAiModelId } from './providerCatalog.ts';
 
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.24.7';
+export const APP_VERSION = '0.24.9';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -36,16 +36,18 @@ export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanM
   if (!next.googleBackupModel || STALE_GOOGLE_BACKUP_MODELS.has(String(next.googleBackupModel))) {
     next.googleBackupModel = DEFAULT_GOOGLE_BACKUP_MODEL;
   }
-  if (!next.scanModel) {
+  // D3: ids outside the contract catalog (retired/renamed models in stale settings)
+  // must never reach routing — clamp them to the task defaults.
+  if (!resolveCatalogAiModelId(String(next.scanModel || ''))) {
     next.scanModel = DEFAULT_SCAN_VOICE_MODEL_ID;
   }
-  if (!next.voiceModel) {
+  if (!resolveCatalogAiModelId(String(next.voiceModel || ''))) {
     next.voiceModel = DEFAULT_SCAN_VOICE_MODEL_ID;
   }
-  if (!next.emailModel) {
+  if (!resolveCatalogAiModelId(String(next.emailModel || ''))) {
     next.emailModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
   }
-  if (!next.tripUpdateModel) {
+  if (!resolveCatalogAiModelId(String(next.tripUpdateModel || ''))) {
     next.tripUpdateModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
   }
   return next;

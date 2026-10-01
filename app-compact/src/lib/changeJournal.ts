@@ -6,11 +6,11 @@ import type { AppState, SyncQueueItem } from './types';
 export type ChangeDraft = Pick<SyncQueueItem, 'type' | 'entityId' | 'op' | 'payload'>;
 
 export type JournalOutcome =
-  | { kind: 'syncing' }
+  | { kind: 'syncing'; expectedUpdatedAt?: number }
   | { kind: 'succeeded'; expectedUpdatedAt?: number }
   | { kind: 'retryable-error'; error: string; expectedUpdatedAt?: number }
   | { kind: 'terminal-error'; error: string; expectedUpdatedAt?: number }
-  | { kind: 'manual-retry' };
+  | { kind: 'manual-retry'; expectedUpdatedAt?: number };
 
 export type JournalResult = {
   queue: SyncQueueItem[];
@@ -75,8 +75,15 @@ export function enqueueChange(
     updatedAt,
     payload: mergedPayload as SyncQueueItem['payload'],
   };
-  return [...(queue || []).filter((item) => queueKey(item) !== queueKey(change)), next]
-    .slice(-500);
+  const merged = [...(queue || []).filter((item) => queueKey(item) !== queueKey(change)), next];
+  if (merged.length <= 500) return merged;
+  // Cap must never evict visible terminal failures (40001 / exhausted). Keep every
+  // error/failed item and trim only the oldest active work to fit.
+  const durable = merged.filter((item) => item.status === 'error' || item.status === 'failed');
+  const active = merged.filter((item) => item.status !== 'error' && item.status !== 'failed');
+  const durableKept = durable.slice(-500);
+  const activeBudget = Math.max(0, 500 - durableKept.length);
+  return [...durableKept, ...active.slice(-activeBudget)];
 }
 
 export function settleChange(
@@ -86,9 +93,12 @@ export function settleChange(
 ): JournalResult {
   const current = queue.find((item) => item.id === itemId);
   if (!current) return summarize(queue);
-  if (outcome.kind !== 'syncing'
-    && outcome.kind !== 'manual-retry'
-    && outcome.expectedUpdatedAt !== undefined
+  // Any settle carrying expectedUpdatedAt is stale when the item was superseded by a
+  // newer local edit (same id, bumped updatedAt). This includes 'syncing': without the
+  // guard a stale push marks the NEW item 'syncing' and the later succeeded/retryable
+  // settle no-ops on the updatedAt mismatch, leaving it stuck in 'syncing'.
+  // 'manual-retry' callers omit expectedUpdatedAt and still force-apply.
+  if (outcome.expectedUpdatedAt !== undefined
     && current.updatedAt !== outcome.expectedUpdatedAt) {
     return summarize(queue);
   }

@@ -78,7 +78,12 @@ export async function loadIndexedState(scope?: string): Promise<Partial<AppState
   }
 }
 
-export async function saveIndexedState(state: AppState, scope?: string): Promise<void> {
+// Serialize writes through one chain: each saveIndexedState opens its own connection, so two
+// overlapping writes (debounced persist vs pagehide flushPersist) can commit out of order and
+// let an OLDER snapshot overwrite a NEWER one. A mutex preserves call order.
+let writeChain: Promise<unknown> = Promise.resolve();
+
+async function saveIndexedStateUnqueued(state: AppState, scope?: string): Promise<void> {
   if (!('indexedDB' in window)) return;
   const db = await openDb();
   try {
@@ -89,7 +94,13 @@ export async function saveIndexedState(state: AppState, scope?: string): Promise
   }
 }
 
-export async function clearIndexedState(scope?: string): Promise<void> {
+export function saveIndexedState(state: AppState, scope?: string): Promise<void> {
+  const task = writeChain.then(() => saveIndexedStateUnqueued(state, scope));
+  writeChain = task.catch(() => undefined);
+  return task;
+}
+
+async function clearIndexedStateUnqueued(scope?: string): Promise<void> {
   if (!('indexedDB' in window)) return;
   const db = await openDb();
   try {
@@ -97,4 +108,10 @@ export async function clearIndexedState(scope?: string): Promise<void> {
   } finally {
     db.close();
   }
+}
+
+export function clearIndexedState(scope?: string): Promise<void> {
+  const task = writeChain.then(() => clearIndexedStateUnqueued(scope));
+  writeChain = task.catch(() => undefined);
+  return task;
 }

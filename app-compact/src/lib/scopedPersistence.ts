@@ -189,22 +189,31 @@ export function createScopedPersistence(
       // Settings (rate/rateMode/theme/…) must follow settingsUpdatedAt, not overall freshness.
       // A debounced IndexedDB write can lag the localStorage mirror; a receipt-only update must
       // not let a stale rateMode/rate clobber the newer fixed-rate choice.
+      // Only defined fields participate: a partial snapshot with the higher settingsUpdatedAt
+      // but missing e.g. displayCurrency must not blank the value the other side holds.
       const settingsFrom = (localState?.settingsUpdatedAt || 0) >= (indexedState?.settingsUpdatedAt || 0)
         ? localState
         : indexedState;
-      const settingsPatch = settingsFrom
-        ? {
-            rate: settingsFrom.rate,
-            rateMode: settingsFrom.rateMode,
-            rateTable: settingsFrom.rateTable,
-            tripCurrency: settingsFrom.tripCurrency,
-            budget: settingsFrom.budget,
-            themePreference: settingsFrom.themePreference,
-            displayCurrency: settingsFrom.displayCurrency,
-            statsIncludeTransportLodging: settingsFrom.statsIncludeTransportLodging,
-            top10IncludeBigItems: settingsFrom.top10IncludeBigItems,
+      const settingsPatch: Partial<AppState> = {};
+      if (settingsFrom) {
+        const candidates: Array<keyof AppState> = [
+          'rate',
+          'rateMode',
+          'rateTable',
+          'tripCurrency',
+          'budget',
+          'themePreference',
+          'displayCurrency',
+          'statsIncludeTransportLodging',
+          'top10IncludeBigItems',
+        ];
+        for (const key of candidates) {
+          const value = (settingsFrom as Partial<AppState>)[key];
+          if (value !== undefined) {
+            (settingsPatch as Record<string, unknown>)[key] = value;
           }
-        : {};
+        }
+      }
       const receiptTombstones = mergeTombstones(
         tombstonesOf(newest),
         tombstonesOf(other || {}),
@@ -231,10 +240,15 @@ export function createScopedPersistence(
     },
     async persistScope(
       scope: string,
-      _userEmail: string | null,
+      userEmail: string | null,
       state: AppState,
     ): Promise<PersistResult> {
-      const safe = stripSensitiveState(migrateAppState(state));
+      // Scrub demo state on the way OUT as well as on hydrate: a public supabase user's
+      // snapshot must never carry the demo trip/persons/itinerary, even if demo data
+      // leaked into memory (stale pendingPersist, import, or a pre-scrub state object).
+      const safe = stripSensitiveState(migrateAppState(
+        sanitizePublicDemoState(state, scope, userEmail),
+      ));
       const [localResult, indexedResult] = await Promise.allSettled([
         local.save(scope, safe),
         indexed.save(scope, safe),

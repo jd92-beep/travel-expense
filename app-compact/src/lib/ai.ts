@@ -1,7 +1,9 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
-import { brokerAiJson, hasCredentialBrokerSession, testProviderConnection } from './credentialBroker';
+import { brokerAiJson, hasCredentialBrokerSession, redactedError, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
+// @ts-expect-error TS5097: Node's strip-types runner needs the extension.
+import { resolveCatalogAiModelId } from './providerCatalog.ts';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
 import { compressPhoto, prepareForOCR } from './domain';
 import { currentSupabaseAccessToken } from './supabase';
@@ -11,8 +13,24 @@ const KIMI_API_MODEL = 'kimi-code';
 const KIMI_NON_THINKING = { type: 'disabled' } as const;
 
 // Remove trailing commas before } or ] — the single most common JSON error from weak models.
+// String-aware: a comma inside a quoted value must never be rewritten ("buy 1, get 1" etc).
 function repairJson(text: string): string {
-  return text.replace(/,\s*([}\]])/g, '$1');
+  let out = '';
+  let inString = false;
+  let escape = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escape) { out += ch; escape = false; continue; }
+    if (ch === '\\') { out += ch; escape = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (!inString && ch === ',') {
+      let j = i + 1;
+      while (j < text.length && /\s/.test(text[j])) j++;
+      if (j < text.length && (text[j] === '}' || text[j] === ']')) continue; // drop trailing comma
+    }
+    out += ch;
+  }
+  return out;
 }
 
 function extractJson(text: string): unknown {
@@ -1027,7 +1045,15 @@ function buildTripExtractionReport(raw: unknown, trip: TripProfile): TripExtract
 
 function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
   if (!chosenModelId) return null;
-  const parts = chosenModelId.split('/');
+  // D3 (routing-side): stale settings can name retired/non-catalog models. Only ids that
+  // resolve against the contract catalog are ever sent to the broker; anything else is
+  // dropped so the caller falls back to the contract default attempt.
+  const catalogId = resolveCatalogAiModelId(chosenModelId);
+  if (!catalogId) {
+    console.warn(`[AI Routing] 模型唔喺 catalog allowlist，已忽略: ${chosenModelId}`);
+    return null;
+  }
+  const parts = catalogId.split('/');
   if (parts.length === 2) {
     const provider = parts[0] as 'kimi' | 'google' | 'mimo' | 'volcano';
     return {
@@ -1036,16 +1062,16 @@ function selectedModelAttempt(chosenModelId: string): ModelAttempt | null {
       label: `${provider === 'kimi' ? 'Kimi' : provider === 'mimo' ? 'Mimo' : provider === 'volcano' ? 'Volcano' : 'Google'} (${parts[1]}) [Selected]`,
     };
   }
-  if (/kimi/i.test(chosenModelId)) {
-    return { provider: 'kimi', model: chosenModelId, label: `Kimi (${chosenModelId}) [Selected]` };
+  if (/kimi/i.test(catalogId)) {
+    return { provider: 'kimi', model: catalogId, label: `Kimi (${catalogId}) [Selected]` };
   }
-  if (/mimo/i.test(chosenModelId)) {
-    return { provider: 'mimo', model: chosenModelId, label: `Mimo (${chosenModelId}) [Selected]` };
+  if (/mimo/i.test(catalogId)) {
+    return { provider: 'mimo', model: catalogId, label: `Mimo (${catalogId}) [Selected]` };
   }
-  if (/volcano|doubao|minimax/i.test(chosenModelId)) {
-    return { provider: 'volcano', model: chosenModelId, label: `Volcano (${chosenModelId}) [Selected]` };
+  if (/volcano|doubao|minimax/i.test(catalogId)) {
+    return { provider: 'volcano', model: catalogId, label: `Volcano (${catalogId}) [Selected]` };
   }
-  return { provider: 'google', model: chosenModelId, label: `Google (${chosenModelId}) [Selected]` };
+  return { provider: 'google', model: catalogId, label: `Google (${catalogId}) [Selected]` };
 }
 
 function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | 'email' | 'trip'): ModelAttempt[] {
@@ -1170,11 +1196,19 @@ export async function callPreferredJson(
   image?: { base64: string; mime: string }
 ) {
   const attempts = modelAttemptsForKind(state, kind);
+  // Without a per-attempt timeout a hung broker fetch leaves Scan/Settings busy forever
+  // (the finally in callers only runs after the fetch settles). Trip path has its own
+  // staged timeouts inside parseTripParagraph.
+  const attemptTimeoutMs = kind === 'trip' ? 90_000 : kind === 'email' ? 60_000 : 45_000;
   let last: unknown;
   for (const attempt of attempts) {
     try {
       console.log(`[AI Routing] 正在嘗試調用: ${attempt.label}...`);
-      return await callModelAttemptJson(state, attempt, prompt, kind, image);
+      return await withTimeout(
+        callModelAttemptJson(state, attempt, prompt, kind, image),
+        attemptTimeoutMs,
+        attempt.label,
+      );
     } catch (error) {
       console.warn(`[AI Routing] ${attempt.label} 嘗試失敗:`, error);
       last = error;
@@ -1313,7 +1347,7 @@ CRITICAL ITEMS FORMATTING RULES:
     return [{
       ...heuristicReceiptFromText(text, state),
       source,
-      note: `${text.slice(0, 450)}\n\nAI fallback: ${error instanceof Error ? error.message : String(error)}`,
+      note: `${text.slice(0, 450)}\n\nAI fallback: ${redactedError(error)}`,
     }];
   }
   if (!parsed) throw new Error('AI returned empty response');
@@ -1791,21 +1825,22 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
         last = error;
         // Quota / 429 is a hard stop — do not fall through to other models or local extraction.
         if (isQuotaHardStopError(error)) throw error;
-        warnings.push(error instanceof Error ? error.message : String(error));
+        warnings.push(redactedError(error));
         const routeLabel = isBrokerRouteUnavailable(error) ? 'backend unavailable' : 'attempt failed';
-        console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, error);
+        console.warn(`[AI Routing] Trip update ${attempt.label} ${routeLabel}, trying next model:`, redactedError(error));
       }
     }
     const localDraft = localDraftWithWarnings(warnings) || localTripDraftFromParagraph(paragraph, state, warnings);
     if (localDraft && hasUsefulTripItinerary(localDraft)) {
       return intent === 'partial' ? finalizePartial(localDraft) : localDraft;
     }
-    throw new Error([...warnings, last instanceof Error ? last.message : '', 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
+    throw new Error([...warnings, redactedError(last), 'All trip LLM attempts returned no usable itinerary spots.'].filter(Boolean).join(' | '));
   } catch (error) {
     // Preserve metering hard stops — do not paper over them with a local draft.
     if (isQuotaHardStopError(error)) throw error;
-    const localDraft = localDraftWithWarnings([error instanceof Error ? error.message : String(error)])
-      || localTripDraftFromParagraph(paragraph, state, [error instanceof Error ? error.message : String(error)]);
+    const safeError = redactedError(error);
+    const localDraft = localDraftWithWarnings([safeError])
+      || localTripDraftFromParagraph(paragraph, state, [safeError]);
     if (localDraft && hasUsefulTripItinerary(localDraft)) {
       return intent === 'partial' ? finalizePartial(localDraft) : localDraft;
     }
@@ -1819,7 +1854,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     return {
       trip: { ...fallback, itinerary: current.itinerary || [], version: current.version + 1, updatedAt: Date.now() },
       summary: 'AI 暫時未能完整分析，已保留現有旅程供手動修改。',
-      warnings: [error instanceof Error ? error.message : String(error)],
+      warnings: [safeError],
       changes: ['沒有自動套用新資料。'],
     };
   }

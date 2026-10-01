@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ExternalLink } from 'lucide-react';
 import type { Receipt } from '../lib/types';
@@ -12,6 +12,15 @@ export function ReceiptPhotoModal({ receipt, onClose }: { receipt: Receipt; onCl
   const [imgSrc, setImgSrc] = useState(photoSrc);
   const [error, setError] = useState(!photoSrc);
   const [fallbackAttempted, setFallbackAttempted] = useState(false);
+
+  // useState only captures the first photoSrc. When the parent swaps the receipt on an
+  // already-mounted modal (or a resync refreshes photoUrl), re-seed so we never keep
+  // showing the previous receipt's image / error state.
+  useEffect(() => {
+    setImgSrc(photoSrc);
+    setError(!photoSrc);
+    setFallbackAttempted(false);
+  }, [photoSrc, receipt.id]);
 
   const handleImgError = () => {
     if (!fallbackAttempted) {
