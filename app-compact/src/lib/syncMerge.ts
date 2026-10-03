@@ -1,13 +1,12 @@
 import { activeTrip, stampReceiptForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange } from '../domain/trip/itineraryContract';
-import { canonicalTombstoneWins, mergeCanonicalReceiptTombstones } from './receiptTombstones';
+import { canonicalReceiptKey, canonicalTombstoneWins, mergeCanonicalReceiptTombstones } from './receiptTombstones';
 import type { AppState, Receipt, ReceiptTombstone, SyncQueueItem, TripProfile } from './types';
 
 const stampForRemote = (state: AppState, receipt: Receipt) => stampReceiptForTrip(state, receipt, { preserveUpdatedAt: true });
 
 export function receiptSourceTombstoneKey(receipt: Pick<Receipt, 'id' | 'sourceId' | 'tripId'>): string {
-  const sourceId = receipt.sourceId || receipt.id;
-  return receipt.tripId ? `${receipt.tripId}::${sourceId}` : sourceId;
+  return canonicalReceiptKey(receipt);
 }
 
 export function rawReceiptSourceId(value: unknown, tripId?: string): string {
@@ -184,31 +183,15 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
     }
     const localUpdated = receiptUpdatedAt(localReceipt, true);
     const remoteUpdated = receiptUpdatedAt(remoteReceipt, false);
-    const remoteHasMissingLink = !localReceipt.notionPageId && !!remoteReceipt.notionPageId
-      || !localReceipt.sourceId && !!remoteReceipt.sourceId;
-    // Signed photo URLs rotate on every pull. Only adopt a remote URL when the remote row is
-    // actually newer (or we are missing the link) — never treat a rotating URL as a full-row
-    // overwrite, which used to clobber newer local edits mid-flight.
-    const photoUrlOnlyChange = !!remoteReceipt.photoUrl
-      && remoteReceipt.photoUrl !== localReceipt.photoUrl
-      && remoteUpdated <= localUpdated
-      && !remoteHasMissingLink;
-    if (photoUrlOnlyChange) {
-      byId.set(localReceipt.id, {
-        ...localReceipt,
-        photoUrl: remoteReceipt.photoUrl,
-      });
-      if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
-      if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
-      if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
-      indexRawSource(rawSourceKey, localReceipt.id);
-      continue;
-    }
-    if (remoteUpdated > localUpdated || (remoteUpdated === localUpdated && remoteHasMissingLink)) {
+    if (remoteUpdated > localUpdated) {
       byId.set(localReceipt.id, stampForRemote(state, {
         ...localReceipt,
         ...remoteReceipt,
         id: localReceipt.id,
+        // A newer Notion mirror row has no Supabase identity; retain the canonical link.
+        supabaseId: remoteReceipt.supabaseId || localReceipt.supabaseId,
+        notionPageId: remoteReceipt.notionPageId || localReceipt.notionPageId,
+        sourceId: remoteReceipt.sourceId || localReceipt.sourceId,
         photoThumb: localReceipt.photoThumb || remoteReceipt.photoThumb,
         photoUrl: remoteReceipt.photoUrl || localReceipt.photoUrl,
         // Local unsynced photo replacement must not be marked synced by a remote row merge.
@@ -218,11 +201,21 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
         supabasePhotoPath: localReceipt.supabasePhotoPath || remoteReceipt.supabasePhotoPath,
         syncStatus: 'synced',
       }));
-      if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
-      if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
-      if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
-      indexRawSource(rawSourceKey, localReceipt.id);
+    } else {
+      // Identity and rotating signed URLs can arrive with an equal/older timestamp.
+      // Adopt these links without replacing newer local content or its pending status.
+      byId.set(localReceipt.id, {
+        ...localReceipt,
+        supabaseId: remoteReceipt.supabaseId || localReceipt.supabaseId,
+        notionPageId: remoteReceipt.notionPageId || localReceipt.notionPageId,
+        sourceId: remoteReceipt.sourceId || localReceipt.sourceId,
+        photoUrl: remoteReceipt.photoUrl || localReceipt.photoUrl,
+      });
     }
+    if (remoteReceipt.supabaseId) idBySupabaseId.set(remoteReceipt.supabaseId, localReceipt.id);
+    if (remoteReceipt.notionPageId) idByPageId.set(remoteReceipt.notionPageId, localReceipt.id);
+    if (tripSourceKey) idByTripSource.set(tripSourceKey, localReceipt.id);
+    indexRawSource(rawSourceKey, localReceipt.id);
   }
   return [...byId.values()];
 }

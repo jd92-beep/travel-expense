@@ -3,6 +3,8 @@ const { test, expect } = require('@playwright/test');
 const APP_URL = `${process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903'}/travel-expense/compact/`;
 
 async function seedCompactA11yState(page) {
+  await page.route(/https:\/\/(?:open\.er-api\.com|[^/]*open-meteo\.com|www\.jma\.go\.jp|fonts\.googleapis\.com|fonts\.gstatic\.com)\//, route => route.fulfill({ status: 200, json: { rates: { HKD: 1, JPY: 20 }, results: [] } }));
+
   await page.route('**/secrets.local.js', (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',

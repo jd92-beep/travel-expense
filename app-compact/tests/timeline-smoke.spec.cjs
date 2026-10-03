@@ -223,6 +223,7 @@ test('Timeline tab entry scrolls to the current live itinerary spot', async ({ p
 });
 
 test('Timeline command card stays compact and day header shows one date', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
@@ -259,6 +260,7 @@ test('Timeline command card stays compact and day header shows one date', async 
   await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
   const commandAtmosphere = await command.evaluate((node) => getComputedStyle(node).backgroundImage);
   expect(commandAtmosphere).toContain('travel-ai-atlas');
+  await page.locator('.timeline-command').evaluate(async node => { await document.fonts.ready; await Promise.all(node.getAnimations({ subtree: true }).map(a => a.finished.catch(() => {}))); });
   const commandMetrics = await page.evaluate(() => {
     const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
     const firstDay = document.querySelector('.timeline-day')?.getBoundingClientRect();

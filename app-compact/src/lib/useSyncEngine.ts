@@ -117,6 +117,22 @@ export function useSyncEngine(
   stateRef.current = state;
   const supabaseSessionRef = useRef<Session | null | undefined>(supabaseSession);
   supabaseSessionRef.current = supabaseSession;
+  const accountId = supabaseSession?.user?.id || '';
+  const accountIdRef = useRef(accountId);
+  const operationGenerationRef = useRef(0);
+  if (accountIdRef.current !== accountId) {
+    accountIdRef.current = accountId;
+    operationGenerationRef.current += 1;
+    processingRef.current = false;
+    pullingRef.current = false;
+    syncingRef.current = false;
+    needsSyncAfterCurrentRef.current = false;
+    hydratedTripPullRef.current = false;
+    accessDeniedTripsRef.current.clear();
+    backfillSuspendedRef.current.clear();
+  }
+  const isOperationCurrent = useCallback((generation: number) =>
+    aliveRef.current && generation === operationGenerationRef.current, []);
 
   useEffect(() => {
     void recordClientHeartbeat(supabaseSession);
@@ -126,6 +142,7 @@ export function useSyncEngine(
     aliveRef.current = true;
     return () => {
       aliveRef.current = false;
+      operationGenerationRef.current += 1;
       processingRef.current = false;
       pullingRef.current = false;
       syncingRef.current = false;
@@ -141,10 +158,11 @@ export function useSyncEngine(
   const runDeferredSync = useCallback(() => {
     if (!aliveRef.current || processingRef.current || pullingRef.current || syncingRef.current || !needsSyncAfterCurrentRef.current) return;
     needsSyncAfterCurrentRef.current = false;
+    const generation = operationGenerationRef.current;
     window.setTimeout(() => {
-      if (aliveRef.current) void syncRef.current();
+      if (isOperationCurrent(generation)) void syncRef.current();
     }, 0);
-  }, []);
+  }, [isOperationCurrent]);
 
   const engineState = useMemo<SyncEngineState>(() => ({
     status: state.globalSyncStatus || 'idle',
@@ -199,6 +217,8 @@ export function useSyncEngine(
             supabaseId: receipt.supabaseId || candidate.supabaseId,
             notionPageId: receipt.notionPageId || candidate.notionPageId,
             sourceId: receipt.sourceId || candidate.sourceId,
+            version: Math.max(receipt.version || 0, candidate.version || 0) || undefined,
+            syncRevision: Math.max(receipt.syncRevision || 0, candidate.syncRevision || 0) || undefined,
             _photoSyncedToSupabase: localPhotoUnsynced
               ? false
               : (candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase),
@@ -213,6 +233,25 @@ export function useSyncEngine(
             : 'synced';
         return { ...candidate, ...receipt, _photoSyncedToSupabase: candidate._photoSyncedToSupabase || receipt._photoSyncedToSupabase, supabasePhotoPath: receipt.supabasePhotoPath || candidate.supabasePhotoPath, syncStatus: nextSyncStatus };
       }),
+      // If a receipt was deleted while this request was in flight, carry its
+      // newly-created cloud identity/version to the delete instead of losing it.
+      syncQueue: current.syncQueue?.map((pending) => pending.type === 'delete-receipt' && pending.entityId === receipt.id ? {
+        ...pending,
+        updatedAt: Math.max(Date.now(), pending.updatedAt + 1),
+        payload: { ...pending.payload,
+          supabaseId: receipt.supabaseId || pending.payload?.supabaseId,
+          notionPageId: receipt.notionPageId || pending.payload?.notionPageId,
+          version: receipt.version || pending.payload?.version,
+          syncRevision: receipt.syncRevision || pending.payload?.syncRevision,
+        },
+      } : pending),
+      receiptTombstones: Object.fromEntries(Object.entries(current.receiptTombstones || {}).map(([key, tombstone]) => [key,
+        tombstone.pending && key === receiptSourceTombstoneKey(receipt) ? { ...tombstone,
+          supabaseId: receipt.supabaseId || tombstone.supabaseId,
+          version: Math.max(receipt.version || 0, tombstone.version),
+          syncRevision: Math.max(receipt.syncRevision || 0, tombstone.syncRevision),
+        } : tombstone,
+      ])),
     }));
   }, [setState]);
 
@@ -266,6 +305,7 @@ export function useSyncEngine(
   }), []);
 
   const processItem = useCallback(async (item: SyncQueueItem): Promise<JournalOutcome | undefined> => {
+    const generation = operationGenerationRef.current;
     const current = stateRef.current;
     const session = supabaseSessionRef.current;
     const supabaseSession = hasSupabaseSession(session) ? session : null;
@@ -280,6 +320,7 @@ export function useSyncEngine(
       let synced = supabaseSession
         ? await upsertSupabaseReceipt(supabaseSession, current, { ...receipt, syncStatus: 'syncing' })
         : { ...receipt, syncStatus: 'syncing' as const };
+      if (!isOperationCurrent(generation)) return;
       let photoError = '';
       if (receipt.photoThumb && !receipt._photoSyncedToSupabase && supabaseSession) {
         try {
@@ -295,6 +336,7 @@ export function useSyncEngine(
           console.warn(`[SyncEngine] Supabase photo upload failed (photo attempt ${attempts}/${MAX_SYNC_RETRY_ATTEMPTS}):`, photoErr);
         }
       }
+      if (!isOperationCurrent(generation)) return;
       if (hasNotionSync && !sharedLedger) {
         if (receipt.visibility === 'private') {
           if (receipt.notionPageId) await archiveReceipt(current, receipt);
@@ -303,6 +345,7 @@ export function useSyncEngine(
           synced = await pushReceipt(current, { ...synced, notionPageId: receipt.notionPageId });
         }
       }
+      if (!isOperationCurrent(generation)) return;
       applyReceiptSyncResult(item, synced);
       return photoError ? { kind: 'retryable-error', error: photoError } : undefined;
     }
@@ -321,7 +364,8 @@ export function useSyncEngine(
         version: item.payload?.version,
         syncRevision: item.payload?.syncRevision,
       } as Receipt;
-      if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone);
+      if (hasSupabaseSession(session)) await archiveSupabaseReceipt(session, current, tombstone, item.payload?.tripSupabaseId);
+      if (!isOperationCurrent(generation)) return;
       if (hasNotionSync && !usesSharedLedger(current, tombstone)) await archiveReceipt(current, tombstone);
       return;
     }
@@ -336,19 +380,24 @@ export function useSyncEngine(
         };
       }
       let synced = hasSupabaseSession(session) ? await upsertSupabaseTrip(session, current, trip) : trip;
+      if (!isOperationCurrent(generation)) return;
       if (hasNotionSync) synced = await pushTripPage(current, synced);
+      if (!isOperationCurrent(generation)) return;
       applyTripSyncResult(item, synced);
       return;
     }
     if (item.type === 'settings') {
       if (hasSupabaseSession(session)) await pushSupabaseSettings(session, current);
+      if (!isOperationCurrent(generation)) return;
       if (hasNotionSync) await pushSettingsMeta(current);
       return;
     }
     if (hasNotionSync) await pushSettingsMeta(current);
-  }, [applyReceiptSyncResult, applyTripSyncResult]);
+  }, [applyReceiptSyncResult, applyTripSyncResult, isOperationCurrent]);
 
   const push = useCallback(async (options?: SyncOptions) => {
+    const generation = operationGenerationRef.current;
+    if (!isOperationCurrent(generation)) return;
     console.log('[SyncEngine] push() started');
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
@@ -393,6 +442,8 @@ export function useSyncEngine(
         || '',
       );
       for (const item of dedupeQueue(stateRef.current.syncQueue || [])) {
+        if (!isOperationCurrent(generation)) return;
+        if (!(stateRef.current.syncQueue || []).some((current) => current.id === item.id && current.updatedAt === item.updatedAt)) continue;
         if (item.status === 'failed' || item.status === 'error' || item.attempts >= MAX_SYNC_RETRY_ATTEMPTS) continue;
         const tripKey = tripKeyForItem(item);
         if (tripKey && accessDeniedTrips.has(tripKey)) {
@@ -404,6 +455,7 @@ export function useSyncEngine(
         settleQueueItem(item, { kind: 'syncing' });
         try {
           const outcome = await processItem(item);
+          if (!isOperationCurrent(generation)) return;
           settleQueueItem(item, outcome || { kind: 'succeeded' });
           // Recovery: if a trip push succeeds now (e.g. after re-invite or rehome),
           // clear the denied flag so future receipts for this trip can sync.
@@ -412,6 +464,7 @@ export function useSyncEngine(
           // Also clear the generic backfill suspension for this receipt.
           if (item.type === 'receipt') backfillSuspendedRef.current.delete(item.entityId);
         } catch (error) {
+          if (!isOperationCurrent(generation)) return;
           lastError = redactError(error);
           const lowerError = lastError.toLowerCase();
           const isAuthError = lowerError.includes('session') ||
@@ -440,12 +493,14 @@ export function useSyncEngine(
           // normal error handling below, so the banner still surfaces real auth failures.
           if (isAuthError && options?.auto) {
             await new Promise((resolve) => window.setTimeout(resolve, AUTO_SYNC_AUTH_RETRY_DELAY_MS));
-            if (!aliveRef.current) break;
+            if (!isOperationCurrent(generation)) return;
             try {
               const outcome = await processItem(item);
+              if (!isOperationCurrent(generation)) return;
               settleQueueItem(item, outcome || { kind: 'succeeded' });
               continue;
             } catch (retryError) {
+              if (!isOperationCurrent(generation)) return;
               lastError = redactError(retryError);
             }
           }
@@ -469,8 +524,9 @@ export function useSyncEngine(
           }
         }
       }
-      if (aliveRef.current) {
+      if (isOperationCurrent(generation)) {
         setState((current) => {
+          if (!isOperationCurrent(generation)) return current;
           const before = dedupeQueue(current.syncQueue || []);
           // Keep exhausted receipt IDs out of backfill so durable failures cannot be replaced
           // by fresh attempts=0 items.
@@ -479,28 +535,27 @@ export function useSyncEngine(
               backfillSuspendedRef.current.add(item.entityId);
             }
           }
-          const durableFailures = before.filter((item) => item.status === 'error' || item.status === 'failed');
-          const activeItems = before.filter((item) => item.status !== 'error' && item.status !== 'failed');
-          // 500-cap must not evict terminal failures: keep every durable error and trim
-          // only the oldest active work (matches enqueueChange's cap policy).
-          const durableKept = durableFailures.slice(-500);
-          const activeQueue = activeItems.slice(-Math.max(0, 500 - durableKept.length));
           return {
             ...current,
-            syncQueue: [...durableKept, ...activeQueue],
+            syncQueue: before,
           };
         });
       }
       await yieldToStateFlush();
+      if (!isOperationCurrent(generation)) return;
       console.log(`[SyncEngine] push() complete — failures: ${failures}, pending: ${pendingCount(stateRef.current.syncQueue)}`);
       settlePushStatus(failures, lastError || undefined);
     } finally {
-      processingRef.current = false;
-      runDeferredSync();
+      if (isOperationCurrent(generation)) {
+        processingRef.current = false;
+        runDeferredSync();
+      }
     }
-  }, [settleQueueItem, updateSyncState, processItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync]);
+  }, [settleQueueItem, updateSyncState, processItem, settlePushStatus, setState, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync, isOperationCurrent]);
 
   const pull = useCallback(async () => {
+    const generation = operationGenerationRef.current;
+    if (!isOperationCurrent(generation)) return;
     console.log('[SyncEngine] pull() started');
     if (pullingRef.current) {
       scheduleSyncAfterCurrent();
@@ -534,6 +589,7 @@ export function useSyncEngine(
         hasNotionSync ? pullAll(stateRef.current) : Promise.resolve([]),
         hasNotionSync && !hasCloudSync ? pullSettingsMeta(stateRef.current) : Promise.resolve(null),
       ]);
+      if (!isOperationCurrent(generation)) return;
       const supabaseData = supabaseResult.status === 'fulfilled' ? supabaseResult.value : { trips: [], receipts: [], tombstones: [] };
       const trips = [...supabaseData.trips, ...(tripsResult.status === 'fulfilled' ? tripsResult.value : [])];
       const receipts = [...supabaseData.receipts, ...(receiptsResult.status === 'fulfilled' ? receiptsResult.value : [])];
@@ -575,8 +631,9 @@ export function useSyncEngine(
       // One-sync-cycle banner when this pull purged trips (membership revoked / trip deleted),
       // so the removal is visible instead of silently dropping shared records.
       let purgeNotice = '';
-      if (aliveRef.current) {
+      if (isOperationCurrent(generation)) {
         setState((current) => {
+          if (!isOperationCurrent(generation)) return current;
           const mergedBase = mergePulledData(current, receipts, trips, supabaseData.tombstones);
           let finalState = mergedBase;
           if (settings) {
@@ -750,7 +807,7 @@ export function useSyncEngine(
               }), freshQueue);
             }
           }
-          if (cloudPullAuthoritative && finalState.autoSync) {
+          if (cloudPullOk && finalState.autoSync) {
             const queuedTripIds = new Set(freshQueue.filter((item) => item.type === 'trip').map((item) => item.entityId));
             const localTrips = (finalState.trips || []).filter((trip) =>
               !trip.archived
@@ -819,6 +876,7 @@ export function useSyncEngine(
       }
       console.log(`[SyncEngine] pull() complete — trips: ${trips.length}, receipts: ${receipts.length}, settings: ${settings ? 'yes' : 'no'}, errors: ${pullErrors.length}`);
     } catch (error) {
+      if (!isOperationCurrent(generation)) return;
       const message = redactError(error);
       console.log('[SyncEngine] pull() error:', message);
       // Same rule as the partial-failure path: a transient network error must not paint the
@@ -829,12 +887,16 @@ export function useSyncEngine(
         updateSyncState({ status: 'error', error: message });
       }
     } finally {
-      pullingRef.current = false;
-      runDeferredSync();
+      if (isOperationCurrent(generation)) {
+        pullingRef.current = false;
+        runDeferredSync();
+      }
     }
-  }, [updateSyncState, setState, scheduleSyncAfterCurrent, runDeferredSync]);
+  }, [updateSyncState, setState, scheduleSyncAfterCurrent, runDeferredSync, isOperationCurrent]);
 
   const pushSettings = useCallback(async () => {
+    const generation = operationGenerationRef.current;
+    if (!isOperationCurrent(generation)) return;
     const current = stateRef.current;
     const session = supabaseSessionRef.current;
     const hasNotionSync = canUseNotionMirror(current, hasSupabaseSession(session), session?.user?.email || null);
@@ -849,15 +911,20 @@ export function useSyncEngine(
     updateSyncState({ status: 'pushing', error: '' });
     try {
       if (hasSupabaseSession(session)) await pushSupabaseSettings(session, current);
+      if (!isOperationCurrent(generation)) return;
       if (hasNotionSync) await pushSettingsMeta(current);
+      if (!isOperationCurrent(generation)) return;
       updateSyncState({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'synced', lastSyncedAt: Date.now(), error: '' });
     } catch (error) {
+      if (!isOperationCurrent(generation)) return;
       updateSyncState({ status: 'error', error: redactError(error) });
       throw error;
     }
-  }, [updateSyncState]);
+  }, [updateSyncState, isOperationCurrent]);
 
   const sync = useCallback(async (options?: SyncOptions) => {
+    const generation = operationGenerationRef.current;
+    if (!isOperationCurrent(generation)) return;
     if (syncingRef.current) {
       scheduleSyncAfterCurrent();
       console.log('[SyncEngine] sync() skipped — already syncing');
@@ -868,6 +935,7 @@ export function useSyncEngine(
     try {
       await push(options);
       await yieldToStateFlush();
+      if (!isOperationCurrent(generation)) return;
       if (!navigator.onLine) {
         console.log('[SyncEngine] Offline — skipping pull');
         return;
@@ -878,11 +946,13 @@ export function useSyncEngine(
       }
       console.log('[SyncEngine] Running pull()...');
       await pull();
+      if (!isOperationCurrent(generation)) return;
       // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
       // Notion connected. Transport failures stay observable without blocking the main sync.
       const cloudSession = hasSupabaseSession(supabaseSessionRef.current) ? supabaseSessionRef.current : null;
       if (cloudSession && isSupabaseConfigured() && canUseNotionMirror(stateRef.current, true, cloudSession.user?.email || null)) {
         await yieldToStateFlush();
+        if (!isOperationCurrent(generation)) return;
         const tripIds = (stateRef.current.trips || [])
           .filter((trip) => trip.supabaseId
             && (trip.sharing?.role === 'owner' || trip.sharing?.role === 'admin'))
@@ -906,14 +976,17 @@ export function useSyncEngine(
         }
       }
     } finally {
-      syncingRef.current = false;
-      runDeferredSync();
+      if (isOperationCurrent(generation)) {
+        syncingRef.current = false;
+        runDeferredSync();
+      }
     }
-  }, [pull, push, yieldToStateFlush, scheduleSyncAfterCurrent]);
+  }, [pull, push, yieldToStateFlush, scheduleSyncAfterCurrent, runDeferredSync, isOperationCurrent]);
   syncRef.current = sync;
 
   const retryFailedItems = useCallback(() => {
     if (!aliveRef.current) return;
+    const generation = operationGenerationRef.current;
     for (const item of stateRef.current.syncQueue || []) {
       if (item.status !== 'failed' && item.status !== 'error') continue;
       const tripId = String(
@@ -945,9 +1018,9 @@ export function useSyncEngine(
       };
     });
     setTimeout(() => {
-      void sync({ auto: true });
+      if (isOperationCurrent(generation)) void sync({ auto: true });
     }, 100);
-  }, [setState, sync]);
+  }, [setState, sync, isOperationCurrent]);
 
   useEffect(() => {
     if (!aliveRef.current || !state.activeTripId) return;

@@ -575,7 +575,7 @@ export function ReceiptEditor({
               notionFileUploadId: undefined,
             }))}>刪除相片</button>}
             {!readOnly && <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>}
-            {onAddToItinerary && <button type="button" className="secondary" onClick={() => {
+            {onAddToItinerary && !readOnly && <button type="button" className="secondary" onClick={() => {
               const total = validAmount(commitTotalDraft());
               if (total == null) {
                 alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);

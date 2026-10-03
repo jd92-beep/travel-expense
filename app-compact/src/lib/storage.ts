@@ -169,12 +169,16 @@ export function stripPortableBackupState(state: AppState): Partial<AppState> {
     syncQueue: _syncQueue,
     notionDeletedIds: _notionDeletedIds,
     notionDeletedSourceIds: _notionDeletedSourceIds,
+    receiptTombstones: _receiptTombstones,
+    deletedTripIds: _deletedTripIds,
     lastSyncedAt: _lastSyncedAt,
     globalSyncStatus: _globalSyncStatus,
     syncError: _syncError,
     settingsPulledAt: _settingsPulledAt,
     receipts: _receipts,
     trips: _trips,
+    peopleByTripId: _peopleByTripId,
+    shareRatiosByTripId: _shareRatiosByTripId,
     ...safeState
   } = stripSensitiveState(state);
 
@@ -191,6 +195,8 @@ export function stripPortableBackupState(state: AppState): Partial<AppState> {
       sourceId: _sourceId,
       syncStatus: _syncStatus,
       photoUrl: _photoUrl,
+      ownerId: _ownerId,
+      createdByLabel: _createdByLabel,
       ...localReceipt
     } = receipt;
     return localReceipt;
@@ -202,6 +208,7 @@ export function stripPortableBackupState(state: AppState): Partial<AppState> {
       notionPageId: _notionPageId,
       notionDb: _notionDb,
       sourceId: _sourceId,
+      sharing: _sharing,
       ...localTrip
     } = trip;
     return localTrip;
@@ -211,6 +218,8 @@ export function stripPortableBackupState(state: AppState): Partial<AppState> {
     ...safeState,
     receipts,
     trips,
+    peopleByTripId: Object.fromEntries(Object.entries(state.peopleByTripId || {}).filter(([id]) => trips.some((trip) => trip.id === id))),
+    shareRatiosByTripId: Object.fromEntries(Object.entries(state.shareRatiosByTripId || {}).filter(([id]) => trips.some((trip) => trip.id === id))),
   };
 }
 

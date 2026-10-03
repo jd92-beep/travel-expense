@@ -154,7 +154,7 @@ test('boot retries a persisted retryable error with auto auth recovery', async (
         op: 'create',
         status: 'error',
         attempts: 1,
-        error: 'session expired',
+        error: '503 service unavailable',
         createdAt: now - 60_000,
         updatedAt: now - 60_000,
       }],
@@ -172,7 +172,7 @@ test('boot retries a persisted retryable error with auto auth recovery', async (
   await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
 });
 
-test('boot retries a non-exhausted permission error after access is restored', async ({ page }) => {
+test('boot preserves a permission error until an explicit retry after access is restored', async ({ page }) => {
   let pageCreateAttempts = 0;
   await page.route('**/notion/request', async (route) => {
     const payload = route.request().postDataJSON();
@@ -228,12 +228,15 @@ test('boot retries a non-exhausted permission error after access is restored', a
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await expect(page.getByRole('button', { name: '手動重試', exact: true })).toBeVisible();
+  expect(pageCreateAttempts).toBe(0);
+  await page.getByRole('button', { name: '手動重試', exact: true }).click();
   await expect.poll(() => pageCreateAttempts, { timeout: 5_000 }).toBe(1);
   await expect.poll(() => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     return { queueLength: state.syncQueue?.length || 0, status: state.globalSyncStatus };
   }), { timeout: 5_000 }).toEqual({ queueLength: 0, status: 'synced' });
-  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '手動重試', exact: true })).toHaveCount(0);
 });
 
 test('boot keeps exhausted permission errors visible for manual retry', async ({ page }) => {

@@ -48,6 +48,7 @@ test('shared trip: foreign-owned receipt badge + read-only editor', async ({ pag
   await expect(dialog).toContainText('由 Natalie 記錄');
   await expect(dialog.getByRole('button', { name: '儲存' })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: '刪除' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: '加入行程' })).toHaveCount(0);
   await expect(page.getByLabel('店名 / 項目')).toBeDisabled();
   await page.screenshot({ path: 'test-results/sharing-editor-readonly.png' });
   await dialog.getByRole('button', { name: '取消' }).click();

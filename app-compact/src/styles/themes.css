@@ -1021,3 +1021,10 @@ html[data-color-scheme='dark'] .stats-switch {
     box-shadow: 0 8px 18px var(--cream-shadow), inset 3px 0 0 var(--chip-color, var(--theme-accent)) !important;
   }
 }
+
+/* Non-Japan themes omit the decorative mark; let the actual heading own the first column. */
+@media (max-width: 767px) {
+  .compact-mobile-header:not(:has(> .compact-mobile-mark)) {
+    grid-template-columns: minmax(0, 1fr) auto auto !important;
+  }
+}

@@ -130,7 +130,7 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   scan: { title: 'Receipt Studio', mobileTitle: '收據掃描工作室', subtitle: '掃描 · 辨識 · 記帳', status: '就緒 · 可掃描' },
   timeline: { title: 'Trip Route', mobileTitle: '行程時間線', subtitle: '行程時間線總覽', status: '地圖檢視' },
   history: { title: '紀錄中心', mobileTitle: '紀錄中心', subtitle: '管理所有收據與支出', status: '可同步' },
-  weather: { title: 'Weather Window', mobileTitle: '天氣預報', subtitle: '旅程天氣 · 隨時掌握', status: '已更新' },
+  weather: { title: 'Weather Station', mobileTitle: '旅程氣象站', subtitle: '地點 · 日期 · 來源', status: '天氣' },
   stats: { title: 'Spend Flight Deck', mobileTitle: '預算使用分析', subtitle: 'Spend Cockpit', status: '統計中' },
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };

@@ -67,7 +67,7 @@ Mobile Chrome URL
 - The app shell uses a warm parchment background, subtle animated light, scroll-linked paper/parallax motion, a short windmill tab transition, Liquid Glass surfaces, and reduced-motion fallbacks.
 - Visual emoji are progressively replaced in UI by code-native generated SVG icons and non-realistic illustrated avatars. The legacy `emoji` data field remains for compatibility and Notion text snapshots.
 - Scan camera/gallery/email screenshot inputs use accessible native labels connected to visually hidden file inputs. This keeps mobile Chrome picker activation inside the browser's trusted input path.
-- Weather forecast fetches detailed Open-Meteo hourly variables and renders fixed daily slots at 09:00, 12:00, 16:00, and 21:00. Japan trips may use JMA model candidates; non-Japan trips stay on Open-Meteo.
+- Weather uses one report service for the tab and Dashboard. `weather/providers.ts` separates official observations/daily bulletins/native hourly feeds from labelled model hours; `locations.ts` resolves itinerary coordinates; `currentLocation.ts` owns explicit device permission and location metadata; `http.ts` owns bounded requests/memoization; `useWeatherReport.ts` rejects stale UI responses. Native provider times are retained, with no synthetic fixed slots. The responsive screen styles live in `styles/weather.css`.
 - Settings parity additions remain broker-safe: split settlement details, equal split reset, local settings save, server-side settings push, and pending-email pull never store raw provider credentials in Compact state.
 
 ## Deployment Targets
@@ -92,3 +92,26 @@ Unlock password
 - Immutable secrets are set with `wrangler secret put`.
 - Rotatable provider credentials live in KV as AES-GCM ciphertext.
 - Rotation requires an active session and admin maintenance passphrase.
+
+## Account and persistence boundaries (0.25.0)
+
+`useAppState` resets state before the next account commits and binds mutation
+callbacks to that scope identity. Deferred hydration preserves pre-hydrate edits
+and deletions. LocalStorage/IndexedDB merge trips and receipts by their own
+freshness, retaining tombstones, settings timestamps and all pending work.
+
+`useSyncEngine` invalidates async operations on account changes/unmounts. Data
+requests use a Supabase client bound to the initiating session token, while the
+auth client remains responsible for session refresh. A successful older receipt
+write may supply cloud identity/version without overwriting a newer local edit;
+a delete during creation inherits the returned identity for its durable delete.
+
+Only recognized transient, non-exhausted work resumes after reload. Permanent
+errors, exhausted attempts and `40001` conflicts remain visible. RPC idempotency
+keys identify receipt content plus its mutation timestamp, so two distinct edits
+of the same base version cannot silently share a success. Explicit missing trip
+references fail closed; deletes retain their original trip UUID.
+
+Portable backups omit credentials, cloud identities, deletion state and sharing
+metadata; per-trip maps stay within the exported trip set. Storage keys and the
+cross-client persisted schema remain compatible.

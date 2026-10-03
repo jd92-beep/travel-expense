@@ -38,26 +38,40 @@ Weather, Settings, Stats, receipt stamping, Supabase, and Notion sync all depend
 on stable itinerary days. After touching it, run at least typecheck plus targeted
 Timeline/Weather/Settings/shared-contract checks before claiming live proof.
 
-## Weather Provider Priority
+## Weather data and current location
 
-Compact Weather should prefer official local meteorological data when an itinerary
-country/region has a safe source. Current browser-direct official providers are:
+The Weather tab and Dashboard share `src/lib/weather.ts`. Observations, daily
+bulletins and hourly forecasts retain separate sources, issue times and destination
+timezones. Missing readings remain unknown; daily temperatures and HKO significant
+rain categories never generate invented hourly numbers.
 
-- Japan: JMA official public JSON (`www.jma.go.jp` forecast + AMeDAS observations).
-- Singapore: NEA/data.gov.sg real-time readings and two-hour forecast.
-- United States: NWS `api.weather.gov` point and hourly forecast APIs.
-- Canada: MSC GeoMet City Page Weather current conditions.
+| Region | Direct official data | Hourly supplement |
+| --- | --- | --- |
+| Hong Kong | HKO current observations and nine-day bulletin | Open-Meteo, labelled model data |
+| Japan | JMA mapped forecast areas and nearest quality-checked AMeDAS station within 30 km | Open-Meteo JMA model, labelled model data |
+| Singapore | NEA/data.gov.sg station readings and current two-hour bulletin | Open-Meteo, labelled model data |
+| United States | NWS point-specific hourly forecast | Model only if official hours unavailable |
+| Canada | MSC City Page Weather observation and native hours, nearest city within 50 km | Model only if official hours unavailable |
+| Other supported destinations | Official agency link; no claim of a live official connection | Available regional government model through Open-Meteo; generic fallback labelled separately |
 
-Official data remains the displayed provider. Broker-backed WeatherAPI or
-Open-Meteo should only fill fields the official source does not provide, such as
-feels-like, UV, cloud cover, or wind gusts. Do not let a private WeatherAPI cache
-replace fresh official data.
+Taiwan CWA, Korea KMA and UK Met Office credentials, and MET Norway production
+proxy identification/caching, need a separately configured backend. This release
+adds no keys, subscriptions or backend deployment. Existing authenticated
+WeatherAPI broker fallback is retained when public hourly services fail.
 
-Official providers with required keys or strict User-Agent/cache rules must go
-through the Credential Broker or another backend proxy, not the public frontend.
-Korea KMA, Taiwan CWA, UK Met Office, DWD, Meteo-France, BOM, and MET Norway
-production use should be broker/proxy-backed because of keys, CORS, User-Agent,
-parsing, cache, or licence constraints.
+“使用目前位置” requests browser geolocation only on click, resolves country and
+timezone via BigDataCloud, and displays accuracy/permission recovery. BigDataCloud
+receives coordinates and uses anonymous GPS/IP associations as disclosed beside
+the button. Device location is not written to app storage or the weather cache.
+Weather queries require an identified timezone; an Open-Meteo timezone lookup can
+complete missing metadata.
+
+Trip forecast cache: 20-minute freshness, at most six hours of explicitly stale
+fallback, 24 entries, keyed by coordinates/country/timezone/date. Refresh bypasses
+both report and endpoint caches. Past dates and dates beyond the 16-day model
+window show actionable limits instead of another date's forecast.
+
+See [the audit and provider evidence](../docs/reviews/2026-10-03-compact-audit.md).
 
 ## Broker Vault Proof
 

@@ -44,6 +44,7 @@ function stateWithTrip(tripId = 'security_trip', lastTab = 'dashboard') {
 test('Sensitive legacy fields are stripped from localStorage, IndexedDB, and service workers', async ({ page }) => {
   test.skip(process.env.SUPABASE_REDIRECT_SMOKE === '1', 'Run this local-storage security smoke without Supabase env.');
   await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     indexedDB.deleteDatabase('travel-expense-react');
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));

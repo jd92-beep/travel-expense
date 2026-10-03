@@ -262,10 +262,10 @@ function validWeatherPreference(value: unknown): TripIntelligence['weatherPrefer
 }
 
 export function resolveTripContext(destination = '', currency = 'JPY', countryCode = ''): Omit<DestinationContext, 'pattern'> {
-  const haystack = `${destination} ${currency} ${countryCode}`.toLowerCase();
   const code = String(countryCode || '').trim().toUpperCase();
   const matched = DESTINATION_CONTEXTS.find((ctx) => ctx.countryCode === code)
-    || DESTINATION_CONTEXTS.find((ctx) => ctx.pattern.test(haystack));
+    || DESTINATION_CONTEXTS.find((ctx) => ctx.pattern.test(destination))
+    || DESTINATION_CONTEXTS.find((ctx) => ctx.pattern.test(currency));
   if (matched) {
     const { pattern: _pattern, ...context } = matched;
     return context;
@@ -282,7 +282,8 @@ export function resolveTripContext(destination = '', currency = 'JPY', countryCo
 }
 
 export function timezoneForDestination(destination = '', fallback = 'Asia/Tokyo'): string {
-  return resolveTripContext(destination).timezone || normalizeZone(fallback) || 'Asia/Tokyo';
+  const context = resolveTripContext(destination, '');
+  return context.countryCode !== 'GLOBAL' ? context.timezone : normalizeZone(fallback) || 'Asia/Tokyo';
 }
 
 export function normalizeTripIntelligence(

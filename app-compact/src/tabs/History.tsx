@@ -301,7 +301,7 @@ export function History({
       return {
         ...prev,
         receipts: prev.receipts.map((receipt) => receipt.id === updatedReceipt.id ? updatedReceipt : receipt),
-        syncQueue: nextQueue.slice(-500),
+        syncQueue: nextQueue,
         globalSyncStatus: stillHasFailedQueue ? prev.globalSyncStatus : 'queued',
         syncError: stillHasFailedQueue ? prev.syncError : '',
       };

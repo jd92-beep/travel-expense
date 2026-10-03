@@ -2476,6 +2476,7 @@ export function Settings({
           notionPageId: receipt.notionPageId,
           supabaseId: receipt.supabaseId,
           tripId: receipt.tripId,
+          tripSupabaseId: target.supabaseId,
           sourceId: receipt.sourceId || receipt.id,
           tombstoneKey: receiptSourceTombstoneKey(receipt),
           version: receipt.version,

@@ -19,13 +19,14 @@ const rehomedTripIds = new Map<string, string>();
 // Receipts whose photo has already been mirrored to Notion this session.
 const notionPhotoMirroredReceipts = new Set<string>();
 
-function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
-  return Promise.race([
+async function withTimeout<T>(promise: PromiseLike<T>, ms = 30000): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([
     Promise.resolve(promise),
     new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Request timeout after ${ms}ms`)), ms)
+      timer = setTimeout(() => reject(new Error(`Request timeout after ${ms}ms`)), ms)
     ),
-  ]);
+  ]); } finally { clearTimeout(timer); }
 }
 
 // PostgREST/Supabase silently caps unpaginated `select('*')` (default max-rows = 1000).
@@ -50,8 +51,7 @@ async function selectAllPaged<T>(
     rows.push(...chunk);
     if (chunk.length < SUPABASE_PULL_PAGE_SIZE) break;
     if (rows.length >= SUPABASE_PULL_MAX_ROWS) {
-      console.warn(`[supabase] ${label} pull hit row cap ${SUPABASE_PULL_MAX_ROWS}; remaining rows will come on the next pull`);
-      break;
+      throw new Error(`${label} pull reached ${SUPABASE_PULL_MAX_ROWS} rows; refusing an incomplete authoritative snapshot`);
     }
     from += SUPABASE_PULL_PAGE_SIZE;
   }
@@ -669,8 +669,21 @@ export function isSupabaseConfigured(): boolean {
   return /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(rawUrl) && rawKey.length > 20;
 }
 
-export function getSupabaseClient(): SupabaseClient | null {
+const sessionClients = new WeakMap<Session, SupabaseClient>();
+
+export function getSupabaseClient(session?: Session): SupabaseClient | null {
   if (!isSupabaseConfigured()) return null;
+  if (session) {
+    // Data operations keep the initiating bearer token through every await. A
+    // later login cannot turn account A's remaining requests into account B's writes.
+    let scoped = sessionClients.get(session);
+    if (!scoped) {
+      const accessToken = session.access_token;
+      scoped = createClient(rawUrl, rawKey, { accessToken: async () => accessToken });
+      sessionClients.set(session, scoped);
+    }
+    return scoped;
+  }
   client ||= createClient(rawUrl, rawKey, {
     auth: {
       persistSession: true,
@@ -880,7 +893,7 @@ export function useSupabaseAuth() {
 }
 
 export async function ensureSupabaseProfile(session: Session, state: AppState): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) return;
   const user = session.user as User;
   const displayName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Travel user';
@@ -961,7 +974,7 @@ async function upsertSupabaseAccountingPeople(
 }
 
 export async function pushSupabaseSettings(session: Session, state: AppState): Promise<void> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) return;
   await ensureSupabaseProfile(session, state);
   const { error } = await withTimeout(
@@ -1006,12 +1019,12 @@ async function existingTripUuid(supabase: SupabaseClient, userId: string, trip?:
 }
 
 export async function upsertSupabaseTrip(session: Session, state: AppState, trip: TripProfile): Promise<TripProfile> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) return trip;
   await ensureSupabaseProfile(session, state);
   const userId = session.user.id;
   let id = await findTripUuid(supabase, userId, trip);
-  const rehomedId = rehomedTripIds.get(id);
+  const rehomedId = rehomedTripIds.get(`${userId}:${id}`);
   if (rehomedId) id = rehomedId;
   const explicitSharedTrip = !!cleanUuid(trip.supabaseId) && !!trip.sharing && trip.sharing.role !== 'owner';
   const normalizedIntelligence = normalizeTripIntelligence(
@@ -1251,7 +1264,7 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
         .select('*')
         .single());
       if (!rehome.error) {
-        rehomedTripIds.set(String(activeRow.id), newId);
+        rehomedTripIds.set(`${userId}:${activeRow.id}`, newId);
         id = newId;
         data = rehome.data;
         error = null;
@@ -1305,9 +1318,10 @@ async function findReceiptUuid(supabase: SupabaseClient, tripUuid: string, userI
 }
 
 export async function upsertSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<Receipt> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) return receipt;
-  const trip = state.trips?.find((candidate) => candidate.id === receipt.tripId) || activeTrip(state);
+  const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : activeTrip(state);
+  if (!trip) throw new Error('Receipt trip is unavailable; select or restore its original trip before syncing');
   await ensureSupabaseProfile(session, state);
   const syncedTrip = cleanUuid(trip.supabaseId)
     ? trip
@@ -1349,12 +1363,17 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     map_url: receipt.mapUrl || null,
     version: Math.max(1, Number(receipt.version) || 1),
   };
+  // A server revision identifies a base version, not a user's edit. Two devices
+  // editing that version must not share an idempotency key and silently lose one edit.
+  const mutation = JSON.stringify({ updatedAt: receipt.updatedAt || receipt.createdAt || 0, row });
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(mutation));
+  const mutationKey = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   const { data, error } = await withTimeout(supabase.rpc('upsert_shared_trip_receipt', {
     p_trip_id: tripUuid,
     p_receipt: row,
     p_receipt_id: cleanUuid(receipt.supabaseId),
     p_source_id: row.source_id,
-    p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${receipt.syncRevision || receipt.updatedAt || receipt.createdAt || 0}`,
+    p_idempotency_key: `${tripUuid}:${row.source_id}:upsert:${mutationKey}`,
   }).single());
   if (error) throw error;
   const tripBySupabaseId = new Map([[tripUuid, syncedTrip]]);
@@ -1368,7 +1387,7 @@ export async function uploadReceiptPhoto(
   mime = 'image/jpeg',
   existingPath?: string,
 ): Promise<{ storagePath: string; publicUrl: string }> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) throw new Error('Supabase not configured');
   const bin = atob(base64.includes(',') ? base64.split(',')[1] : base64);
   // Guard against an oversized payload (e.g. a raw uncompressed photo when compression failed)
@@ -1460,7 +1479,7 @@ export function createSharedTripOutboxSupabaseAdapter(
   session: Session,
   state: AppState,
 ): SharedTripOutboxAdapters['supabase'] {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) throw new Error('Supabase client unavailable');
   return {
     async listBackends(tripIds) {
@@ -1498,11 +1517,19 @@ export function createSharedTripOutboxSupabaseAdapter(
   };
 }
 
-export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<void> {
-  const supabase = getSupabaseClient();
+export async function archiveSupabaseReceipt(session: Session, state: AppState, receipt: Receipt, tripSupabaseId?: string): Promise<void> {
+  const supabase = getSupabaseClient(session);
   if (!supabase) return;
-  const trip = (receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : undefined) || activeTrip(state);
-  const tripUuid = cleanUuid(trip?.supabaseId) || await existingTripUuid(supabase, session.user.id, trip);
+  const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : activeTrip(state);
+  let tripUuid = cleanUuid(tripSupabaseId) || cleanUuid(trip?.supabaseId)
+    || (trip ? await existingTripUuid(supabase, session.user.id, trip) : null);
+  // An in-flight create can finish after its trip was removed locally. Resolve only
+  // that returned row's trip; never substitute the currently selected trip.
+  if (!tripUuid && cleanUuid(receipt.supabaseId)) {
+    const { data, error } = await supabase.from('receipts').select('trip_id').eq('id', receipt.supabaseId!).maybeSingle();
+    if (error) throw error;
+    tripUuid = cleanUuid(data?.trip_id);
+  }
   if (!tripUuid) throw new Error('Supabase trip id missing for receipt delete');
   let receiptId = cleanUuid(receipt.supabaseId);
   if (!receiptId) {
@@ -1524,7 +1551,7 @@ export async function archiveSupabaseReceipt(session: Session, state: AppState, 
 }
 
 export async function pullSupabaseData(session: Session, state: AppState): Promise<SupabasePullResult> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) return { trips: [], receipts: [], tombstones: [] };
   await ensureSupabaseProfile(session, state);
   // Page every bulk table: PostgREST silently truncates unpaginated selects at max-rows (1000).
@@ -1541,8 +1568,7 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
   const [receiptRows, memberRowsRaw, inviteRowsRaw, backendRowsRaw, peopleRowsRaw, profilesRaw] = await withTimeout(Promise.all([
     tripIds.length
       ? selectAllPaged<SupabaseReceiptRow>(
-        (from, to) => supabase.from('receipts').select('*').in('trip_id', tripIds)
-          .order('record_date', { ascending: false }).order('id', { ascending: true }).range(from, to),
+        (from, to) => supabase.from('receipts').select('*').in('trip_id', tripIds).order('record_date', { ascending: false }).order('id', { ascending: true }).range(from, to),
         'receipts',
       )
       : emptyRows<SupabaseReceiptRow>(),
@@ -1711,7 +1737,7 @@ export async function createSupabaseTripInvite(
   trip: TripProfile,
   invite: TripSharingInviteDraft,
 ): Promise<{ invite: TripInviteSummary; trip: TripProfile }> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) throw new Error('Supabase is not configured');
   const syncedTrip = cleanUuid(trip.supabaseId) ? trip : await upsertSupabaseTrip(session, state, trip);
   const tripUuid = cleanUuid(syncedTrip.supabaseId);
@@ -1741,7 +1767,7 @@ export async function createSupabaseTripInvite(
 }
 
 export async function acceptSupabaseTripInvite(session: Session, token: string): Promise<{ tripId: string; role: TripMemberRole; status: string }> {
-  const supabase = getSupabaseClient();
+  const supabase = getSupabaseClient(session);
   if (!supabase) throw new Error('Supabase is not configured');
   if (!hasSupabaseSession(session)) throw new Error('Supabase session unavailable');
   const { data, error } = await supabase.rpc('accept_trip_invite', { p_token: token });
@@ -1751,31 +1777,31 @@ export async function acceptSupabaseTripInvite(session: Session, token: string):
   return { tripId: String(row?.trip_id || ''), role: cleanMemberRole(row?.role), status: String(row?.status || 'accepted') };
 }
 
-export async function revokeSupabaseTripInvite(_session: Session, inviteId: string): Promise<void> {
-  const supabase = getSupabaseClient();
+export async function revokeSupabaseTripInvite(session: Session, inviteId: string): Promise<void> {
+  const supabase = getSupabaseClient(session);
   if (!supabase) throw new Error('Supabase is not configured');
   const { error } = await supabase.rpc('revoke_trip_invite', { p_invite_id: inviteId });
   if (error) throw error;
 }
 
-export async function updateSupabaseTripMemberRole(_session: Session, trip: TripProfile, userId: string, role: Exclude<TripMemberRole, 'owner'>): Promise<void> {
-  const supabase = getSupabaseClient();
+export async function updateSupabaseTripMemberRole(session: Session, trip: TripProfile, userId: string, role: Exclude<TripMemberRole, 'owner'>): Promise<void> {
+  const supabase = getSupabaseClient(session);
   const tripUuid = cleanUuid(trip.supabaseId);
   if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
   const { error } = await supabase.rpc('update_trip_member_role', { p_trip_id: tripUuid, p_user_id: userId, p_role: role });
   if (error) throw error;
 }
 
-export async function removeSupabaseTripMember(_session: Session, trip: TripProfile, userId: string): Promise<void> {
-  const supabase = getSupabaseClient();
+export async function removeSupabaseTripMember(session: Session, trip: TripProfile, userId: string): Promise<void> {
+  const supabase = getSupabaseClient(session);
   const tripUuid = cleanUuid(trip.supabaseId);
   if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
   const { error } = await supabase.rpc('remove_trip_member', { p_trip_id: tripUuid, p_user_id: userId });
   if (error) throw error;
 }
 
-export async function leaveSupabaseTrip(_session: Session, trip: TripProfile): Promise<void> {
-  const supabase = getSupabaseClient();
+export async function leaveSupabaseTrip(session: Session, trip: TripProfile): Promise<void> {
+  const supabase = getSupabaseClient(session);
   const tripUuid = cleanUuid(trip.supabaseId);
   if (!supabase || !tripUuid) throw new Error('Supabase trip id missing');
   const { error } = await supabase.rpc('leave_trip', { p_trip_id: tripUuid });

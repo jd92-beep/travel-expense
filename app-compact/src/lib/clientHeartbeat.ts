@@ -43,7 +43,7 @@ export async function recordClientHeartbeat(session: Session | null | undefined)
     const lastSent = Number(localStorage.getItem(sentKey) || 0);
     if (Date.now() - lastSent < HEARTBEAT_INTERVAL_MS) return;
 
-    const supabase = getSupabaseClient();
+    const supabase = getSupabaseClient(session);
     if (!supabase) return;
     const sessionIdHash = await sha256(`${session.user.id}:${installationId()}`);
     const { error } = await supabase.from('app_usage_events').insert({

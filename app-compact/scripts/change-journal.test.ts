@@ -103,7 +103,10 @@ accessDeniedQueue = settleChange(accessDeniedQueue, accessDeniedQueue[0].id, {
   error: '42501 row-level security permission denied',
 }).queue;
 assert.equal(accessDeniedQueue[0].status, 'error');
-assert.equal(restoreJournal(accessDeniedQueue).queue[0].status, 'queued');
+assert.equal(restoreJournal(accessDeniedQueue).queue[0].status, 'error');
+assert.equal(restoreJournal([{ ...accessDeniedQueue[0], error: '503 service unavailable' }]).queue[0].status, 'queued');
+assert.equal(restoreJournal([{ ...accessDeniedQueue[0], status: 'syncing', attempts: 3 }]).queue[0].status, 'error');
+assert.equal(restoreJournal([{ ...accessDeniedQueue[0], status: 'queued', error: '40001 version conflict' }]).queue[0].status, 'error');
 
 let terminal = enqueueChange([], receipt('terminal', { updatedAt: 10 }));
 terminal = settleChange(terminal, terminal[0].id, {
@@ -147,11 +150,11 @@ let bounded: SyncQueueItem[] = [];
 for (let index = 0; index < 501; index += 1) {
   bounded = enqueueChange(bounded, receipt(`r${index}`));
 }
-assert.equal(bounded.length, 500);
-assert.equal(bounded[0].entityId, 'r1');
-assert.equal(restoreJournal(bounded).pendingCount, 500);
+assert.equal(bounded.length, 501);
+assert.equal(bounded[0].entityId, 'r0');
+assert.equal(restoreJournal(bounded).pendingCount, 501);
 
-// 500-cap must not evict terminal failures (40001 / exhausted) — visibility contract.
+// Both pending changes and terminal failures remain durable beyond 500 entries.
 let capped: SyncQueueItem[] = [];
 for (let index = 0; index < 499; index += 1) {
   capped = enqueueChange(capped, receipt(`live${index}`));
@@ -162,14 +165,22 @@ capped = settleChange(capped, capped.find((item) => item.entityId === 'doomed')!
   error: '40001 version conflict',
 }).queue;
 assert.equal(capped.find((item) => item.entityId === 'doomed')?.status, 'error');
-// Overflow with more active work: the terminal error stays, oldest actives go first.
+// More active work must not evict old edits or permanent failures.
 for (let index = 0; index < 20; index += 1) {
   capped = enqueueChange(capped, receipt(`overflow${index}`));
 }
-assert.equal(capped.length, 500);
+assert.equal(capped.length, 520);
 assert.ok(capped.some((item) => item.entityId === 'doomed' && item.status === 'error'),
-  'terminal failure survives the 500-cap');
-assert.ok(!capped.some((item) => item.entityId === 'live0'), 'oldest active work is trimmed first');
+  'terminal failure remains visible');
+assert.ok(capped.some((item) => item.entityId === 'live0'), 'oldest pending work is retained');
+
+const pendingDelete = enqueueChange(enqueueChange([], receipt('delete-inflight', { supabaseId: 'cloud-delete', sourceId: 'source-delete' })), {
+  type: 'delete-receipt', entityId: 'delete-inflight', op: 'delete', payload: { updatedAt: 45 },
+});
+assert.equal(pendingDelete.length, 1);
+assert.equal(pendingDelete[0].type, 'delete-receipt');
+assert.equal(pendingDelete[0].payload?.supabaseId, 'cloud-delete');
+assert.equal(pendingDelete[0].payload?.sourceId, 'source-delete');
 
 // 'syncing' settle carrying a stale expectedUpdatedAt must not stick the superseded item.
 let stuckSyncing = enqueueChange([], receipt('stuck', { updatedAt: 10 }));

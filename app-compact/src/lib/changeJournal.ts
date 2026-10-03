@@ -49,6 +49,9 @@ export function enqueueChange(
 ): SyncQueueItem[] {
   const now = Date.now();
   const previous = (queue || []).find((item) => queueKey(item) === queueKey(change));
+  const supersededReceipt = change.type === 'delete-receipt'
+    ? (queue || []).find((item) => item.type === 'receipt' && item.entityId === change.entityId)
+    : undefined;
   const wasTerminal = previous?.status === 'error' || previous?.status === 'failed';
   // A newer local edit supersedes a terminal failure (including 40001). Re-queue it so the
   // user's latest payload can retry; without a strictly newer payload.updatedAt the
@@ -60,7 +63,7 @@ export function enqueueChange(
   const updatedAt = Math.max(now, (previous?.updatedAt || 0) + 1);
   // Explicit `undefined` payload values must not wipe link metadata an earlier item captured
   // (call sites pass `supabaseId: receipt.supabaseId` even when it is undefined).
-  const mergedPayload: Record<string, unknown> = { ...(previous?.payload || {}) };
+  const mergedPayload: Record<string, unknown> = { ...(supersededReceipt?.payload || {}), ...(previous?.payload || {}) };
   for (const [key, value] of Object.entries(change.payload || {})) {
     if (value !== undefined) mergedPayload[key] = value;
   }
@@ -75,15 +78,10 @@ export function enqueueChange(
     updatedAt,
     payload: mergedPayload as SyncQueueItem['payload'],
   };
-  const merged = [...(queue || []).filter((item) => queueKey(item) !== queueKey(change)), next];
-  if (merged.length <= 500) return merged;
-  // Cap must never evict visible terminal failures (40001 / exhausted). Keep every
-  // error/failed item and trim only the oldest active work to fit.
-  const durable = merged.filter((item) => item.status === 'error' || item.status === 'failed');
-  const active = merged.filter((item) => item.status !== 'error' && item.status !== 'failed');
-  const durableKept = durable.slice(-500);
-  const activeBudget = Math.max(0, 500 - durableKept.length);
-  return [...durableKept, ...active.slice(-activeBudget)];
+  // Pending deletes/updates and visible failures are durable work, not a history cache.
+  // Dropping the oldest item at 500 silently loses changes that cannot be backfilled.
+  return [...(queue || []).filter((item) =>
+    queueKey(item) !== queueKey(change) && item !== supersededReceipt), next];
 }
 
 export function settleChange(
@@ -129,13 +127,17 @@ export function settleChange(
 
 export function restoreJournal(queue: SyncQueueItem[] | undefined): JournalResult {
   const restored = (queue || []).map((item): SyncQueueItem => {
+    if (item.status !== 'synced' && (terminalError(item.error || '') || item.attempts >= MAX_SYNC_RETRY_ATTEMPTS)) {
+      return { ...item, status: 'error', error: item.error || 'Sync retry limit reached' };
+    }
     const failed = item.status === 'error' || item.status === 'failed';
     // Only requeue retryable work that still has attempts left (and interrupted
     // in-flight items). Exhausted and terminal failures stay visible across
     // reloads — resurrecting them with a wiped error hides real breakage.
     const retryable = failed
       && !terminalError(item.error || '')
-      && item.attempts < MAX_SYNC_RETRY_ATTEMPTS;
+      && item.attempts < MAX_SYNC_RETRY_ATTEMPTS
+      && isTransientSyncErrorMessage(item.error);
     return item.status === 'syncing' || retryable
       ? {
           ...item,

@@ -773,7 +773,7 @@ export function Dashboard({
         tripCurrency: finalTrip.currencies.find((currency) => currency !== 'HKD') || 'JPY',
         customItinerary: finalTrip.itinerary,
         tripDateRange: { start: finalTrip.startDate, end: finalTrip.endDate },
-        syncQueue: [...latest.values()].slice(-500)
+        syncQueue: [...latest.values()]
       };
     });
 

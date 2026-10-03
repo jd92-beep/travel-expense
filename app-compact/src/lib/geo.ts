@@ -71,9 +71,9 @@ export const GEO_DICTIONARY: { pattern: RegExp; geo: GeoCoordinate }[] = [
 // lookup once stamped Jeju-airport coords onto 中部國際機場 and the bad coords synced to every
 // device. When we know the day's country, only that country's entries may match.
 const COUNTRY_HINTS: { pattern: RegExp; country: string }[] = [
-  { pattern: /japan|日本|jpn/i, country: 'Japan' },
-  { pattern: /korea|韓國|韩国|kr\b/i, country: 'South Korea' },
-  { pattern: /hong\s*kong|香港|hk\b/i, country: 'Hong Kong' },
+  { pattern: /^(?:japan|日本|jp|jpn)$/i, country: 'Japan' },
+  { pattern: /^(?:south korea|korea|republic of korea|韓國|韩国|kr|kor)$/i, country: 'South Korea' },
+  { pattern: /^(?:hong\s*kong|香港|hk|hkg)$/i, country: 'Hong Kong' },
 ];
 
 const TZ_COUNTRY: Record<string, string> = {
@@ -98,6 +98,12 @@ export function geoDistanceKm(a: { lat: number; lon: number }, b: { lat: number;
   const dLon = ((b.lon - a.lon) * Math.PI) / 180;
   const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+export function coordinateNumber(value: unknown, limit: number): number | undefined {
+  if ((typeof value !== 'number' && typeof value !== 'string') || String(value).trim() === '') return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) && Math.abs(number) <= limit ? number : undefined;
 }
 
 export function resolveGeoCoordinate(name: string, countryHint?: string): GeoCoordinate | null {

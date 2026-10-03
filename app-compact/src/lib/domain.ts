@@ -2,7 +2,9 @@ import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { canonicalizeItineraryRange, isNagoyaCanonicalRange } from '../domain/trip/itineraryContract';
-import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, SyncQueueItem, TripPhase, TripProfile } from './types';
+import { coordinateNumber } from './geo';
+import { enqueueChange } from './changeJournal';
+import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, PaymentId, Person, Receipt, SettlementSnapshot, TripPhase, TripProfile } from './types';
 
 export const fmt = (n: number | string | undefined) =>
   new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Number(n) || 0);
@@ -121,8 +123,8 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
           address: s.address ? String(s.address) : '',
           timezone: s.timezone ? normalizeZone(s.timezone) : '',
           mapUrl: s.mapUrl ? String(s.mapUrl) : '',
-          lat: Number.isFinite(Number(s.lat)) ? Number(s.lat) : undefined,
-          lon: Number.isFinite(Number(s.lon)) ? Number(s.lon) : undefined,
+          lat: coordinateNumber(s.lat, 90),
+          lon: coordinateNumber(s.lon, 180),
           bookingRef: s.bookingRef ? String(s.bookingRef) : '',
           sourceText: s.sourceText ? String(s.sourceText) : '',
           confidence: s.confidence === 'high' || s.confidence === 'medium' || s.confidence === 'low' ? s.confidence : undefined,
@@ -160,37 +162,17 @@ export function todayYmd(timeZone = 'Asia/Hong_Kong', atMs: number = Date.now())
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-function isoAddDays(date: string, days: number): string {
-  const parsed = new Date(`${date}T00:00:00Z`);
-  if (Number.isNaN(parsed.getTime())) return date;
-  parsed.setUTCDate(parsed.getUTCDate() + days);
-  return parsed.toISOString().slice(0, 10);
-}
-
 export function todayForReceipts(state: AppState, precomputedItinerary?: ItineraryDay[]): string {
   const trip = activeTrip(state);
-  // Optional access: a partially-hydrated state may lack tripDateRange; never crash the Home render.
-  const start = trip.startDate || state.tripDateRange?.start;
-  const end = trip.endDate || state.tripDateRange?.end;
   const zone = trip.timezones?.[0]
     || (precomputedItinerary || getItinerary(state))[0]?.timezone
     || '';
   // Keep HKT as fallback when no trip timezone.
   if (!zone) return todayYmd('Asia/Hong_Kong');
 
-  // Derive and gate on the same trip-local calendar date. The old HKT gate with a
-  // trip-local return opened a ~1h hole for UTC+9 trips: Day-1 early morning fell
-  // outside the HKT window, and end-day night returned a post-endDate date.
-  const localToday = todayYmd(zone);
-  if (isIsoDate(start) && isIsoDate(end) && end >= start) {
-    if (localToday >= start && localToday <= end) return localToday;
-    // Clamp only the timezone-drift boundary back into [start,end]; true prep/post
-    // days keep the real trip-local date so callers can label the phase and keep
-    // money on the same real day.
-    if (localToday < start && isoAddDays(localToday, 1) === start) return start;
-    if (localToday > end && isoAddDays(localToday, -1) === end) return end;
-  }
-  return localToday;
+  // A purchase before/after a trip still belongs to its real local calendar date.
+  // Clamping whole adjacent days silently changed dates in ReceiptEditor and Stats.
+  return todayYmd(zone);
 }
 
 /** Shared daily-budget divisor: itinerary days, else trip date-span, else trend days. */
@@ -306,6 +288,8 @@ export function jpyToHkd(jpy: number, state: AppState): number {
 export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   // Normalize case once: stored 'hkd'/'jpy' must not miss the identity/branch checks.
   const cur = String(r.currency || 'JPY').toUpperCase();
+  const total = Number(r.total) || 0;
+  if (!Number.isFinite(total) || total === 0) return 0;
   if (cur === 'HKD') {
     return Number(r.total) || 0;
   }
@@ -321,10 +305,10 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   const hasStoredRate = Number.isFinite(storedRate) && storedRate > 0;
   const storedHkd = typeof r.hkdAmount === 'number' && Number.isFinite(r.hkdAmount) ? r.hkdAmount : 0;
 
-  // 自我修復只信「行內數據」：hkdAmount 缺失/<=0 先補齊；有正數 hkdAmount 時只拿行內
+  // 自我修復只信「行內數據」：退款亦保留原有負數 HKD 快照，只拿行內
   // 自帶匯率 (r.exchangeRate) 校驗，偏差 >10% 先重算。唔好單憑今日市場匯率覆寫歷史
   // 金額 —— 市場波動唔等於舊數據被污染。
-  if (storedHkd > 0) {
+  if (storedHkd !== 0 && Math.sign(storedHkd) === Math.sign(total)) {
     if (!hasStoredRate) return storedHkd;
     const rate = Math.max(0.01, storedRate);
     const ratio = (Number(r.total) || 0) / storedHkd;
@@ -403,29 +387,16 @@ export function applyItineraryEdit(state: AppState, nextItinerary: ItineraryDay[
   const trips = baseTrips.some((t) => t.id === trip.id)
     ? baseTrips.map((t) => (t.id === trip.id ? nextTrip : t))
     : [...baseTrips, nextTrip];
-  const stamp = (type: SyncQueueItem['type'], entityId: string, payload: SyncQueueItem['payload']): SyncQueueItem => ({
-    id: `sync_${now}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
-      ? crypto.randomUUID()
-      : Math.random().toString(16).slice(2)}`,
-    type,
-    entityId,
-    op: 'update',
-    status: 'queued',
-    attempts: 0,
-    createdAt: now,
-    updatedAt: now,
-    payload,
+  const queue = enqueueChange(state.syncQueue, {
+    type: 'trip', entityId: trip.id, op: 'update',
+    payload: { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now },
   });
   return {
     ...state,
     trips,
     customItinerary: nextItinerary,
     settingsUpdatedAt: now,
-    syncQueue: [
-      ...(state.syncQueue || []),
-      stamp('trip', trip.id, { sourceId: nextTrip.sourceId || `trip_${trip.id}`, updatedAt: now }),
-      stamp('settings', 'app-settings', { updatedAt: now }),
-    ].slice(-500),
+    syncQueue: enqueueChange(queue, { type: 'settings', entityId: 'app-settings', op: 'update', payload: { updatedAt: now } }),
   };
 }
 
@@ -754,13 +725,21 @@ export function exportCsv(state: AppState): void {
       (r.itemsText || '').replace(/\n/g, '; '),
     ]);
   }
-  const csv = '\uFEFF' + rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`;
   a.click();
   window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+export function csvCell(value: unknown): string {
+  const text = String(value ?? '');
+  // Quoting alone does not stop a spreadsheet from executing imported formulas.
+  // Preserve signed numeric amounts while escaping untrusted store/note text.
+  const formula = /^[\s\uFEFF]*[=+@-]/.test(text) && !/^-?\d+(?:\.\d+)?$/.test(text);
+  return `"${(formula || /^[\t\r\n]/.test(text) ? `'${text}` : text).replace(/"/g, '""')}"`;
 }
 
 function isHeicLike(mime?: string): boolean {

@@ -10,7 +10,7 @@ import { clearDeviceTrust } from '../security/deviceTrust';
 import { clearTrustedDevice } from '../security/trustedDevice';
 import { clearCurrencyCache } from './currency';
 import { enqueueChange } from './changeJournal';
-import { receiptSourceTombstoneKey } from './syncMerge';
+import { isReceiptTombstoned, receiptSourceTombstoneKey } from './syncMerge';
 import { saveStoredSnapshot } from './storage';
 import type { AppState, Receipt, SyncQueueItem, TripProfile } from './types';
 
@@ -96,8 +96,9 @@ function tripContentKey(trip: unknown): string {
 // trip switch, wizard-created trip, currency toggle…), and fill only untouched fields
 // from storage. `initial` is the pre-hydrate safeInitialState snapshot.
 function preferPreHydrateEdits(prev: AppState, hydrated: AppState, initial: AppState): AppState {
-  const keep = <K extends keyof AppState>(key: K): AppState[K] =>
-    jsonKey(prev[key]) !== jsonKey(initial[key]) ? prev[key] : hydrated[key];
+  const editedFields = Object.fromEntries(Object.keys(prev)
+    .filter((key) => jsonKey(prev[key as keyof AppState]) !== jsonKey(initial[key as keyof AppState]))
+    .map((key) => [key, prev[key as keyof AppState]]));
 
   const tripsById = new Map<string, TripProfile>();
   for (const trip of hydrated.trips || []) if (trip?.id) tripsById.set(trip.id, trip);
@@ -111,24 +112,17 @@ function preferPreHydrateEdits(prev: AppState, hydrated: AppState, initial: AppS
     }
   }
 
-  return {
+  const merged = {
     ...hydrated,
-    lastTab: keep('lastTab'),
-    activeTripId: keep('activeTripId'),
-    budget: keep('budget'),
-    tripName: keep('tripName'),
-    tripCurrency: keep('tripCurrency'),
-    displayCurrency: keep('displayCurrency'),
-    customItinerary: keep('customItinerary'),
-    tripDateRange: keep('tripDateRange'),
-    persons: keep('persons'),
-    shareRatios: keep('shareRatios'),
-    peopleByTripId: keep('peopleByTripId'),
-    shareRatiosByTripId: keep('shareRatiosByTripId'),
+    ...editedFields,
     trips: [...tripsById.values()],
     receipts: mergeByKey(hydrated.receipts || [], prev.receipts || [], (r) => r.id),
     syncQueue: mergeByKey(hydrated.syncQueue || [], prev.syncQueue || [], syncQueueKey),
   };
+  const deletedTrips = new Set(merged.deletedTripIds || []);
+  merged.trips = merged.trips.filter((trip) => !deletedTrips.has(trip.id));
+  merged.receipts = merged.receipts.filter((receipt) => !deletedTrips.has(receipt.tripId || '') && !isReceiptTombstoned(merged, receipt));
+  return merged;
 }
 
 export function useAppState(syncAvailable = false, storageScope = 'local', userEmail: string | null = null) {
@@ -143,6 +137,20 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   // Snapshot of the pre-hydrate initial state so a late hydrate can tell which fields
   // the user actually changed (budget/trip switch/wizard) vs still default.
   const preHydrateInitialRef = useRef<AppState>(state);
+  const scopeIdentityRef = useRef({ scope: storageScope, userEmail });
+  if (scopeIdentityRef.current.scope !== storageScope || scopeIdentityRef.current.userEmail !== userEmail) {
+    // Reset before rendering the next account, including its async hydration baseline.
+    // React retries this render immediately, so callers never commit the old account's
+    // receipts/queue with the new session while IndexedDB is still loading.
+    const initial = safeInitialState(storageScope, userEmail);
+    scopeIdentityRef.current = { scope: storageScope, userEmail };
+    preHydrateInitialRef.current = initial;
+    mutationSeqRef.current = 0;
+    setState(initial);
+    setHydratedScope('');
+    setIndexedReadyScope('');
+  }
+  const scopeIdentity = scopeIdentityRef.current;
 
   // Coalesce the expensive IndexedDB structured-clone write (photo thumbs included) at
   // PERSIST_DEBOUNCE_MS. The localStorage mirror is written through on every commit so
@@ -167,9 +175,12 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
   }, []);
 
   const commitState = useCallback((action: SetStateAction<AppState>) => {
+    if (scopeIdentityRef.current !== scopeIdentity) return;
     mutationSeqRef.current += 1;
-    setState(action);
-  }, []);
+    setState((current) => scopeIdentityRef.current !== scopeIdentity
+      ? current
+      : typeof action === 'function' ? action(current) : action);
+  }, [scopeIdentity]);
 
   const persistGenRef = useRef(0);
   const schedulePersist = useCallback((scope: string, email: string | null, next: AppState, delayMs: number) => {
@@ -325,7 +336,9 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
           pending: true,
         },
       },
-      syncQueue: prev.autoSync && (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken())
+      // Keep deletes durable even when automatic delivery is disabled.
+      syncQueue: (syncAvailable || hasCredentialBrokerSession(prev) || hasDirectNotionToken()
+        || !!receipt.supabaseId || !!receipt.notionPageId || prev.syncQueue?.some((item) => item.entityId === receipt.id))
         ? enqueueChange(prev.syncQueue, {
             type: 'delete-receipt',
             entityId: receipt.id,
@@ -334,6 +347,7 @@ export function useAppState(syncAvailable = false, storageScope = 'local', userE
               notionPageId: receipt.notionPageId,
               supabaseId: receipt.supabaseId,
               tripId: receipt.tripId,
+              tripSupabaseId: prev.trips?.find((trip) => trip.id === receipt.tripId)?.supabaseId,
               sourceId: rawSourceId,
               tombstoneKey,
               version: receipt.version,

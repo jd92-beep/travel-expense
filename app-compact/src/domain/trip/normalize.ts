@@ -2,7 +2,7 @@ import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY, normalizeThemePreference 
 import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
 import { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
-import { countryHintFor, geoDistanceKm, resolveGeoCoordinate, resolveCategory } from '../../lib/geo';
+import { coordinateNumber, countryHintFor, geoDistanceKm, resolveGeoCoordinate, resolveCategory } from '../../lib/geo';
 
 export { normalizeTripIntelligence, normalizeZone, timezoneForDestination } from './context';
 
@@ -107,17 +107,18 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
       dayId,
       day: Number(day.day) || dayIdx + 1,
       region: day.region || day.city || `Day ${dayIdx + 1}`,
-      timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone) || 'Asia/Tokyo',
+      timezone: normalizeZone(day.timezone || day.spots?.find((spot) => spot.timezone)?.timezone)
+        || timezoneForDestination([day.country, day.city, day.region].filter(Boolean).join(' ')),
       currency: day.currency || fallbackCurrency,
       spots: (day.spots || []).map((spot, spotIdx) => {
         const name = String(spot.name || '').trim() || `Spot ${spotIdx + 1}`;
         const geo = resolveGeoCoordinate(name, countryHintFor(day));
-        let rawLat = Number(spot.lat);
-        let rawLon = Number(spot.lon);
+        let rawLat = coordinateNumber(spot.lat, 90);
+        let rawLon = coordinateNumber(spot.lon, 180);
         // Self-heal: old unscoped geo lookups baked wrong-country coords into synced itineraries
         // (中部國際機場 got Jeju airport). If the name resolves to a known place >150km from the
         // stored coords, the stored coords are stale garbage — the dictionary wins.
-        if (geo && Number.isFinite(rawLat) && Number.isFinite(rawLon)
+        if (geo && rawLat != null && rawLon != null
           && geoDistanceKm({ lat: rawLat, lon: rawLon }, geo) > 150) {
           rawLat = geo.lat;
           rawLon = geo.lon;
@@ -131,8 +132,8 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
           id: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
           spotId: spot.spotId || spot.id || stableSpotId(tripId, safeDate, spotIdx, spot),
           mapUrl: spot.mapUrl || '',
-          lat: Number.isFinite(rawLat) ? rawLat : geo?.lat,
-          lon: Number.isFinite(rawLon) ? rawLon : geo?.lon,
+          lat: rawLat ?? geo?.lat,
+          lon: rawLon ?? geo?.lon,
         };
       }),
     };

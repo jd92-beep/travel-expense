@@ -1,710 +1,193 @@
-import { CloudRain, CloudSun, LocateFixed, RefreshCw, Sun, Wind } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GlassCard, LoadingState, Reveal, StatusPill, Toast } from '../components/ui';
-import { WeatherFX } from '../components/WeatherFX';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpRight, CalendarDays, Check, CloudSun, Droplets, LocateFixed, MapPin, RefreshCw, ShieldCheck, Thermometer, Umbrella, Wind } from 'lucide-react';
 import { WeatherIcon } from '../components/WeatherIcon';
-import { Meteors } from '../components/ui/meteors';
-import { ProgressiveBlur } from '../components/ui/progressive-blur';
-import { getItinerary, todayYmd } from '../lib/domain';
 import { activeTrip } from '../domain/trip/normalize';
-import { fetchWeather, getCachedWeatherRows, groupedCoordsForDay, resolveCoordsForDay, resolveOfficialWeatherProvider, setCachedWeatherRows, slotsForDate, WEATHER_SLOTS, weatherLabel, type DayWeather, type GroupedWeatherLocation, type WeatherCoord } from '../lib/weather';
-import { hasCredentialBrokerSession } from '../lib/credentialBroker';
-import { getEffectsTier } from '../lib/performance';
+import { getItinerary } from '../lib/domain';
 import type { AppState, ItineraryDay } from '../lib/types';
-import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
+import { OFFICIAL_WEATHER_SERVICES, resolveCoordsForDay, uniqueWeatherLocations, weatherLabel, weatherLocalTime, weatherLocationKey, weatherTimezone, type WeatherCoord, type WeatherHour, type WeatherReport, type WeatherSource } from '../lib/weather';
+import { useWeatherReport } from '../lib/weather/useWeatherReport';
+import { requestCurrentWeatherLocation, type CurrentWeatherLocation } from '../lib/weather/currentLocation';
+import '../styles/weather.css';
 
+const value = (number?: number, suffix = '') => number == null || !Number.isFinite(number) ? '—' : `${Math.round(number)}${suffix}`;
 
-const WEEKDAY_ZH = ['日', '一', '二', '三', '四', '五', '六'] as const;
-function formatWeatherDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  if (!y || !m || !d) return dateStr;
-  const dt = new Date(y, m - 1, d);
-  const wd = WEEKDAY_ZH[dt.getDay()];
-  return `${m}月${d}日 (${wd})`;
+function dayLabel(date: string): string {
+  const parsed = new Date(`${date}T12:00:00Z`);
+  return Number.isFinite(parsed.getTime()) ? new Intl.DateTimeFormat('zh-HK', { month: 'short', day: 'numeric', weekday: 'short', timeZone: 'UTC' }).format(parsed) : date;
+}
+
+function timestamp(at: string | number | undefined, zone: string): string {
+  return at ? weatherLocalTime(at, zone).replace('T', ' ') || '時間未提供' : '時間未提供';
+}
+
+function SourceLink({ source }: { source: WeatherSource }) {
+  return <a className="wx-source-link" href={source.url} target="_blank" rel="noopener noreferrer">
+    {source.official ? <ShieldCheck size={14} aria-hidden="true" /> : <CloudSun size={14} aria-hidden="true" />}
+    {source.name}<ArrowUpRight size={13} aria-hidden="true" /><span className="sr-only">（新分頁）</span>
+  </a>;
+}
+
+function WeatherTrend({ hours }: { hours: WeatherHour[] }) {
+  const temperatures = hours.flatMap((hour) => hour.temp == null ? [] : [hour.temp]);
+  if (temperatures.length < 2) return null;
+  const min = Math.floor(Math.min(...temperatures) - 2);
+  const max = Math.ceil(Math.max(...temperatures) + 2);
+  const points = hours.map((hour, i) => ({ x: 24 + i * (672 / Math.max(1, hours.length - 1)), y: hour.temp == null ? null : 112 - ((hour.temp - min) / (max - min)) * 80 }));
+  const segments: string[] = [];
+  points.forEach((point, i) => {
+    if (point.y == null) return;
+    segments.push(`${i === 0 || points[i - 1].y == null ? 'M' : 'L'}${point.x},${point.y}`);
+  });
+  return <svg className="wx-trend" viewBox="0 0 720 140" role="img" aria-label={`所選日期逐時溫度走勢，${value(Math.min(...temperatures))} 至 ${value(Math.max(...temperatures))} 攝氏度；詳細數值見下方時段。`}>
+    {[32, 72, 112].map((y) => <line key={y} x1="24" x2="696" y1={y} y2={y} className="wx-trend-grid" />)}
+    <path d={segments.join(' ')} fill="none" className="wx-trend-line" />
+    {points.filter((_, i) => i % Math.max(1, Math.floor(hours.length / 6)) === 0).map((point) => point.y == null ? null : <circle key={point.x} cx={point.x} cy={point.y} r="3" className="wx-trend-dot" />)}
+  </svg>;
+}
+
+function Forecast({ report, selectedHour, onHour }: { report: WeatherReport; selectedHour: string; onHour: (hour: string) => void }) {
+  const hours = report.hourly;
+  const selected = hours.find((hour) => hour.time === selectedHour) || hours[0];
+  return <section className="wx-forecast" aria-labelledby="wx-forecast-heading">
+    <div className="wx-section-heading"><div><span className="wx-eyebrow">THE DAY AHEAD</span><h2 id="wx-forecast-heading">逐時看天氣</h2></div><span className="wx-unit">°C · km/h</span></div>
+    {report.hourlySource && <div className="wx-forecast-credit"><SourceLink source={report.hourlySource} /><span>預報時間為目的地當地時間</span></div>}
+    {!hours.length ? <p className="wx-empty-copy">此來源未提供所選日期的逐時預報。可查看官方每日摘要，或稍後重新整理。</p> : <>
+      <WeatherTrend hours={hours} />
+      <div className="wx-hours" role="group" aria-label="選擇預報時段" tabIndex={0}>
+        {hours.map((hour) => <button type="button" key={hour.time} aria-pressed={selected?.time === hour.time} onClick={() => onHour(hour.time)} className="wx-hour" aria-label={`${hour.time.slice(11)} 預報 ${value(hour.temp, ' 度')} ${weatherLabel(hour.code)}`}>
+          <time dateTime={hour.time}>{hour.time.slice(11)}</time><WeatherIcon code={hour.code} size={28} hour={Number(hour.time.slice(11, 13))} />
+          <strong>{value(hour.temp, '°')}</strong><span><Droplets size={11} aria-hidden="true" />{value(hour.rain, '%')}</span>
+        </button>)}
+      </div>
+      {selected && <div className="wx-hour-detail" aria-live="polite">
+        <div className="wx-detail-title"><time dateTime={selected.time}>{selected.time.slice(11)}</time><span>{weatherLabel(selected.code)}</span></div>
+        <dl className="wx-metrics">
+          <div><dt><Thermometer size={15} aria-hidden="true" />體感</dt><dd>{value(selected.feelsLike, '°')}</dd></div>
+          <div><dt><Umbrella size={15} aria-hidden="true" />降雨機率</dt><dd>{value(selected.rain, '%')}</dd></div>
+          <div><dt><Wind size={15} aria-hidden="true" />風速</dt><dd>{value(selected.windSpeed)}<small> km/h</small></dd></div>
+          <div><dt><Droplets size={15} aria-hidden="true" />濕度</dt><dd>{value(selected.humidity, '%')}</dd></div>
+        </dl>
+        <div className="wx-extra-readings"><span>雨量 {value(selected.precipMm, ' mm')}</span><span>陣風 {value(selected.windGust, ' km/h')}</span><span>紫外線 {value(selected.uvIndex)}</span><span>雲量 {value(selected.cloudCover, '%')}</span></div>
+      </div>}
+    </>}
+  </section>;
 }
 
 export function Weather({ state }: { state: AppState }) {
-  // Seed from the module cache so tab remount does not flash "未有天氣資料" for a frame
-  // before the load effect runs. busy starts true until the first load settles.
-  const [rows, setRows] = useState<Record<string, DayWeather[]>>(() => getCachedWeatherRows() || {});
-  const [busy, setBusy] = useState(true);
-  const [stale, setStale] = useState(false);
-  const [error, setError] = useState('');
   const trip = activeTrip(state);
-  // Same memo keys as Timeline — getItinerary normalizes on every call; depending on the
-  // whole state object recreated displayItinerary/groupedCoords on unrelated updates.
-  const itinerary = useMemo(
-    () => getItinerary(state),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.trips, state.customItinerary, state.activeTripId, state.tripDateRange, state.tripName, state.tripCurrency],
-  );
-  const today = todayYmd(normalizedTimezone(trip.timezones?.[0]) || 'Asia/Hong_Kong');
-  const hasEnded = trip.endDate ? today > trip.endDate : false;
-  // Any PAST date (mid-trip or after the trip) shows the CURRENT weather at that location;
-  // today/future show the forecast for that date.
-  const forecastDateFor = (dayDate: string) => (dayDate && dayDate < today ? today : dayDate);
-  const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
-
-  const displayItinerary = useMemo<ItineraryDay[]>(() =>
-    itinerary.map((day, index) => ({
-      ...day,
-      day: day.day || index + 1,
-      timezone: day.timezone || trip.timezones?.[0] || 'Asia/Hong_Kong',
-    })),
-  [itinerary, trip]);
-
-  const groupedCoordsByDay = useMemo(() => {
-    const map = new Map<string, GroupedWeatherLocation[]>();
-    for (const day of displayItinerary) {
-      map.set(day.date, groupedCoordsForDay(day));
-    }
-    return map;
-  }, [displayItinerary]);
-
-  const itineraryKey = displayItinerary.map((day) => {
-    const groups = groupedCoordsByDay.get(day.date) || [];
-    const coords = groups.map((g) => `${g.label}:${g.lat}:${g.lon}`).join(',');
-    return `${day.date}:${day.region}:${day.country || ''}:${forecastDateFor(day.date)}:${coords}`;
-  }).join('|');
-  // Late broker session must re-trigger the effect so credentialed weather paths can refetch.
-  const sessionReady = hasCredentialBrokerSession(state);
-  const targetSummary = useMemo(() => weatherTargetSummary(displayItinerary, hasEnded, today), [displayItinerary, hasEnded, today]);
-  const hasMissingTarget = useMemo(
-    () => displayItinerary.some((day) => {
-      const dayRows = rows[day.date];
-      // Post-load rows reflect geocode results — a resolved city-geocode row clears the warning.
-      if (dayRows && dayRows.length) return dayRows.some((row) => row.source === '缺少座標' && !row.slots?.length);
-      return (groupedCoordsByDay.get(day.date) || []).some((g) => g.missing);
-    }),
-    [displayItinerary, groupedCoordsByDay, rows],
-  );
-  const activeWeatherDay = useMemo(() => {
-    if (!displayItinerary.length) return undefined;
-    const exact = displayItinerary.find((day) => day.date === today);
-    if (exact) return exact;
-    const future = displayItinerary.find((day) => day.date > today);
-    if (future) return future;
-    return hasEnded ? displayItinerary[displayItinerary.length - 1] : displayItinerary[0];
-  }, [displayItinerary, hasEnded, today]);
-  const leadDay = activeWeatherDay || displayItinerary[0];
-  const leadRows = leadDay ? rows[leadDay.date] || [] : [];
-  const leadSource = leadRows[0];
-  const leadForecastDate = leadDay ? forecastDateFor(leadDay.date) : today;
-  const leadLiveHour = leadDay ? liveSlotHour(leadForecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong') : null;
-  const leadSourceSlots = leadSource?.slots || [];
-  const leadAllSlots = leadRows.flatMap((row) => row.slots || []);
-  const leadSlot = (leadLiveHour != null ? leadSourceSlots.find((slot) => slot.hour === leadLiveHour && slot.temp != null) : undefined)
-    || leadSourceSlots.find((slot) => slot.temp != null)
-    || leadAllSlots.find((slot) => slot.temp != null)
-    || leadAllSlots[0];
-  // Real daily high/low from the day's hourly slots — no fabricated fallbacks.
-  const leadTemps = (leadSource?.slots || leadAllSlots).map((slot) => slot.temp).filter((t): t is number => t != null);
-  const leadHigh = leadTemps.length ? Math.round(Math.max(...leadTemps)) : null;
-  const leadLow = leadTemps.length ? Math.round(Math.min(...leadTemps)) : null;
-  const heroHasData = leadSlot?.temp != null;
-  const previewHourly = leadRows.flatMap((row) => row.slots || []).slice(0, 5);
-
-  const loadRef = useRef<(options?: { force?: boolean }) => Promise<void>>(async () => {});
-
+  const itinerary = useMemo(() => getItinerary(state), [state.trips, state.activeTripId, state.customItinerary, state.tripDateRange, state.tripName, state.tripCurrency]);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setClock(Date.now()), 60_000); return () => window.clearInterval(timer); }, []);
+  const tripZone = weatherTimezone(trip.timezones?.[0] || itinerary[0]?.timezone);
+  const today = weatherLocalTime(clock, tripZone).slice(0, 10);
+  const [selection, setSelection] = useState({ tripId: trip.id, date: 'today', location: '' });
+  const [deviceLocation, setDeviceLocation] = useState<(CurrentWeatherLocation & { tripId: string })>();
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const locationRequest = useRef(0);
   useEffect(() => {
-    const controller = new AbortController();
-    async function load(options?: { force?: boolean }) {
-      const force = Boolean(options?.force);
-      const cached = getCachedWeatherRows();
-      if (cached && cachedRowsMatchItinerary(cached, displayItinerary, groupedCoordsByDay)) {
-        setRows(cached);
-        setStale(true);
-      } else {
-        setBusy(true);
-      }
-      setError('');
-      try {
-        const dayPromises = displayItinerary.map(async (day) => {
-          const forecastDate = forecastDateFor(day.date);
-          let groups = groupedCoordsByDay.get(day.date) || [];
-          // Dictionary miss (e.g. a trip outside Japan/HK/Korea): geocode the city/region names
-          // instead of dead-ending on 缺少座標.
-          if (groups.length && groups.every((g) => g.missing)) {
-            try {
-              const resolved = await resolveCoordsForDay(day, 2);
-              const found = resolved.filter((c) => !c.missing && Number.isFinite(c.lat) && Number.isFinite(c.lon));
-              if (found.length) {
-                groups = found.map((c) => ({ label: c.label, lat: c.lat, lon: c.lon, spotNames: [], timezone: c.timezone || day.timezone, origin: c.origin, query: c.query }));
-              }
-            } catch {
-              // Geocoding unavailable — keep the missing groups and show the notice.
-            }
-          }
-          const coordPromises = groups.map(async (group) => {
-            try {
-              if (group.missing) {
-                return { coord: group as WeatherCoord, source: '缺少座標', slots: [] };
-              }
-              const coord: WeatherCoord = { label: group.label, lat: group.lat, lon: group.lon, timezone: group.timezone, origin: group.origin || 'known-region', query: group.query };
-              const officialProvider = resolveOfficialWeatherProvider(coord, { country: day.country, region: day.region, city: day.city });
-              const result = await fetchWeather(coord, normalizedTimezone(coord.timezone || day.timezone) || 'auto', officialProvider, state, forecastDate, { force });
-              if (controller.signal.aborted) return null;
-              return {
-                coord,
-                source: result.source,
-                provider: result.provider,
-                cached: result.cached,
-                fetchedAt: result.fetchedAt,
-                fallbackReason: result.fallbackReason,
-                slots: slotsForDate(result.data as Parameters<typeof slotsForDate>[0], forecastDate),
-              };
-            } catch (innerErr) {
-              if (controller.signal.aborted) return null;
-              console.warn(`[Weather] Load failed for ${group.label}:`, innerErr);
-              // Keep the previous in-memory row on failure so offline force-refresh does not wipe cache.
-              return null;
-            }
-          });
-          const results = (await Promise.all(coordPromises)).filter((r): r is NonNullable<typeof r> => r != null);
-          if (!results.length) return { date: day.date, rows: null as DayWeather[] | null };
-          return { date: day.date, rows: results };
-        });
-        const dayResults = await Promise.all(dayPromises);
-        if (controller.signal.aborted) return;
-        const next: Record<string, DayWeather[]> = {};
-        const priorCache = getCachedWeatherRows() || {};
-        for (const { date, rows: dayRows } of dayResults) {
-          if (dayRows) next[date] = dayRows;
-          else if (priorCache[date]) next[date] = priorCache[date];
-        }
-        // Only overwrite when we actually got usable rows; otherwise keep prior cache.
-        if (Object.keys(next).length) {
-          setRows(next);
-          setCachedWeatherRows(next);
-        } else {
-          setStale(true);
-        }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (!controller.signal.aborted) {
-          setBusy(false);
-          setStale(false);
-        }
-      }
-    }
-    loadRef.current = load;
-    load();
-    return () => { controller.abort(); };
-  }, [itineraryKey, sessionReady]);
-
-  const scrollCorrectionHandlesRef = useRef<number[]>([]);
-  // Distinguish user scrolls from programmatic auto-jump scrolls so we never fight the user.
-  const programmaticScrollRef = useRef(false);
-  const userScrollAtRef = useRef(0);
-  const markProgrammaticScroll = useCallback(() => {
-    programmaticScrollRef.current = true;
-    window.setTimeout(() => { programmaticScrollRef.current = false; }, 800);
-  }, []);
-
+    locationRequest.current += 1;
+    setLocating(false);
+    setLocationError('');
+    return () => { locationRequest.current += 1; };
+  }, [trip.id]);
+  const dateChoice = selection.tripId === trip.id ? selection.date : 'today';
+  const selectedDay = itinerary.find((day) => day.date === dateChoice);
+  const locationDays = dateChoice === 'today' ? itinerary.filter((day) => day.date === today) : selectedDay ? [selectedDay] : [];
+  const days = locationDays.length ? locationDays : dateChoice === 'today' ? itinerary : [];
+  const daysKey = JSON.stringify(days);
+  const known = useMemo(() => uniqueWeatherLocations(days), [daysKey]);
+  const [resolved, setResolved] = useState<{ key: string; coords: WeatherCoord[]; error?: string }>({ key: '', coords: [] });
   useEffect(() => {
-    const onUserScroll = () => {
-      if (programmaticScrollRef.current) return;
-      userScrollAtRef.current = Date.now();
-      // User took over — drop pending height-correction snaps that would yank the page back.
-      scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
-      scrollCorrectionHandlesRef.current = [];
-    };
-    window.addEventListener('scroll', onUserScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onUserScroll);
-  }, []);
-
-  // Jump to the active day's card (live-hour slot if rendered). The Weather tab changes height
-  // while provider rows and reveal animations settle, so keep correcting briefly after entry.
-  // Used by both the auto-jump effect and the manual "今日" button.
-  const jumpToActiveDay = useCallback((behavior: ScrollBehavior = 'smooth', options?: { force?: boolean }) => {
-    if (!leadDay) return;
-    // Auto path only: if the user just scrolled, stay put. Manual button always jumps.
-    if (!options?.force && Date.now() - userScrollAtRef.current < 2500) return;
-    scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
-    scrollCorrectionHandlesRef.current = [];
-    const forecastDate = forecastDateFor(leadDay.date);
-    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-    const findTarget = (): Element | null => {
-      const daySelector = `[data-weather-day="${leadDay.date}"]`;
-      const liveMarker = document.querySelector(`${daySelector} [data-weather-live="true"]`);
-      if (liveMarker) return liveMarker;
-      if (liveHour != null) {
-        const liveSlot = document.querySelector(`${daySelector} [data-weather-hour="${liveHour}"]`);
-        if (liveSlot) return liveSlot;
-      }
-      return document.querySelector(daySelector);
-    };
-    const doScroll = (b: ScrollBehavior) => {
-      const el = findTarget();
-      if (!el) return;
-      markProgrammaticScroll();
-      const rect = el.getBoundingClientRect();
-      const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.36);
-      // window.scrollTo only — a simultaneous scrollIntoView fights this smooth scroll.
-      window.scrollTo({ top: targetTop, behavior: b });
-    };
-    doScroll(behavior);
-    // One correction pass only: the old 120/420/900ms triple snap re-scrolled while the user
-    // was already touching the page, which read as jank on entry.
-    const correctionDelays = [250];
-    scrollCorrectionHandlesRef.current = correctionDelays.map((delay) => window.setTimeout(() => {
-      if (Date.now() - userScrollAtRef.current < 400) return;
-      const el = findTarget();
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      const center = rect.top + rect.height / 2;
-      if (center < 112 || center > window.innerHeight - 112) doScroll('auto');
-    }, delay));
-    // "You are here" double-flash on the landed slot, after the scroll settles.
-    scrollCorrectionHandlesRef.current.push(window.setTimeout(() => {
-      const el = findTarget();
-      if (!(el instanceof HTMLElement)) return;
-      el.classList.remove('weather-arrive-flash');
-      void el.offsetWidth;
-      el.classList.add('weather-arrive-flash');
-      window.setTimeout(() => el.classList.remove('weather-arrive-flash'), 2100);
-    }, 560));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [leadDay, today, trip, markProgrammaticScroll]);
-
-  useEffect(() => () => {
-    scrollCorrectionHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
-    scrollCorrectionHandlesRef.current = [];
-  }, []);
-
-  const autoJumpKeyRef = useRef('');
-  useEffect(() => {
-    if (!leadDay || busy) return;
-    const forecastDate = forecastDateFor(leadDay.date);
-    const liveHour = liveSlotHour(forecastDate, normalizedTimezone(leadDay.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong');
-    const targetReady = typeof document === 'undefined'
-      ? false
-      : Boolean(document.querySelector(`[data-weather-day="${leadDay.date}"] ${liveHour != null ? `[data-weather-hour="${liveHour}"]` : '.weather-location'}`));
-    const key = `${leadDay.date}:${forecastDate}:${liveHour ?? 'day'}:${Object.keys(rows).length > 0}:${targetReady}`;
-    if (autoJumpKeyRef.current === key) return;
-    autoJumpKeyRef.current = key;
-    const t = window.setTimeout(() => jumpToActiveDay('smooth'), targetReady ? 180 : 360);
-    return () => window.clearTimeout(t);
-  }, [busy, leadDay, rows, today, jumpToActiveDay]);
-
-  // Manual "今日" button must always land, even if the user just scrolled.
-  const jumpToActiveDayForced = useCallback(() => {
-    jumpToActiveDay('smooth', { force: true });
-  }, [jumpToActiveDay]);
-
-  return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative weather-screen" style={travelAtlasStyle}>
-      <div className="japanese-sun-decor" />
-      <div className="japanese-sakura-decor" />
-      <div className="stack w-full relative z-10">
-        <GlassCard className="weather-command weather-command-fancy">
-        {getEffectsTier() === 'lite' ? null : (
-          <Meteors number={getEffectsTier() === 'full' ? 9 : 4} minDuration={4} maxDuration={9} className="weather-meteor" />
-        )}
-        {getEffectsTier() === 'full' && (
-          <ProgressiveBlur className="weather-command-blur" height="34%" position="bottom" blurLevels={[0.5, 1, 2, 4, 8, 12]} />
-        )}
-        <div className="weather-command-row relative z-10">
-          <h2>天氣預報</h2>
-          <div className="weather-command-actions">
-            <span className="weather-target-pill">
-              <StatusPill tone={hasMissingTarget ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{targetSummary}</StatusPill>
-            </span>
-            <button className="secondary weather-refresh-icon" type="button" aria-label="跳去今日天氣" title="跳去今日天氣" onClick={jumpToActiveDayForced}>
-              <LocateFixed size={17} />
-            </button>
-            <button className="secondary weather-refresh-icon" type="button" aria-label="刷新天氣" title="刷新天氣" disabled={busy} onClick={() => loadRef.current({ force: true })}>
-              <RefreshCw size={17} className={busy ? 'spin' : ''} />
-            </button>
-          </div>
-        </div>
-        {busy && !stale && <LoadingState label="更新天氣中" />}
-        {stale && !busy && <span className="weather-stale-hint" style={{ fontSize: '0.72rem', opacity: 0.6 }}>背景更新中</span>}
-        {error && <Toast tone="warning">天氣拉取失敗：{error}</Toast>}
-      </GlassCard>
-      <GlassCard className="preview-weather-current-card">
-        {heroHasData ? (
-          <>
-            <WeatherFX code={leadSlot?.code} rain={leadSlot?.rain} precipMm={leadSlot?.precipMm} />
-            <div className="preview-weather-source-strip" aria-label="Weather source status" style={{ position: 'relative', zIndex: 2 }}>
-              <span>{weatherProviderLabel(leadSource)}</span>
-              <span>{weatherFreshnessLabel(leadSource)}</span>
-              <span>{weatherTargetOriginLabel(leadSource?.coord)}</span>
-              {leadSource?.fallbackReason && <span className="weather-fallback-chip" title={weatherFallbackTitle(leadSource.fallbackReason)}>{weatherFallbackLabel(leadSource.fallbackReason)}</span>}
-            </div>
-            <div className="preview-weather-current-layout relative z-40">
-              <div className="preview-weather-hero-icon">
-                <WeatherIcon code={leadSlot?.code} size={92} hour={leadSlot?.hour} />
-              </div>
-              <div className="preview-weather-temp">
-                <strong>{Math.round(leadSlot!.temp!)}°C</strong>
-                <span>{weatherLabel(leadSlot?.code)}</span>
-                <em className="preview-weather-place">{leadSource?.coord.label || leadDay?.region || '目前地點'}</em>
-                <small>實際氣溫 {Math.round(leadSlot!.temp!)}°C · 體感 {leadSlot?.feelsLike != null ? `${Math.round(leadSlot.feelsLike)}°C` : '—'}</small>
-              </div>
-              <div className="preview-weather-facts">
-                <span>最高 <b className="hot">{leadHigh != null ? `${leadHigh}°C` : '—'}</b></span>
-                <span>最低 <b>{leadLow != null ? `${leadLow}°C` : '—'}</b></span>
-                <span>風速 <b>{leadSlot?.windSpeed != null ? formatNumber(leadSlot.windSpeed, 'km/h') : '—'}</b></span>
-              </div>
-              <div className="preview-weather-hourly-rail" aria-label="今日逐時天氣">
-                {previewHourly.map((slot, index) => (
-                  <span className="preview-weather-hourly-chip" key={`preview-hour-${slot.hour}-${index}`}>
-                    <b>{formatHour(slot.hour)}</b>
-                    <WeatherIcon code={slot.code} size={18} hour={slot.hour} />
-                    <em>{slot.temp == null ? '—' : `${Math.round(slot.temp)}°C`}</em>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : busy ? (
-          <div className="preview-weather-skeleton" aria-label="天氣載入中">
-            <span className="skeleton-block skeleton-hero" />
-            <span className="skeleton-block skeleton-line" />
-            <span className="skeleton-block skeleton-line short" />
-          </div>
-        ) : (
-          <div className="preview-weather-empty">
-            <CloudSun size={30} />
-            <strong>未有天氣資料</strong>
-            <small>{displayItinerary.length ? '稍後撳右上角刷新再試。' : '貼好行程之後，呢度會顯示目的地天氣。'}</small>
-          </div>
-        )}
-      </GlassCard>
-      {displayItinerary.map((day) => {
-        const dayRows = rows[day.date] || [];
-        const dayFailed = dayRows.length === 0 && Boolean(error) && !busy;
-        const missingAll = dayRows.length > 0 && dayRows.every((weather) => !weather.slots?.length && weather.source !== '拉取失敗');
-        const fetchFailed = dayRows.length > 0 && dayRows.some((weather) => !weather.slots?.length && weather.source === '拉取失敗');
-        const dayCode = dayRows.flatMap((weather) => weather.slots || []).find((slot) => slot.code != null)?.code;
-        // Live-hour marker is a per-day value — computing it per location row rebuilt an
-        // Intl.DateTimeFormat for every location on every render.
-        const dayTimezone = normalizedTimezone(day.timezone) || trip.timezones?.[0] || 'Asia/Hong_Kong';
-        const dayLiveHour = liveSlotHour(forecastDateFor(day.date), dayTimezone);
-        return (
-          <Reveal key={day.date} className="weather-day-reveal" delay={Math.min(0.14, day.day * 0.02)} lowCost>
-            <div className="weather-day-anchor" data-weather-day={day.date}>
-              <GlassCard className="weather-day">
-                <WeatherFX code={dayCode} tintOnly />
-                <div className="section-head">
-                  <div>
-                    <p className="weather-day-date">{formatWeatherDate(day.date)}</p>
-                    <p className="eyebrow">{day.date < today ? `Current · Day ${day.day || 1}` : `Day ${day.day}`} · {dayRows.map(weatherSourceLabel).filter(Boolean).join(' / ') || (dayFailed ? '拉取失敗' : '載入中')}</p>
-                    <h2>{day.region}</h2>
-                  </div>
-                  <StatusPill tone={missingAll || fetchFailed || dayFailed ? 'warning' : 'info'} icon={<CloudSun size={14} />}>{(groupedCoordsByDay.get(day.date) || []).map((g) => g.label).join(' / ') || day.region}</StatusPill>
-                </div>
-                {missingAll && <p className="notice">未有座標。可喺 Settings 貼新行程，或喺 trip JSON 補 lat/lon。</p>}
-                {fetchFailed && <p className="notice">天氣拉取失敗，請稍後再試，可以撳右上角刷新重試。</p>}
-                {dayFailed && <p className="notice">天氣拉取失敗，請稍後再試，可以撳右上角刷新重試。</p>}
-                {dayRows.map((weather) => {
-                  const emptyForecast = weather.slots?.length && weather.slots.every((slot) => slot.temp == null && slot.rain == null);
-                  const liveHour = dayLiveHour;
-                  return (
-                    <div className="weather-location" key={`${day.date}-${weather.coord.label}`}>
-                      <h3>{weather.coord.label}</h3>
-                      {Boolean(weather.slots?.length) && (
-                        <div className="weather-location-meta" aria-label={`Weather metadata for ${weather.coord.label}`}>
-                          <span>{weatherProviderLabel(weather)}</span>
-                          <span>{weatherFreshnessLabel(weather)}</span>
-                          <span>{weatherTargetOriginLabel(weather.coord)}</span>
-                          {weather.fallbackReason && <span className="weather-fallback-chip" title={weatherFallbackTitle(weather.fallbackReason)}>{weatherFallbackLabel(weather.fallbackReason)}</span>}
-                        </div>
-                      )}
-                      {emptyForecast && <p className="notice">旅程日期超出目前預報範圍，會顯示佔位資料；稍後刷新會自動更新。</p>}
-                      <div className="weather-grid weather-grid-detailed">
-                        {(weather.slots || []).map((slot) => {
-                          const live = liveHour === slot.hour;
-                          const hasRain = slot.rain != null || slot.precipMm != null;
-                          const hasWind = slot.windSpeed != null || slot.windGust != null;
-                          const hasSunUv = slot.uvIndex != null || slot.cloudCover != null;
-                          const feels = slot.feelsLike ?? slot.temp;
-
-                          return (
-                            <div
-                              className={`weather-slot weather-slot-detailed ${live ? 'is-live' : ''}`}
-                              key={slot.hour}
-                              data-weather-hour={slot.hour}
-                              data-weather-live={live ? 'true' : undefined}
-                              style={{ '--weather-accent': weatherAccent(slot) } as CSSProperties}
-                            >
-                          <div className="weather-slot-header">
-                            <div className="weather-time">
-                              <span className="time-text">{formatHour(slot.hour)}</span>
-                              {live && <span className="live-badge live-pulse-badge"><span className="pulse-dot"></span>LIVE</span>}
-                            </div>
-                            <div className="weather-type-badge">
-                              <WeatherIcon code={slot.code} size={15} hour={slot.hour} />
-                              <span className="type-text">{weatherLabel(slot.code)}</span>
-                            </div>
-                          </div>
-
-                          <div className="weather-temp-container">
-                            <div className="weather-temp-block">
-                              <span className="temp-label">實溫 (Actual)</span>
-                              <span className={`temp-num ${slot.temp == null ? 'temp-missing' : ''}`}>
-                                {slot.temp == null ? '—' : `${Math.round(slot.temp)}`}
-                                {slot.temp != null && <span className="temp-unit">°C</span>}
-                              </span>
-                            </div>
-                            <div className="weather-temp-block" aria-label={feels == null ? '體感未有資料' : `體感 ${Math.round(feels)}°C`}>
-                              <span className="temp-label">體感 (Feels)</span>
-                              <span className={`temp-num feels-num ${feels == null ? 'temp-missing' : ''}`}>
-                                {feels == null ? '—' : `${Math.round(feels)}`}
-                                {feels != null && <span className="temp-unit">°C</span>}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="weather-metrics">
-                            {hasSunUv && (
-                              <span className="metric-tag sun-tag">
-                                <Sun size={13} className="metric-icon" />
-                                <span className="metric-val">
-                                  {slot.uvIndex != null ? `UV ${formatNumber(slot.uvIndex, '')}` : ''}
-                                  {slot.uvIndex != null && slot.cloudCover != null ? ' · ' : ''}
-                                  {slot.cloudCover != null ? `雲${formatNumber(slot.cloudCover, '%')}` : ''}
-                                </span>
-                              </span>
-                            )}
-                            {hasRain && (
-                              <span className="metric-tag rain-tag">
-                                <CloudRain size={13} className="metric-icon" />
-                                <span className="metric-val">
-                                  {slot.rain != null ? `${slot.rain}%` : ''}
-                                  {slot.rain != null && slot.precipMm != null ? ' · ' : ''}
-                                  {slot.precipMm != null ? formatNumber(slot.precipMm, 'mm') : ''}
-                                </span>
-                              </span>
-                            )}
-                            {hasWind && (
-                              <span className="metric-tag wind-tag">
-                                <Wind size={13} className="metric-icon" />
-                                <span className="metric-val">
-                                  {slot.windSpeed != null ? formatNumber(slot.windSpeed, 'km/h') : ''}
-                                  {slot.windSpeed != null && slot.windGust != null ? ' (陣 ' : ''}
-                                  {slot.windGust != null ? formatNumber(slot.windGust, 'km/h') : ''}
-                                  {slot.windSpeed != null && slot.windGust != null ? ')' : ''}
-                                </span>
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="weather-hint-container">
-                            <p className="weather-hint">{weatherHint(slot)}</p>
-                          </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </GlassCard>
-            </div>
-          </Reveal>
-        );
-      })}
-      </div>
-    </section>
-  );
-}
-
-function formatNumber(value?: number, suffix = ''): string {
-  if (value == null || !Number.isFinite(value)) return '—';
-  const n = suffix === 'mm' ? Number(value.toFixed(1)) : Math.round(value);
-  return `${n}${suffix}`;
-}
-
-function formatHour(hour: number): string {
-  return `${String(hour).padStart(2, '0')}:00`;
-}
-
-function weatherTargetSummary(days: ItineraryDay[], hasEnded: boolean, today: string): string {
-  const todayDay = days.find((day) => day.date === today);
-  const sourceDays = hasEnded ? days : todayDay ? [todayDay] : days;
-  const labels = Array.from(new Set(sourceDays.flatMap((day) => groupedCoordsForDay(day).map((g) => g.label).filter(Boolean))));
-  const scope = hasEnded
-    ? 'Current'
-    : Boolean(todayDay) || days.every((day) => day.day <= 0)
-      ? 'Today'
-    : days.length === 1
-      ? `Day ${days[0]?.day || 1}`
-      : `${days.length}日`;
-  const visible = labels.slice(0, 3).join('/') || '未設定地點';
-  return `${scope} · ${visible}${labels.length > 3 ? ` +${labels.length - 3}` : ''}`;
-}
-
-function weatherCoordsMatch(
-  a: { lat?: number; lon?: number },
-  b: { lat?: number; lon?: number },
-): boolean {
-  // Missing coords can't disprove a match — fall back to the label comparison.
-  if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon) || !Number.isFinite(b.lat) || !Number.isFinite(b.lon)) {
-    return true;
-  }
-  return Math.abs((a.lat as number) - (b.lat as number)) < 0.01
-    && Math.abs((a.lon as number) - (b.lon as number)) < 0.01;
-}
-
-function cachedRowsMatchItinerary(
-  cached: Record<string, DayWeather[]> | null,
-  days: ItineraryDay[],
-  groupedCoordsByDay: Map<string, GroupedWeatherLocation[]>,
-): cached is Record<string, DayWeather[]> {
-  if (!cached || !days.length) return false;
-  return days.every((day) => {
-    // Label-only matching accepted a cache whose coords pointed at a different place
-    // after an itinerary edit (same display name, new lat/lon) or a geocode upgrade.
-    const expected = (groupedCoordsByDay.get(day.date) || []).filter((group) => !group.missing);
-    if (!expected.length) return true;
-    const rows = cached[day.date] || [];
-    return expected.every((group) => rows.some((row) =>
-      row.coord?.label === group.label && weatherCoordsMatch(row.coord || {}, group),
-    ));
-  });
-}
-
-function weatherProviderLabel(weather?: DayWeather): string {
-  const provider = String(weather?.provider || weather?.source || '').replace(/\s+cache$/i, '').trim();
-  return provider ? `來源 · ${weatherDisplayProvider(provider)}` : '來源 · 載入中';
-}
-
-function weatherSourceLabel(weather?: DayWeather): string {
-  const source = String(weather?.source || '').replace(/\s+cache$/i, '').trim();
-  return source ? weatherDisplayProvider(source) : '';
-}
-
-function weatherDisplayProvider(value: string): string {
-  return /weatherapi/i.test(value) ? 'Live weather' : value;
-}
-
-function weatherFreshnessLabel(weather?: DayWeather): string {
-  if (!weather) return '載入中';
-  const ts = Number(weather.fetchedAt || 0);
-  if (!Number.isFinite(ts) || ts <= 0) return weather.cached ? '快取' : '即時';
-  const ageMs = Math.max(0, Date.now() - ts);
-  const minutes = Math.round(ageMs / 60000);
-  const age = minutes < 1 ? '啱啱更新' : minutes < 60 ? `${minutes} 分鐘前` : `${Math.round(minutes / 60)} 小時前`;
-  return `${weather.cached ? '快取' : '即時'} · ${age}`;
-}
-
-function weatherTargetOriginLabel(coord?: DayWeather['coord']): string {
-  if (!coord) return '定位中';
-  if (coord.origin === 'spot-coordinate') return `景點座標 · ${coord.label}`;
-  if (coord.origin === 'city-geocode') return `城市定位 · ${coord.query || coord.label}`;
-  if (coord.origin === 'known-region') return `行程城市 · ${coord.label}`;
-  return `未能定位 · ${coord.label}`;
-}
-
-function weatherFallbackLabel(reason: string): string {
-  return /unavailable/i.test(reason) ? '官方數據暫時不可用，顯示備用來源' : '官方數據不完整，已用備用來源補充';
-}
-
-function weatherFallbackTitle(reason: string): string {
-  const safeReason = reason.replace(/WeatherAPI\.com/gi, 'private weather provider');
-  return safeReason.replace(/\s+/g, ' ').slice(0, 120);
-}
-
-function weatherHint(slot: { rain?: number; precipMm?: number; windSpeed?: number; windGust?: number; uvIndex?: number; temp?: number; feelsLike?: number }) {
-  if ((slot.rain || 0) >= 60 || (slot.precipMm || 0) >= 1) return '帶遮，行程之間預多少少轉場時間。';
-  if ((slot.windGust || 0) >= 35 || (slot.windSpeed || 0) >= 25) return '風勢較強，留意戶外景點同交通。';
-  if ((slot.uvIndex || 0) >= 6) return 'UV 偏高，防曬同補水要跟身。';
-  if ((slot.feelsLike ?? slot.temp ?? 99) <= 12) return '體感偏涼，晚上活動加件外套會舒服啲。';
-  return '天氣條件穩定，適合按原定行程走。';
-}
-
-// Per-slot theme color keyed on the forecast condition (Boss spec):
-// 大雨 deep blue · 落雨 blue · 微雨/驟雨 light blue · 晴 orange · 多雲 grey · 霧 pale grey
-// (雪 ice blue · 雷暴 purple). WMO weather codes; rain% is the fallback when code is missing.
-function weatherAccent(slot: { code?: number; rain?: number; precipMm?: number }): string {
-  const code = slot.code;
-  if (code != null) {
-    if (code >= 95) return '#7c3aed';                                        // 雷暴
-    if (code === 65 || code === 67 || code === 82) return '#1e40af';         // 大雨
-    if (code === 63 || code === 66 || code === 81) return '#2563eb';         // 落雨
-    if ((code >= 51 && code <= 61) || code === 80) return '#4a94e8';         // 微雨/驟雨
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '#4fb2d9'; // 雪
-    if (code === 45 || code === 48) return '#9aa2ae';                        // 霧
-    if (code === 0 || code === 1) return '#f59e0b';                          // 晴
-    if (code === 2 || code === 3) return '#77808e';                          // 多雲
-  }
-  if ((slot.rain || 0) >= 70 || (slot.precipMm || 0) >= 4) return '#1e40af';
-  if ((slot.rain || 0) >= 40) return '#2563eb';
-  if ((slot.rain || 0) >= 20) return '#4a94e8';
-  return '#1e6d86';
-}
-
-// Formatters are expensive to construct and these run inside render loops (per day/location),
-// so cache them per timezone like Timeline's zonePartsFormatterCache does.
-const liveSlotFormatterCache = new Map<string, Intl.DateTimeFormat | null>();
-function liveSlotFormatter(timezone: string): Intl.DateTimeFormat | null {
-  if (liveSlotFormatterCache.has(timezone)) return liveSlotFormatterCache.get(timezone) || null;
-  let formatter: Intl.DateTimeFormat | null = null;
-  try {
-    formatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      hourCycle: 'h23',
+    if (!known.some((coord) => coord.missing)) return;
+    let active = true;
+    // Resolve only missing named destinations, independently of forecast requests.
+    void Promise.all(days.map(async (day) => {
+      try { return await resolveCoordsForDay(day); } catch { return uniqueWeatherLocations([day]); }
+    })).then((groups) => {
+      if (!active) return;
+      const coords = [...new Map(groups.flat().map((coord) => [coord.missing ? `missing:${coord.label}:${coord.countryCode}` : weatherLocationKey(coord), coord])).values()];
+      setResolved({ key: daysKey, coords });
     });
-  } catch {
-    formatter = null;
-  }
-  if (liveSlotFormatterCache.size > 24) liveSlotFormatterCache.clear();
-  liveSlotFormatterCache.set(timezone, formatter);
-  return formatter;
-}
-
-function liveSlotHour(date: string, timezone: string): number | null {
-  try {
-    const formatter = liveSlotFormatter(timezone);
-    if (!formatter) return null;
-    const parts = formatter.formatToParts(new Date());
-    const value = (type: string) => parts.find((part) => part.type === type)?.value || '';
-    const today = `${value('year')}-${value('month')}-${value('day')}`;
-    if (today !== date) return null;
-    const hour = Number(value('hour'));
-    return WEATHER_SLOTS.slice().reverse().find((slot) => hour >= slot) || WEATHER_SLOTS[0];
-  } catch {
-    return null;
-  }
-}
-
-const timezoneValidityCache = new Map<string, boolean>();
-function normalizedTimezone(value?: string): string {
-  const zone = String(value || '').trim();
-  const aliases: Record<string, string> = {
-    JST: 'Asia/Tokyo',
-    HKT: 'Asia/Hong_Kong',
-    KST: 'Asia/Seoul',
-    CST: 'Asia/Shanghai',
-    SGT: 'Asia/Singapore',
-    PST: 'America/Los_Angeles',
-    PDT: 'America/Los_Angeles',
-    EST: 'America/New_York',
-    EDT: 'America/New_York',
-    GMT: 'Etc/GMT',
-    UTC: 'UTC',
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daysKey]);
+  const tripCoords = resolved.key === daysKey ? resolved.coords : known;
+  const currentLocation = deviceLocation?.tripId === trip.id ? deviceLocation : undefined;
+  const coords = currentLocation ? [currentLocation.coord, ...tripCoords] : tripCoords;
+  const coord = coords.find((item) => selection.tripId === trip.id && weatherLocationKey(item) === selection.location) || tripCoords[0] || currentLocation?.coord;
+  const zone = weatherTimezone(coord?.timezone || selectedDay?.timezone || tripZone);
+  const date = dateChoice === 'today' ? weatherLocalTime(clock, zone).slice(0, 10) : dateChoice;
+  const locationNeedsZone = coord?.origin === 'device-location' && !coord.timezone;
+  const { report, busy, error, refresh } = useWeatherReport(locationNeedsZone ? undefined : coord, date, state);
+  const [hourChoice, setHourChoice] = useState('');
+  const localNow = weatherLocalTime(clock, report?.timezone || zone);
+  const defaultHour = report?.hourly.find((hour) => hour.time >= localNow)?.time || report?.hourly[0]?.time || '';
+  const selectedHour = report?.hourly.some((hour) => hour.time === hourChoice) ? hourChoice : defaultHour;
+  const daily = report?.daily;
+  const observation = report?.observation;
+  const observationAge = observation ? clock - Date.parse(observation.observedAt) : Infinity;
+  const observationFresh = !!observation && observationAge >= -5 * 60_000 && observationAge <= 3 * 60 * 60_000 && !report?.stale;
+  const headline = observation?.temp;
+  const currentHour = report?.hourly.find((hour) => hour.time === selectedHour);
+  const service = OFFICIAL_WEATHER_SERVICES[coord?.countryCode || ''];
+  const geocoding = known.some((item) => item.missing) && resolved.key !== daysKey;
+  const selectDate = (next: string) => { setSelection({ tripId: trip.id, date: next, location: next === 'today' ? selection.location : '' }); setHourChoice(''); };
+  const selectLocation = (next: WeatherCoord) => { setSelection({ tripId: trip.id, date: dateChoice, location: weatherLocationKey(next) }); setHourChoice(''); };
+  const locate = async () => {
+    const request = ++locationRequest.current;
+    setLocating(true);
+    setLocationError('');
+    try {
+      const location = await requestCurrentWeatherLocation();
+      if (request !== locationRequest.current) return;
+      setDeviceLocation({ ...location, tripId: trip.id });
+      setSelection({ tripId: trip.id, date: 'today', location: weatherLocationKey(location.coord) });
+      setHourChoice('');
+    } catch (error) {
+      if (request === locationRequest.current) setLocationError(error instanceof Error ? error.message : '定位暫時不可用，仍可選擇行程地點。');
+    } finally {
+      if (request === locationRequest.current) setLocating(false);
+    }
   };
-  const candidate = aliases[zone] || zone || 'auto';
-  if (candidate === 'auto') return candidate;
-  const known = timezoneValidityCache.get(candidate);
-  if (known === true) return candidate;
-  if (known === false) return 'auto';
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: candidate }).format(new Date());
-    if (timezoneValidityCache.size > 64) timezoneValidityCache.clear();
-    timezoneValidityCache.set(candidate, true);
-    return candidate;
-  } catch {
-    timezoneValidityCache.set(candidate, false);
-    return 'auto';
-  }
+
+  return <div className="wx-station" aria-label="旅程氣象站">
+    <header className="wx-masthead"><div><span className="wx-eyebrow">WEATHER / FIELD NOTES</span><h1>旅程氣象站<span aria-hidden="true">.</span></h1><p>天氣有依據，出發有準備。</p></div><button className="wx-refresh" type="button" onClick={refresh} disabled={busy || !coord || coord.missing} aria-label="重新整理天氣"><RefreshCw size={18} className={busy ? 'wx-spinning' : ''} /><span>{busy ? '更新中' : '更新'}</span></button></header>
+
+    <div className="wx-planner">
+      <div className="wx-location-controls"><button type="button" className="wx-locate" onClick={locate} disabled={locating}><LocateFixed size={17} aria-hidden="true" />{locating ? '定位中…' : '使用目前位置'}</button><details className="wx-location-privacy"><summary>定位如何使用</summary><p>只會在按下按鈕後要求定位權限。座標會傳送至 <a href="https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api" target="_blank" rel="noopener noreferrer">BigDataCloud</a> 辨識國家及時區，再向氣象服務查詢；該服務會使用匿名 GPS／IP 配對改善定位。本 app 不儲存位置紀錄。</p></details></div>
+      {locationError && <p className="wx-location-message" role="alert">{locationError}</p>}
+      {currentLocation && coord === currentLocation.coord && <div className="wx-location-message" role="status"><p>目前位置 · 定位精度約 ±{currentLocation.accuracyMeters < 1000 ? `${Math.round(currentLocation.accuracyMeters)} m` : `${(currentLocation.accuracyMeters / 1000).toFixed(1)} km`} · {coord.countryCode || '國家未確認'}</p>{currentLocation.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>}
+      <div className="wx-trip-label"><CalendarDays size={16} aria-hidden="true" /><span>{trip.name || '我的旅程'}</span><span>{itinerary.length} 日行程</span></div>
+      <div className="wx-date-rail" role="group" aria-label="選擇天氣日期" tabIndex={0}>
+        <button type="button" className="wx-date" aria-pressed={dateChoice === 'today'} onClick={() => selectDate('today')}><span>所選地點</span><strong>今日</strong><small>當地日期</small></button>
+        {itinerary.map((day: ItineraryDay) => <button type="button" className="wx-date" key={day.dayId || day.date} aria-pressed={dateChoice === day.date} onClick={() => selectDate(day.date)} aria-label={`Day ${day.day} ${day.date}`}><span>Day {day.day}</span><strong>{day.date.slice(5).replace('-', '/')}</strong><small>{day.date < today ? '已過日期' : dayLabel(day.date).split('（')[1]?.replace('）', '') || day.region}</small></button>)}
+      </div>
+      <div className="wx-places" role="group" aria-label="選擇預報地點">
+        {coords.map((place, index) => <button type="button" key={`${weatherLocationKey(place)}:${index}`} aria-pressed={place === coord} onClick={() => selectLocation(place)}><MapPin size={14} aria-hidden="true" />{place.label}{place === coord && <Check size={14} aria-hidden="true" />}</button>)}
+      </div>
+    </div>
+
+    {!coord ? <div className="wx-state"><MapPin size={32} aria-hidden="true" /><h2>先加入旅程地點</h2><p>在行程設定城市、國家或景點座標，就可以查看對應天氣。</p></div>
+      : locationNeedsZone ? <div className="wx-state" role="status"><MapPin size={32} aria-hidden="true" /><h2>未能確認當地時區</h2><p>請重新定位或選擇行程地點，以取得正確日期的預報。</p></div>
+      : geocoding && coord.missing ? <div className="wx-state" role="status"><MapPin size={32} aria-hidden="true" /><h2>確認目的地中…</h2></div>
+      : coord.missing ? <div className="wx-state" role="status"><MapPin size={32} aria-hidden="true" /><h2>未能確認「{coord.label}」的位置</h2><p>請在行程加入城市及國家，或有效的經緯度；未確認地點前不會顯示其他城市天氣。</p></div>
+      : error ? <div className="wx-state" role="status"><CloudSun size={32} aria-hidden="true" /><h2>此日期暫無預報</h2><p>{error}</p><button type="button" onClick={dateChoice === 'today' ? refresh : () => selectDate('today')}>{dateChoice === 'today' ? '重試連線' : '查看目的地今日天氣'}</button></div>
+      : !report ? <div className="wx-state wx-loading" role="status"><CloudSun size={36} aria-hidden="true" /><h2>正在接收氣象資料</h2><p>{coord.label} · {dayLabel(date)}</p></div>
+      : <>
+        <section className="wx-overview" aria-labelledby="wx-place-heading">
+          <div className="wx-overview-top"><span>{dayLabel(date)}</span><span>{report.stale ? '上次資料 · 更新失敗' : report.cached ? '已儲存資料' : '資料已更新'}</span></div>
+          <h2 id="wx-place-heading">{coord.label}</h2><div className="wx-zone"><MapPin size={13} aria-hidden="true" />{report.timezone} <span>·</span> {localNow.slice(11)}</div>
+          <div className="wx-condition"><div><span className="wx-reading-label">{observation ? observationFresh ? '測站最新觀測' : '測站上次觀測' : '所選時段預報'}</span><strong className="wx-temperature">{value(observation ? headline : currentHour?.temp)}<sup>°</sup></strong><p>{weatherLabel(observation ? observation.code : currentHour?.code ?? daily?.code)}</p></div><div className="wx-weather-illustration"><WeatherIcon code={observation ? observation.code : currentHour?.code ?? daily?.code} size={132} hour={Number((observation ? weatherLocalTime(observation.observedAt, zone) : currentHour?.time || localNow).slice(11, 13))} /></div></div>
+          <div className="wx-temperature-range"><span><ArrowDown size={15} />最低 <b>{value(daily?.min, '°')}</b></span><span><ArrowUp size={15} />最高 <b>{value(daily?.max, '°')}</b></span><small>{daily?.source.official ? '官方每日預報' : daily ? '每日模型預報' : '未提供每日高低溫'}</small></div>
+          <div className="wx-overview-foot">{observation ? <><SourceLink source={observation.source} /><span>{observation.station} · {timestamp(observation.observedAt, report.timezone)}</span></> : <><span>{currentHour ? `${currentHour.time.slice(11)} 預報 · 非實測` : '未有測站觀測'}</span>{report.hourlySource && <SourceLink source={report.hourlySource} />}</>}</div>
+        </section>
+
+        {daily && <section className="wx-bulletin" aria-label="每日氣象摘要"><div className="wx-bulletin-heading"><ShieldCheck size={19} aria-hidden="true" /><h2>{daily.source.official ? '官方氣象摘要' : '每日預報摘要'}</h2></div><p>{daily.text || weatherLabel(daily.code)}</p>{daily.wind && <p className="wx-bulletin-wind"><Wind size={15} aria-hidden="true" />{daily.wind}</p>}{daily.significantRain && <p>顯著降雨概率：{daily.significantRain}</p>}<SourceLink source={daily.source} />{daily.source.issuedAt && <small>發布：{timestamp(daily.source.issuedAt, report.timezone)}</small>}</section>}
+
+        <Forecast report={report} selectedHour={selectedHour} onHour={setHourChoice} />
+
+        <section className="wx-provenance" aria-label="天氣資料來源與有效時間"><div className="wx-section-heading"><h2>每個數字，都有出處</h2><ShieldCheck size={19} aria-hidden="true" /></div><p>擷取時間 {timestamp(report.fetchedAt, report.timezone)} · 所有時段以目的地時區顯示。</p>{report.notices.map((notice) => <p key={notice}>{notice}</p>)}<p>「—」代表來源未提供；觀測、每日及逐時預報各自保留來源。最新警報請以當地官方公布為準。</p>{service && <a href={service.url} target="_blank" rel="noopener noreferrer">查看 {service.name} 官方天氣及警報 <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only">（新分頁）</span></a>}<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer" className="wx-license">Open-Meteo / GeoNames 資料及授權</a></section>
+      </>}
+  </div>;
 }

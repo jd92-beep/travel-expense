@@ -130,6 +130,8 @@ const taiwanContrastState = {
 async function seedThemeState(page) {
   await page.addInitScript((state) => {
     window.__disable_supabase_configured = true;
+    if (sessionStorage.getItem('theme-fixture-seeded')) return;
+    sessionStorage.setItem('theme-fixture-seeded', '1');
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify(state));
@@ -141,13 +143,13 @@ async function seedThemeState(page) {
   }));
 }
 
-async function seedTaiwanContrastState(page) {
+async function seedTaiwanContrastState(page, state = taiwanContrastState) {
   await page.addInitScript((state) => {
     window.__disable_supabase_configured = true;
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify(state));
-  }, taiwanContrastState);
+  }, state);
   await page.route('**/secrets.local.js', async (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
@@ -298,7 +300,7 @@ test('theme selector previews a manual Taiwan world while auto follows the activ
     return {
       body: read('body'),
       shell: read('.app-shell'),
-      card: read('.settings-theme-card'),
+      card: read('[aria-controls="settings-theme-panel"]'),
       header: read('.compact-mobile-header'),
       dock: read('.app-floating-dock-mobile'),
       quickAction: read('.settings-preview-controls button'),
@@ -374,7 +376,20 @@ async function readContrastSamples(page, definitions) {
 test('Taiwan dark keeps operating data readable across dashboard, history, weather, and stats', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await seedTaiwanContrastState(page);
+  await page.clock.setFixedTime(new Date('2026-05-08T02:00:00Z'));
+  await seedTaiwanContrastState(page, {
+    ...taiwanContrastState,
+    trips: taiwanContrastState.trips.map((trip) => ({ ...trip, itinerary: taiwanContrastState.customItinerary })),
+  });
+  await page.route('https://www.jma.go.jp/**', (route) => route.fulfill({ status: 503, json: {} }));
+  await page.route('https://api.open-meteo.com/**', (route) => route.fulfill({ json: {
+    timezone: 'Asia/Tokyo',
+    hourly: {
+      time: ['2026-05-08T08:00', '2026-05-08T12:00', '2026-05-08T16:00'],
+      temperature_2m: [20, 24, 22], weather_code: [1, 2, 3], precipitation_probability: [10, 20, 30],
+    },
+    daily: { time: ['2026-05-08'], temperature_2m_min: [18], temperature_2m_max: [25], weather_code: [2] },
+  } }));
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   await expect(nav).toBeVisible({ timeout: 15_000 });
@@ -411,19 +426,25 @@ test('Taiwan dark keeps operating data readable across dashboard, history, weath
   ]));
 
   await nav.getByRole('button', { name: '天氣', exact: true }).click();
-  await expect(page.locator('.preview-weather-current-card')).toBeVisible();
+  await expect(page.locator('.wx-overview')).toBeVisible();
   samples.push(...await readContrastSamples(page, [
-    { name: 'weather temperature', text: '.preview-weather-temp strong', surface: '.preview-weather-current-card' },
-    { name: 'weather condition', text: '.preview-weather-temp span', surface: '.preview-weather-current-card' },
-    { name: 'weather place', text: '.preview-weather-place', surface: '.preview-weather-current-card' },
-    { name: 'weather detail', text: '.preview-weather-temp small', surface: '.preview-weather-current-card' },
-    { name: 'weather fact label', text: '.preview-weather-facts span', surface: '.preview-weather-facts span' },
-    { name: 'weather high status', text: '.preview-weather-facts .hot', surface: '.preview-weather-facts span' },
-    { name: 'weather fact value', text: '.preview-weather-facts b:not(.hot)', surface: '.preview-weather-facts span' },
-    { name: 'weather source chip', text: '.preview-weather-source-strip span', surface: '.preview-weather-source-strip span' },
-    { name: 'weather hourly chip', text: '.preview-weather-hourly-chip b', surface: '.preview-weather-hourly-chip' },
-    { name: 'weather mobile source cue', text: '.weather-command-row', surface: '.weather-command-fancy', pseudo: '::before' },
+    { name: 'weather temperature', text: '.wx-temperature', surface: '.wx-overview' },
+    { name: 'weather condition', text: '.wx-condition p', surface: '.wx-overview' },
+    { name: 'weather place', text: '#wx-place-heading', surface: '.wx-overview' },
+    { name: 'weather detail', text: '.wx-reading-label', surface: '.wx-overview' },
+    { name: 'weather fact label', text: '.wx-temperature-range span', surface: '.wx-overview' },
+    { name: 'weather fact value', text: '.wx-temperature-range b', surface: '.wx-overview' },
+    { name: 'weather source', text: '.wx-forecast-credit .wx-source-link', surface: '.wx-forecast' },
+    { name: 'weather hourly value', text: '.wx-hour[aria-pressed="true"] strong', surface: '.wx-hour[aria-pressed="true"]' },
+    { name: 'weather metric label', text: '.wx-metrics dt', surface: '.wx-forecast' },
   ]));
+
+  if (process.env.COMPACT_CAPTURE_DIR) {
+    const path = require('node:path');
+    require('node:fs').mkdirSync(process.env.COMPACT_CAPTURE_DIR, { recursive: true });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(process.env.COMPACT_CAPTURE_DIR, 'weather-dark.png'), fullPage: true });
+  }
 
   await nav.getByRole('button', { name: '統計', exact: true }).click();
   await expect(page.locator('.preview-stats-budget')).toBeVisible();
@@ -600,6 +621,7 @@ test('theme catalog exposes six choices, semantic roles, and accessible color sc
 });
 
 test('AuthGate announces unlock errors, restores password focus, and localizes the route marker', async ({ page }) => {
+  await page.route('**/session/unlock', route => route.fulfill({ status: 401, json: { ok: false, error: 'invalid password' } }));
   await page.addInitScript((state) => {
     window.__disable_supabase_configured = true;
     localStorage.clear();

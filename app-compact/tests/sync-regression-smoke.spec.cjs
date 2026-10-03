@@ -85,7 +85,9 @@ test('failed guide trip cloud save queues one recoverable trip without the gener
 });
 
 test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without the generic banner', async ({ page }) => {
-  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
+  await page.addInitScript(() => { window.__disable_supabase_configured = true; });
+  await page.route('**/storage-fixture', route => route.fulfill({ contentType: 'text/html', body: '<div>Storage fixture</div>' }));
+  await page.goto(`${APP_ORIGIN}/storage-fixture`);
   await page.evaluate(async () => {
     localStorage.clear();
     await new Promise((resolve, reject) => {
@@ -103,7 +105,7 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
         transaction.objectStore('state').put({
           autoSync: false,
           globalSyncStatus: 'error',
-          syncError: 'temporary backend outage',
+          syncError: '503 service unavailable',
           syncQueue: [{
             id: 'sync_recoverable_snapshot',
             type: 'trip',
@@ -111,7 +113,7 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
             op: 'upsert',
             status: 'error',
             attempts: 1,
-            error: 'temporary backend outage',
+            error: '503 service unavailable',
             createdAt: 1,
             updatedAt: 1,
           }],
@@ -122,7 +124,7 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
     });
   });
 
-  await page.reload();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect.poll(async () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     const item = state.syncQueue?.find((entry) => entry.id === 'sync_recoverable_snapshot');
@@ -131,7 +133,7 @@ test('IndexedDB-only scoped snapshot requeues a recoverable sync failure without
   await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
 });
 
-test('fresh Vercel-root cold open quietly retries an exhausted transient error without warning bars', async ({ page }) => {
+test('cold open preserves exhausted transient failure until an explicit retry', async ({ page }) => {
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
   });
@@ -214,8 +216,6 @@ test('fresh Vercel-root cold open quietly retries an exhausted transient error w
   await page.reload();
   await expect(page.locator('.app-shell')).toBeVisible();
   await expect(page.getByText('發現新版本')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Sync error/ })).toHaveCount(0);
-  await expect(page.getByText(/有資料同步失敗/)).toHaveCount(0);
   await expect.poll(async () => page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key) || '{}');
     const item = state.syncQueue?.find((entry) => entry.id === 'sync_exhausted_transient');
@@ -227,19 +227,20 @@ test('fresh Vercel-root cold open quietly retries an exhausted transient error w
       syncError: state.syncError,
     };
   }, scopedStorageKey)).toEqual({
-    status: 'queued',
-    attempts: 2,
-    error: undefined,
-    globalSyncStatus: 'queued',
-    syncError: '',
+    status: 'error',
+    attempts: 3,
+    error: 'Supabase network is unavailable. Please try again.',
+    globalSyncStatus: 'error',
+    syncError: 'Supabase network is unavailable. Please try again.',
   });
   const serviceWorkers = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
   expect(serviceWorkers).toBe(0);
 });
 
 test('cold-open keeps a version conflict as durable terminal evidence', async ({ page }) => {
-  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
+    Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true });
     localStorage.clear();
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       autoSync: false,
@@ -257,7 +258,7 @@ test('cold-open keeps a version conflict as durable terminal evidence', async ({
     }));
   });
 
-  await page.reload();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const restored = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}'));
   expect(restored.syncQueue.find((item) => item.entityId === 'conflict').status).toBe('error');

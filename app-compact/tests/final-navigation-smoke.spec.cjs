@@ -7,7 +7,7 @@ const tabs = [
   ['記帳', '掃描收據'],
   ['行程', '行程時間線'],
   ['紀錄', '紀錄中心'],
-  ['天氣', '天氣預報'],
+  ['天氣', '旅程氣象站'],
   ['統計', '預算使用分析'],
   ['設定', '設定控制中心'],
 ];
@@ -74,6 +74,7 @@ for (const [name, viewport] of [
 
 test('Final lock gate smoke without trusted device', async ({ page }) => {
   await page.addInitScript(() => {
+    window.__disable_supabase_configured = true;
     localStorage.clear();
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({
       access_token: 'fake-access-token',

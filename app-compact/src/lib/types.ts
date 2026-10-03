@@ -323,6 +323,7 @@ export interface SyncQueueItem {
     notionPageId?: string;
     supabaseId?: string;
     tripId?: string;
+    tripSupabaseId?: string;
     sourceId?: string;
     tombstoneKey?: string;
     version?: number;

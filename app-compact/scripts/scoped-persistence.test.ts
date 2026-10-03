@@ -7,7 +7,7 @@ const server = await createServer({
   appType: 'custom',
   logLevel: 'error',
   optimizeDeps: { noDiscovery: true },
-  server: { middlewareMode: true },
+  server: { middlewareMode: true, hmr: false },
 });
 const persistenceModule: typeof import('../src/lib/scopedPersistence.ts') =
   await server.ssrLoadModule('/src/lib/scopedPersistence.ts');
@@ -318,6 +318,23 @@ assert.deepEqual(failed, {
   status: 'failed',
   error: 'localStorage write failed; IndexedDB write failed',
 });
+
+// A newer receipt elsewhere must not let an older trip overwrite its newer copy.
+const tripId = 'fresh-trip';
+persistence = createScopedPersistence(
+  memoryAdapter({ ...DEFAULT_STATE, trips: [{ ...DEFAULT_STATE.trips[0], id: tripId, name: 'new trip', updatedAt: 60 }], settingsUpdatedAt: 10 }).adapter,
+  memoryAdapter({ ...DEFAULT_STATE, trips: [{ ...DEFAULT_STATE.trips[0], id: tripId, name: 'old trip', updatedAt: 20 }], settingsUpdatedAt: 100 }).adapter,
+);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.trips.find(t => t.id === tripId)?.name, 'new trip');
+assert.equal(state.settingsUpdatedAt, 100);
+persistence = createScopedPersistence(
+  memoryAdapter({ ...DEFAULT_STATE, deletedTripIds: [tripId] }).adapter,
+  memoryAdapter({ ...DEFAULT_STATE, trips: [{ ...DEFAULT_STATE.trips[0], id: tripId }], receipts: [{ ...oldLiveReceipt, tripId }] }).adapter,
+);
+state = await persistence.hydrateScope('local', 'vc06456@gmail.com');
+assert.equal(state.trips.some(t => t.id === tripId), false);
+assert.equal(state.receipts.some(r => r.tripId === tripId), false);
 
 console.log('scoped persistence tests passed');
 await server.close();

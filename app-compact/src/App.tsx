@@ -5,8 +5,8 @@ import { ReceiptEditor } from './components/ReceiptEditor';
 import { Shell } from './components/Shell';
 import { LoadingState, TabSkeleton } from './components/ui';
 import { Loader2 } from 'lucide-react';
-import { activeTrip, stampReceiptForTrip, stableDayId, stableSpotId } from './domain/trip/normalize';
-import { applyItineraryEdit, bakeItineraryOverrides } from './lib/domain';
+import { activeTrip, stampReceiptForTrip, stableSpotId } from './domain/trip/normalize';
+import { applyItineraryEdit, bakeItineraryOverrides, getItinerary } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
 import { mergePulledData } from './lib/syncMerge';
@@ -255,7 +255,7 @@ export function App() {
         syncQueue: [
           ...(prev.syncQueue || []).filter((item) => item.type !== queue.type || item.entityId !== queue.entityId),
           queue,
-        ].slice(-500),
+        ],
         syncError: '',
         globalSyncStatus: 'queued',
       }));
@@ -691,29 +691,22 @@ export function App() {
             setEditing(undefined);
           }}
           onAddToItinerary={(receipt) => {
+            const selectedTripId = activeTrip(state).id;
+            if (activeTrip(state).sharing?.role === 'viewer') return;
+            if (!getItinerary(state).some((day) => day.date === receipt.date)) {
+              alert('收據日期不在目前行程內。請先調整收據日期或旅程日期，再加入行程。');
+              return;
+            }
             setState((prev) => {
               const trip = activeTrip(prev);
-              const now = Date.now();
-              const rawItinerary = Array.isArray(trip.itinerary) ? trip.itinerary : [];
-              let itinerary = rawItinerary.map((day) => ({ ...day, spots: day.spots.map((spot) => ({ ...spot })) }));
-              if (!itinerary.length) {
-                const fallbackDate = receipt.date || trip.startDate || prev.tripDateRange.start || new Date().toISOString().slice(0, 10);
-                itinerary = [{
-                  id: stableDayId(trip.id, fallbackDate),
-                  dayId: stableDayId(trip.id, fallbackDate),
-                  date: fallbackDate,
-                  day: 1,
-                  region: trip.destinationSummary || 'Trip',
-                  timezone: trip.timezones?.[0] || 'Asia/Hong_Kong',
-                  currency: trip.currencies?.find((c) => c !== 'HKD') || prev.tripCurrency || 'JPY',
-                  spots: [],
-                }];
-              }
-              const targetIdx = Math.max(0, itinerary.findIndex((day) => day.date === receipt.date));
-              const target = itinerary[targetIdx] || itinerary[0];
+              if (trip.id !== selectedTripId || trip.sharing?.role === 'viewer') return prev;
+              const itinerary = (bakeItineraryOverrides(prev) || getItinerary(prev)).map((day) => ({ ...day, spots: [...day.spots] }));
+              const target = itinerary.find((day) => day.date === receipt.date);
+              if (!target) return prev;
+              const spotId = stableSpotId(trip.id, target.date, target.spots.length, { time: receipt.time || '12:00', name: receipt.store || '新增行程' });
               const spot = {
-                id: stableSpotId(trip.id, target.date, target.spots.length, { time: receipt.time || '12:00', name: receipt.store || '新增行程' }),
-                spotId: stableSpotId(trip.id, target.date, target.spots.length, { time: receipt.time || '12:00', name: receipt.store || '新增行程' }),
+                id: spotId,
+                spotId,
                 time: receipt.time || '12:00',
                 name: receipt.store || '新增行程',
                 type: receipt.category || 'other',
@@ -722,33 +715,7 @@ export function App() {
                 mapUrl: receipt.mapUrl || '',
               };
               target.spots = [...target.spots, spot].sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
-              const trips = (prev.trips || []).map((item) => item.id === trip.id ? { ...item, itinerary, version: item.version + 1, updatedAt: now } : item);
-              const queue: SyncQueueItem = {
-                id: `sync_${now}_${(typeof crypto !== 'undefined' && crypto.randomUUID)
-          ? crypto.randomUUID()
-          : Math.random().toString(16).slice(2)}`,
-                type: 'trip',
-                entityId: trip.id,
-                op: 'update',
-                status: 'queued',
-                attempts: 0,
-                createdAt: now,
-                updatedAt: now,
-                payload: {
-                  notionPageId: trip.notionPageId,
-                  sourceId: trip.sourceId || trip.id,
-                  updatedAt: now,
-                },
-              };
-              return {
-                ...prev,
-                trips,
-                customItinerary: itinerary,
-                syncQueue: [
-                  ...(prev.syncQueue || []).filter((item) => item.type !== queue.type || item.entityId !== queue.entityId),
-                  queue,
-                ].slice(-500),
-              };
+              return applyItineraryEdit({ ...prev, itineraryOverrides: {} }, itinerary);
             });
             setEditing(undefined);
             changeTab('timeline');

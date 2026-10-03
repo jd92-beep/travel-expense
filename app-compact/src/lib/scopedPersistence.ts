@@ -54,6 +54,9 @@ const freshness = (state: Partial<AppState>) => {
   for (const tombstone of tombstonesOf(state)) {
     newest = Math.max(newest, Number(tombstone.deletedAt || 0));
   }
+  for (const item of [...(state.trips || []), ...(state.syncQueue || [])]) {
+    newest = Math.max(newest, Number(item.updatedAt || item.createdAt || 0));
+  }
   return newest;
 };
 
@@ -72,7 +75,8 @@ function mergeReceipts(primary: Receipt[], secondary: Receipt[]): Receipt[] {
 function mergeTrips(primary: AppState['trips'], secondary: AppState['trips']): NonNullable<AppState['trips']> {
   const merged = new Map((primary || []).map((trip) => [trip.id, trip]));
   for (const trip of secondary || []) {
-    if (!merged.has(trip.id)) merged.set(trip.id, trip);
+    const current = merged.get(trip.id);
+    if (!current || Number(trip.updatedAt || trip.createdAt || 0) > Number(current.updatedAt || current.createdAt || 0)) merged.set(trip.id, trip);
   }
   return [...merged.values()];
 }
@@ -197,6 +201,7 @@ export function createScopedPersistence(
       const settingsPatch: Partial<AppState> = {};
       if (settingsFrom) {
         const candidates: Array<keyof AppState> = [
+          'settingsUpdatedAt',
           'rate',
           'rateMode',
           'rateTable',
@@ -222,16 +227,21 @@ export function createScopedPersistence(
         mergeReceipts(receiptsOf(newest), receiptsOf(other || {})),
         receiptTombstones,
       );
+      const deletedTripIds = [...new Set([...(localState?.deletedTripIds || []), ...(indexedState?.deletedTripIds || [])])];
+      const deletedTrips = new Set(deletedTripIds);
       const merged = other
         ? {
             ...other,
             ...newest,
             ...settingsPatch,
-            receipts: resolved.receipts,
+            receipts: resolved.receipts.filter((receipt) => !receipt.tripId || !deletedTrips.has(receipt.tripId)),
             receiptTombstones: resolved.tombstones,
-            trips: mergeTrips(newest.trips, other.trips),
+            trips: mergeTrips(newest.trips, other.trips).filter((trip) => !deletedTrips.has(trip.id)),
+            deletedTripIds,
           }
-        : { ...newest, ...settingsPatch, receipts: resolved.receipts, receiptTombstones: resolved.tombstones };
+        : { ...newest, ...settingsPatch, deletedTripIds,
+            trips: newest.trips?.filter((trip) => !deletedTrips.has(trip.id)),
+            receipts: resolved.receipts.filter((receipt) => !receipt.tripId || !deletedTrips.has(receipt.tripId)), receiptTombstones: resolved.tombstones };
       const credentials = scope === 'local' ? loadCredentials() : {};
       return sanitizePublicDemoState(normalizeState(migrateAppState({
         ...merged,
