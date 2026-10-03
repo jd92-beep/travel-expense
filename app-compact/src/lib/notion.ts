@@ -149,27 +149,7 @@ export async function notionFetch<T>(state: AppState, path: string, init: Reques
   return brokerNotionRequest<T>({ ...state, notionDb: activeDb }, path, init);
 }
 
-function findPropByNames(props: Record<string, any>, names: readonly string[]): string | undefined {
-  for (const name of names) {
-    if (name in props) return name;
-  }
-  return undefined;
-}
 
-function findPropByTypeAndPattern(
-  props: Record<string, any>,
-  types: string[],
-  patterns: RegExp[],
-): string | undefined {
-  for (const [name, prop] of Object.entries(props)) {
-    if (types.includes(prop?.type)) {
-      for (const pattern of patterns) {
-        if (pattern.test(name)) return name;
-      }
-    }
-  }
-  return undefined;
-}
 
 async function ensureSchema(state: AppState): Promise<SchemaMap> {
   const activeDb = getActiveNotionDb(state);
@@ -260,7 +240,6 @@ async function ensureSchema(state: AppState): Promise<SchemaMap> {
       }
     }
     schemaCache = { db: activeDb, map: map as SchemaMap, propertyTypes };
-    console.log('[notion] schema resolved:', JSON.stringify(map));
     return schemaCache.map;
   })();
   schemaPromise = { db: activeDb, promise };
@@ -973,22 +952,6 @@ function tripFromPage(page: any, schema: SchemaMap): TripProfile | null {
   }
 }
 
-export async function diagnoseNotionSchema(state: AppState): Promise<Array<{ name: string; type: string; mapped: string | null }>> {
-  const activeDb = getActiveNotionDb(state);
-  const db = await notionFetch<{ properties?: Record<string, { type: string }> }>(state, `/databases/${activeDb}`, { method: 'GET' });
-  const props = db.properties || {};
-  const schema = await ensureSchema(state);
-  const reverseMap = new Map<string, string>();
-  for (const [key, name] of Object.entries(schema)) {
-    reverseMap.set(name, key);
-  }
-  return Object.entries(props).map(([name, prop]) => ({
-    name,
-    type: prop.type,
-    mapped: reverseMap.get(name) || null,
-  }));
-}
-
 export async function diagnoseReactReceiptMapping(state: AppState): Promise<ReactMappingDiagnostics> {
   const schema = await ensureSchema(state);
   const activeDb = getActiveNotionDb(state);
@@ -1049,39 +1012,6 @@ export async function diagnoseReactReceiptMapping(state: AppState): Promise<Reac
     cursor = page.next_cursor;
   }
   return { scanned, receiptCandidates, skipped, issues, counts };
-}
-
-export async function testNotion(state: AppState) {
-  schemaCache = null;
-  const schema = await ensureSchema(state);
-  return Object.values(schema).join(', ');
-}
-
-export async function testDirectNotion(state: AppState): Promise<{ ok: boolean; count: number; firstTitle?: string; error?: string }> {
-  const token = ((typeof window !== 'undefined' ? (window as any).DEV_SECRETS?.notionToken : '') || getDirectNotionToken());
-  if (!token) return { ok: false, count: 0, error: 'No local dev Notion credential in window.DEV_SECRETS' };
-  const dbId = getActiveNotionDb(state);
-  try {
-    const targetUrl = `https://api.notion.com/v1/databases/${dbId}/query`;
-    const url = state.proxy?.trim() ? makeProxyUrl(state.proxy.trim(), targetUrl) : targetUrl;
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Notion-Version': NOTION_VERSION,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ page_size: 1 }),
-    });
-    const data = await res.json();
-    if (!res.ok) return { ok: false, count: 0, error: data?.message || `${res.status} ${res.statusText}` };
-    const schema = await ensureSchema(state);
-    const firstTitleProp = data.results?.[0]?.properties?.[propName(schema, 'store')];
-    const firstTitle = firstTitleProp?.title?.[0]?.plain_text;
-    return { ok: true, count: data.results?.length ?? 0, firstTitle };
-  } catch (err) {
-    return { ok: false, count: 0, error: String(err) };
-  }
 }
 
 export async function migrateNotionSchema(state: AppState): Promise<string> {
@@ -1228,14 +1158,12 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
   // 1. Upload photo to Notion native storage first if we have a local thumb and haven't uploaded yet.
   if (receipt.photoThumb && !receipt.notionFileUploadId && !receipt.photoUrl) {
     try {
-      console.log('[notionPush] Attempting Native Notion file upload via broker...');
       const safeName = (receipt.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
       const filename = `${safeName}_${receipt.date || 'nodate'}.jpg`;
       const up = await brokerNotionUploadFile(notionState, receipt.photoThumb, 'image/jpeg', filename);
       if (up?.fileUploadId) {
         receipt.notionFileUploadId = up.fileUploadId;
         receipt._photoSyncedToNotion = true;
-        console.log('[notionPush] Native Notion upload succeeded:', up.fileUploadId);
       }
     } catch (e: any) {
       console.warn('[notionPush] Native Notion photo upload failed:', e.message || e);
@@ -1281,7 +1209,6 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
     }
     if (!alreadyHasImageBlock && receipt.photoThumb && !receipt._photoBodyBlockAdded) {
       try {
-        console.log('[notionPush] Appending image block to page body...');
         const baseName = (receipt.store || 'receipt').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40);
         const fileName = `${baseName}_${receipt.date || 'nodate'}_page.jpg`;
         const bodyUp = await brokerNotionUploadFile(notionState, receipt.photoThumb, 'image/jpeg', fileName);
@@ -1297,14 +1224,12 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
             })
           });
           receipt._photoBodyBlockAdded = true;
-          console.log('[notionPush] Native body image block added successfully.');
         }
       } catch (e: any) {
         console.warn('[notionPush] could not append photo block to page body:', e.message || e);
       }
     } else if (!alreadyHasImageBlock && receipt.photoUrl && !receipt._photoBodyBlockAdded) {
       try {
-        console.log('[notionPush] Appending external image block to page body...');
         await notionFetch(notionState, `/blocks/${pageId}/children`, {
           method: 'PATCH',
           body: JSON.stringify({
@@ -1316,7 +1241,6 @@ export async function pushReceipt(state: AppState, receipt: Receipt): Promise<Re
           })
         });
         receipt._photoBodyBlockAdded = true;
-        console.log('[notionPush] External body image block added successfully.');
       } catch (e: any) {
         console.warn('[notionPush] could not append external photo block to page body:', e.message || e);
       }
@@ -1336,7 +1260,6 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
   if (!currentTrip.notionDb) {
     const templateDb = state.notionDb || DEFAULT_NOTION_DB;
     try {
-      console.log(`[notion] 正在為旅程「${currentTrip.name}」在背景自動創建 Notion Database...`);
       const dbMeta = await notionFetch<{ parent?: { page_id?: string }; properties?: Record<string, any> }>(
         state,
         `/databases/${templateDb}`,
@@ -1345,7 +1268,6 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
 
       let parentPageId = dbMeta.parent?.page_id;
       if (!parentPageId) {
-        console.log('[notion] 無法獲取 Notion DB 的 parent page_id，嘗試尋找 ✈️ Travel Notebooks 作為備用 parent...');
         const searchRes = await notionFetch<{ results: any[] }>(
           state,
           '/search',
@@ -1369,7 +1291,6 @@ export async function pushTripPage(state: AppState, trip: TripProfile): Promise<
         dbMeta.properties || {}
       );
 
-      console.log(`[notion] 自動創表成功！新 DB ID: ${newDbId}`);
       currentTrip.notionDb = newDbId;
     } catch (e: any) {
       console.warn('[notion] 自動創建 Notion Database 失敗，將會 fallback 使用預設 Database:', e.message || e);
@@ -1697,31 +1618,6 @@ export async function archiveReceipt(state: AppState, receipt: Receipt) {
   const pageId = receipt.notionPageId || await findPageBySourceId(notionState, schema, receipt.sourceId || receipt.id, receipt.tripId).catch(() => null);
   if (!pageId) return;
   await notionFetch(notionState, `/pages/${pageId}`, { method: 'PATCH', body: JSON.stringify({ archived: true }) });
-}
-
-export async function pushAll(state: AppState) {
-  let ok = 0;
-  const failures: Array<{ id: string; error: string }> = [];
-  // One failing trip must not abort the whole backup sweep: receipts and the
-  // settings row still have to reach Notion, and the trip failure must be
-  // reported in `failures` instead of silently dropping every later record.
-  for (const trip of state.trips || []) {
-    try {
-      await pushTripPage(state, trip);
-    } catch (err) {
-      failures.push({ id: trip.id, error: String(err) });
-    }
-  }
-  for (const receipt of state.receipts) {
-    try {
-      await pushReceipt(state, receipt);
-      ok += 1;
-    } catch (err) {
-      failures.push({ id: receipt.id, error: String(err) });
-    }
-  }
-  await pushSettingsMeta(state);
-  return { ok, failures };
 }
 
 export async function pullAll(state: AppState): Promise<Receipt[]> {

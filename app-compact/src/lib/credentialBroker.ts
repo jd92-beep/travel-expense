@@ -1,7 +1,7 @@
 import { AI_MODELS, ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL } from './constants';
 import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
-import type { AppState, TripProfile } from './types';
+import type { AppState } from './types';
 
 export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'mimo' | 'volcano';
 
@@ -249,20 +249,6 @@ export async function refreshCredentialBrokerSession(
   return session;
 }
 
-export async function listTrustedBrokerDevices(
-  state: Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>,
-): Promise<TrustedBrokerDevice[]> {
-  const data = await brokerFetch<{ ok: boolean; devices: TrustedBrokerDevice[] }>(state, '/session/devices');
-  return data.devices || [];
-}
-
-export async function revokeTrustedBrokerDevice(
-  state: Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>,
-  deviceId: string,
-): Promise<void> {
-  await brokerFetch<{ ok: boolean }>(state, '/session/revoke-device', { deviceId });
-}
-
 export async function brokerHealth(state: Pick<AppState, 'credentialBrokerUrl'>): Promise<string> {
   const data = await brokerFetch<{ ok: boolean; service: string; version: string }>(state, '/health', undefined, false);
   return `${data.service || 'Credential Broker'} ${data.version || ''}`.trim();
@@ -278,11 +264,6 @@ export async function getConnectionStatus(
 export async function testProviderConnection(state: AppState, provider: CredentialProvider): Promise<string> {
   const data = await brokerFetch<{ ok: boolean; status: ProviderStatus }>(state, '/credentials/test', { provider });
   return `${provider} ${data.status?.status || 'unknown'}`;
-}
-
-export async function testAllProviderConnections(state: AppState): Promise<ProviderStatus[]> {
-  const data = await brokerFetch<{ ok: boolean; providers: ProviderStatus[] }>(state, '/credentials/test-all', {});
-  return data.providers || [];
 }
 
 export async function rotateProviderCredential(
@@ -376,14 +357,6 @@ export async function testAiModel(state: AppState, modelId: string): Promise<str
     throw new Error('Model 未有返回有效測試結果');
   }
   return selected.name;
-}
-
-export async function brokerTripIntelligence(
-  state: AppState,
-  payload: { paragraph: string; currentTrip: Pick<TripProfile, 'id' | 'name' | 'startDate' | 'endDate' | 'destinationSummary' | 'itinerary'>; model?: string },
-): Promise<unknown> {
-  const data = await brokerFetch<{ ok: boolean; data: unknown }>(state, '/trip/intelligence', payload);
-  return data.data;
 }
 
 export async function brokerNotionUploadFile(

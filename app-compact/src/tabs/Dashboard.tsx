@@ -6,7 +6,6 @@ import {
   Info,
   Lightbulb,
   MapPin,
-  NotebookPen,
   Pencil,
   Plus,
   X,
@@ -49,8 +48,7 @@ import { activeTrip, createTripProfile, normalizeItinerary, scopedReceiptsForTri
 import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, TabId, TripProfile } from '../lib/types';
 import { parseTripParagraph } from '../lib/ai';
 import { enqueueChange } from '../lib/changeJournal';
-import { brokerAiJson, redactedError } from '../lib/credentialBroker';
-import { AI_MODELS, DEFAULT_KIMI_PRIMARY_MODEL_ID } from '../lib/constants';
+import { redactedError } from '../lib/credentialBroker';
 
 type DestinationIdea = {
   id: string;
@@ -398,25 +396,7 @@ function isQuotaHardStop(error: unknown): boolean {
   return /(?:\b429\b|quota|daily limit|rate limit|too many requests|用量|配額|限額)/i.test(redactedError(error));
 }
 
-function aiModelLabel(modelId: string | undefined): string {
-  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
-  return AI_MODELS.find((model) => model.id === id)?.name || id;
-}
 
-function aiProviderForModel(modelId: string | undefined): { provider: 'kimi' | 'google' | 'mimo' | 'volcano'; model: string; id: string } {
-  const id = modelId || DEFAULT_KIMI_PRIMARY_MODEL_ID;
-  const [providerRaw, modelRaw] = id.includes('/') ? id.split('/') : ['', id];
-  const provider = providerRaw === 'google' || providerRaw === 'mimo' || providerRaw === 'kimi' || providerRaw === 'volcano'
-    ? providerRaw
-    : /mimo/i.test(id)
-      ? 'mimo'
-      : /kimi/i.test(id)
-        ? 'kimi'
-        : /volcano|doubao|minimax/i.test(id)
-          ? 'volcano'
-        : 'google';
-  return { provider, model: modelRaw || id, id };
-}
 
 // 根據景點屬性或名字，智能配對和風 icon 及顏色
 function getSpotIconDetails(type: string, name: string) {
@@ -901,11 +881,8 @@ export function Dashboard({
   const remainingBudgetHkd = Math.max(0, budgetHkd - spentHkd);
   const dayRemainingHkd = Math.max(0, Math.round(amountToHkd(dailyBudget - todayTotal, resolvedTripCurrency, state)));
   const recommendedDailyHkd = Math.max(0, Math.round((budgetHkd - spentHkd) / Math.max(1, Math.max(1, length) - currentDayNumber + 1)));
-  const budgetWarning = rawBudgetPct >= 100 ? '超出預算區' : rawBudgetPct >= 80 ? '接近上限' : '狀態良好';
   const daySpots = (day?.spots || []).slice(0, 4);
   const recentReceipts = tripReceipts.slice().sort((a, b) => `${b.date} ${b.time || ''}`.localeCompare(`${a.date} ${a.time || ''}`));
-  const burnDays = Math.max(1, Math.min(length, currentDayNumber));
-  const dailyBurnHkd = Math.round(spentHkd / burnDays);
   const todaySpendPrimary = showTripCurrency ? displayMoney(todayTotal, resolvedTripCurrency) : displayMoney(todaySpentHkd, 'HKD');
   const todaySpendSecondary = showTripCurrency ? displayMoney(todaySpentHkd, 'HKD') : displayMoney(todayTotal, resolvedTripCurrency);
   const dailyBudgetPrimary = showTripCurrency ? displayMoney(dailyBudget, resolvedTripCurrency) : displayMoney(dailyBudgetHkd, 'HKD');

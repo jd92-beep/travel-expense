@@ -43,7 +43,3 @@ export const VISUAL_ICON_META: Record<VisualIconId, { label: string; color: stri
 export function categoryIconId(id: string): VisualIconId {
   return (id in VISUAL_ICON_META ? id : 'other') as VisualIconId;
 }
-
-export function paymentIconId(id: string): VisualIconId {
-  return (id in VISUAL_ICON_META ? id : 'cash') as VisualIconId;
-}

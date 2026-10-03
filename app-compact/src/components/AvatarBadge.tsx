@@ -2,12 +2,6 @@ import type { Person } from '../lib/types';
 import { cn } from '../lib/cn';
 import type { CSSProperties } from 'react';
 
-function initials(name: string) {
-  const trimmed = name.trim();
-  if (!trimmed) return '?';
-  const latin = trimmed.match(/[A-Za-z]/g)?.join('').slice(0, 2).toUpperCase();
-  return latin || Array.from(trimmed).slice(0, 2).join('');
-}
 
 export function AvatarBadge({
   person,

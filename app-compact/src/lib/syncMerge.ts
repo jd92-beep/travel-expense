@@ -22,11 +22,11 @@ function receiptTripSourceKey(receipt: Pick<Receipt, 'id' | 'sourceId' | 'tripId
   return receipt.tripId && sourceId ? `${receipt.tripId}::${sourceId}` : '';
 }
 
-function receiptUpdatedAt(receipt: Receipt, isLocal = false) {
+function receiptUpdatedAt(receipt: Receipt) {
   return Number(receipt.updatedAt || receipt.createdAt || 0);
 }
 
-function tripUpdatedAt(trip: TripProfile, isLocal = false) {
+function tripUpdatedAt(trip: TripProfile) {
   return Number(trip.updatedAt || trip.createdAt || 0);
 }
 
@@ -181,8 +181,8 @@ export function mergePulledReceipts(state: AppState, pulledReceipts: Receipt[]):
       indexRawSource(rawSourceKey, remoteReceipt.id);
       continue;
     }
-    const localUpdated = receiptUpdatedAt(localReceipt, true);
-    const remoteUpdated = receiptUpdatedAt(remoteReceipt, false);
+    const localUpdated = receiptUpdatedAt(localReceipt);
+    const remoteUpdated = receiptUpdatedAt(remoteReceipt);
     if (remoteUpdated > localUpdated) {
       byId.set(localReceipt.id, stampForRemote(state, {
         ...localReceipt,

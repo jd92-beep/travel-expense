@@ -329,22 +329,3 @@ export function tripIntelligenceColumns(intelligence: TripIntelligence) {
     },
   };
 }
-
-export function tripIntelligencePromptContract(): string {
-  return [
-    'Return strict JSON only.',
-    'Use a four-stage itinerary workflow: (1) read and understand the full user text, (2) reorganize it into your own clean canonical itinerary, (3) extract app data only from that canonical itinerary, and (4) use the extracted data as the trip backbone.',
-    'The JSON response must include organizedItinerary as a concise human-readable canonical itinerary written by the model before the structured trip object.',
-    'Trip intelligence must include countryCode, countryName, primaryCurrency, themeKey, locale, timezone, weatherRegion, confidence.',
-    'Supported countryCode values include JP, KR, TW, GB, EU, HK, CN, SG, TH, MY, VN, PH, AU, NZ, US, GLOBAL.',
-    `themeKey must be one of: ${TRIP_THEME_KEYS.join(', ')}.`,
-    'Use country/day itinerary context to set currency and weather location. Do not invent secrets or API keys.',
-    'Accept messy travel text: Markdown headings, pipe tables, pasted HTML <br> line breaks, Chinese dates like 6月13日, English dates like Jun 13, 2026, and plain timetable rows.',
-    'For pipe tables, treat columns such as time/category/place/action as itinerary rows; extract each row as a spot, not as prose.',
-    'For each Day section, extract the day number, date, lodging/hotel line, every timed activity, transport, flight, restaurant, shop, attraction, note, and optional/skip condition when present.',
-    'Preserve each itinerary spot name in the same language/script the user pasted. If a weather/geocoding/API source only gives an English city or place name for a non-English itinerary, translate that display name into natural Hong Kong Cantonese Traditional Chinese, while keeping address/map coordinates separate.',
-    'Never copy the current itinerary as a successful extraction unless the user text explicitly contains those same days/spots.',
-    'For every extracted place, include city, country, timezone, address/mapUrl when present, and lat/lon only when reasonably inferable; otherwise omit lat/lon and add a warning.',
-    'Mark uncertain fields with confidence low and list assumptions/missingCriticalFields in extractionReport.',
-  ].join(' ');
-}

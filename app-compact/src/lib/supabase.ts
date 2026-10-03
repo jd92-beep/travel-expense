@@ -345,9 +345,6 @@ function sourceIdForReceipt(receipt: Receipt): string {
   return receipt.sourceId || receipt.id;
 }
 
-function isSharedLedgerTrip(trip?: TripProfile): boolean {
-  return !!trip?.sharing?.isShared;
-}
 
 function ledgerSyncStatusForRow(row: SupabaseReceiptRow): Receipt['ledgerSyncStatus'] {
   if (row.notion_sync_status === 'pending' || row.notion_sync_status === 'syncing') return 'notion_pending';
@@ -892,7 +889,24 @@ export function useSupabaseAuth() {
   };
 }
 
-export async function ensureSupabaseProfile(session: Session, state: AppState): Promise<void> {
+// One profile check per user per page load: every pull/push/upsert used to re-SELECT
+// the row, and concurrent first syncs raced two INSERTs into a duplicate-key failure.
+const ensuredProfiles = new Map<string, Promise<void>>();
+
+function ensureSupabaseProfile(session: Session): Promise<void> {
+  const userId = session.user.id;
+  let pending = ensuredProfiles.get(userId);
+  if (!pending) {
+    pending = ensureSupabaseProfileOnce(session).catch((error) => {
+      ensuredProfiles.delete(userId);
+      throw error;
+    });
+    ensuredProfiles.set(userId, pending);
+  }
+  return pending;
+}
+
+async function ensureSupabaseProfileOnce(session: Session): Promise<void> {
   const supabase = getSupabaseClient(session);
   if (!supabase) return;
   const user = session.user as User;
@@ -976,7 +990,7 @@ async function upsertSupabaseAccountingPeople(
 export async function pushSupabaseSettings(session: Session, state: AppState): Promise<void> {
   const supabase = getSupabaseClient(session);
   if (!supabase) return;
-  await ensureSupabaseProfile(session, state);
+  await ensureSupabaseProfile(session);
   const { error } = await withTimeout(
     supabase
       .from('profiles')
@@ -1021,7 +1035,7 @@ async function existingTripUuid(supabase: SupabaseClient, userId: string, trip?:
 export async function upsertSupabaseTrip(session: Session, state: AppState, trip: TripProfile): Promise<TripProfile> {
   const supabase = getSupabaseClient(session);
   if (!supabase) return trip;
-  await ensureSupabaseProfile(session, state);
+  await ensureSupabaseProfile(session);
   const userId = session.user.id;
   let id = await findTripUuid(supabase, userId, trip);
   const rehomedId = rehomedTripIds.get(`${userId}:${id}`);
@@ -1303,26 +1317,13 @@ export async function upsertSupabaseTrip(session: Session, state: AppState, trip
   return rowToTrip(data as SupabaseTripRow, state, trip.sharing);
 }
 
-async function findReceiptUuid(supabase: SupabaseClient, tripUuid: string, userId: string, receipt: Receipt): Promise<string> {
-  const explicit = cleanUuid(receipt.supabaseId);
-  if (explicit) return explicit;
-  const { data, error } = await supabase
-    .from('receipts')
-    .select('id')
-    .eq('trip_id', tripUuid)
-    .eq('owner_id', userId)
-    .eq('source_id', sourceIdForReceipt(receipt))
-    .maybeSingle();
-  if (error) throw error;
-  return cleanUuid(data?.id) || crypto.randomUUID();
-}
 
 export async function upsertSupabaseReceipt(session: Session, state: AppState, receipt: Receipt): Promise<Receipt> {
   const supabase = getSupabaseClient(session);
   if (!supabase) return receipt;
   const trip = receipt.tripId ? state.trips?.find((candidate) => candidate.id === receipt.tripId) : activeTrip(state);
   if (!trip) throw new Error('Receipt trip is unavailable; select or restore its original trip before syncing');
-  await ensureSupabaseProfile(session, state);
+  await ensureSupabaseProfile(session);
   const syncedTrip = cleanUuid(trip.supabaseId)
     ? trip
     : await upsertSupabaseTrip(session, state, trip);
@@ -1553,7 +1554,7 @@ export async function archiveSupabaseReceipt(session: Session, state: AppState, 
 export async function pullSupabaseData(session: Session, state: AppState): Promise<SupabasePullResult> {
   const supabase = getSupabaseClient(session);
   if (!supabase) return { trips: [], receipts: [], tombstones: [] };
-  await ensureSupabaseProfile(session, state);
+  await ensureSupabaseProfile(session);
   // Page every bulk table: PostgREST silently truncates unpaginated selects at max-rows (1000).
   const [profileResult, tripRows] = await withTimeout(Promise.all([
     supabase.from('profiles').select('app_settings').eq('id', session.user.id).maybeSingle(),

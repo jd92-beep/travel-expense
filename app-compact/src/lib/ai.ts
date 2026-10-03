@@ -1,5 +1,5 @@
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
-import { resolveTripContext, tripIntelligencePromptContract } from '../domain/trip/context';
+import { resolveTripContext } from '../domain/trip/context';
 import { brokerAiJson, hasCredentialBrokerSession, redactedError, testProviderConnection } from './credentialBroker';
 import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
 // @ts-expect-error TS5097: Node's strip-types runner needs the extension.
@@ -388,14 +388,6 @@ async function listGoogleModels(state: AppState): Promise<string[]> {
     await testProviderConnection(state, 'google');
   }
   return [state.googleBackupModel || DEFAULT_GOOGLE_BACKUP_MODEL];
-}
-
-async function googleModelForRequest(state: AppState): Promise<string> {
-  const requested = String(state.googleBackupModel || DEFAULT_GOOGLE_BACKUP_MODEL).replace(/^models\//, '');
-  const models = await listGoogleModels(state);
-  return models.includes(requested)
-    ? requested
-    : models.find((id) => /gemma/i.test(id)) || models.find((id) => /flash|pro|gemini/i.test(id)) || requested;
 }
 
 interface ModelAttempt {
@@ -1203,7 +1195,6 @@ export async function callPreferredJson(
   let last: unknown;
   for (const attempt of attempts) {
     try {
-      console.log(`[AI Routing] 正在嘗試調用: ${attempt.label}...`);
       return await withTimeout(
         callModelAttemptJson(state, attempt, prompt, kind, image),
         attemptTimeoutMs,
@@ -1551,7 +1542,6 @@ function buildTripExtractionPrompt(
   organizedItinerary: string,
   currentTrip: unknown,
   intent: ItineraryIntent = 'full',
-  existingItinerary: ItineraryDay[] = [],
 ): string {
   const intentInstruction = intent === 'partial'
     ? `\nIMPORTANT: This is a PARTIAL UPDATE. The user only provided new/updated days.
@@ -1739,8 +1729,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
     destinationSummary: current.destinationSummary,
     itinerary: current.itinerary,
   };
-  const { intent, pastedDates, existingDates } = detectItineraryIntent(paragraph, current.itinerary || [], state);
-  console.log(`[Trip Update] Intent: ${intent} (pasted: ${pastedDates.size} dates, existing: ${existingDates.size} dates)`);
+  const { intent } = detectItineraryIntent(paragraph, current.itinerary || [], state);
   const organizePrompt = buildTripOrganizePrompt(paragraph, currentTrip, intent, current.itinerary || []);
   const startedAt = Date.now();
   const fastLocalDraft = localTripDraftFromParagraph(paragraph, state);
@@ -1780,11 +1769,9 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
         let extractionPrompt: string;
 
         if (isGoogleModel) {
-          console.log(`[AI Routing] Google model — using single-stage extraction: ${attempt.label}...`);
           organizedItinerary = paragraph.slice(0, 28000);
-          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip, intent, current.itinerary || []);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip, intent);
         } else {
-          console.log(`[AI Routing] 正在嘗試行程重整: ${attempt.label}...`);
           const organizedRaw = await withTimeout(
             callModelAttemptJson(state, attempt, organizePrompt, 'trip'),
             timeoutMs,
@@ -1796,8 +1783,7 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
             console.warn(`[AI Routing] ${attempt.label} returned no usable organized itinerary; trying next trip model.`);
             continue;
           }
-          console.log(`[AI Routing] 正在由重整行程抽取 app data: ${attempt.label}...`);
-          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip, intent, current.itinerary || []);
+          extractionPrompt = buildTripExtractionPrompt(organizedItinerary, currentTrip, intent);
         }
         const parsed = coerceModelJsonSafe(await withTimeout(
           callModelAttemptJson(state, attempt, extractionPrompt, 'trip'),

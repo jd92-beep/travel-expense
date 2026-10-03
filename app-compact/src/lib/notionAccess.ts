@@ -1,6 +1,6 @@
 import { activeTrip } from '../domain/trip/normalize';
 import { DEFAULT_NOTION_DB, isBoss } from './constants';
-import { hasCredentialBrokerSession, currentBrokerSession } from './credentialBroker';
+import { hasCredentialBrokerSession } from './credentialBroker';
 import { hasDirectNotionToken } from './notion';
 import type { AppState } from './types';
 

@@ -1,10 +1,9 @@
-import { BarChart3, CalendarDays, CloudSun, Download, Home, List, MoreVertical, ReceiptText, ScanLine, Settings, Users, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Gauge, PackageCheck, Archive } from 'lucide-react';
+import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Archive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
 import { TAB_MANIFEST } from '../lib/tabs';
 import type { SyncEngineState, TabId, AppState, TripProfile } from '../lib/types';
-import { StatusPill } from './ui';
 import { FloatingDock } from './ui/floating-dock';
 import { NoiseTexture } from './ui/noise-texture';
 import { Particles } from './ui/particles';
@@ -150,16 +149,6 @@ type BeforeInstallPromptEvent = Event & {
   userChoice?: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 };
 
-function relativeFreshness(value: number) {
-  if (!value) return 'local only';
-  const seconds = Math.max(1, Math.round((Date.now() - value) / 1000));
-  if (seconds < 60) return 'just now';
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
-}
 
 export function Shell({
   active,
@@ -314,7 +303,6 @@ export function Shell({
     }
   };
 
-  const handleReleaseNotesToggle = () => setReleaseNotesOpen(true);
   const handleReleaseNotesDismiss = () => {
     try {
       localStorage.setItem(COMPACT_RELEASE_NOTES_SEEN_KEY, COMPACT_RELEASE_NOTE_ID);
@@ -324,9 +312,6 @@ export function Shell({
     setReleaseNotesOpen(false);
   };
 
-  const cacheTime = Math.max(syncState?.lastSyncedAt || 0, Number(state?.settingsPulledAt || 0));
-  const cacheLabel = relativeFreshness(cacheTime);
-  const motionLabel = prefersReducedMotion || fxTier === 'lite' ? 'reduced' : fxTier === 'balanced' ? 'balanced' : 'rich';
   const failedSyncCount = syncState?.failedCount || 0;
   const pendingSyncCount = syncState?.pendingCount || 0;
   const hasSyncProblem = syncState?.status === 'error' || failedSyncCount > 0;

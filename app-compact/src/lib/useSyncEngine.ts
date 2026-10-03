@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react';
 import { archiveReceipt, pullAll, pullTrips, pullSettingsMeta, pushReceipt, pushSettingsMeta, pushTripPage } from './notion';
 import { canUseNotionMirror } from './notionAccess';
 import { recordClientHeartbeat } from './clientHeartbeat';
@@ -402,12 +402,10 @@ export function useSyncEngine(
     if (processingRef.current) {
       lastPushSucceededRef.current = false;
       scheduleSyncAfterCurrent();
-      console.log('[SyncEngine] push() skipped — already processing');
       return;
     }
     if (pullingRef.current) {
       scheduleSyncAfterCurrent();
-      console.log('[SyncEngine] push() skipped — pull in progress');
       return;
     }
     if (!navigator.onLine) {
@@ -419,7 +417,6 @@ export function useSyncEngine(
     if (!hasSupabaseSession(supabaseSessionRef.current) && !canUseNotionMirror(stateRef.current, false, (supabaseSessionRef.current as any)?.user?.email || null)) {
       lastPushSucceededRef.current = false;
       updateSyncState({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', error: '' });
-      console.log('[SyncEngine] push() skipped — no broker session');
       return;
     }
     processingRef.current = true;
@@ -519,7 +516,6 @@ export function useSyncEngine(
           });
 
           if (isAuthError) {
-            console.log('[SyncEngine] Auth error detected mid-push, skipping item');
             continue;
           }
         }
@@ -543,7 +539,6 @@ export function useSyncEngine(
       }
       await yieldToStateFlush();
       if (!isOperationCurrent(generation)) return;
-      console.log(`[SyncEngine] push() complete — failures: ${failures}, pending: ${pendingCount(stateRef.current.syncQueue)}`);
       settlePushStatus(failures, lastError || undefined);
     } finally {
       if (isOperationCurrent(generation)) {
@@ -556,25 +551,20 @@ export function useSyncEngine(
   const pull = useCallback(async () => {
     const generation = operationGenerationRef.current;
     if (!isOperationCurrent(generation)) return;
-    console.log('[SyncEngine] pull() started');
     if (pullingRef.current) {
       scheduleSyncAfterCurrent();
-      console.log('[SyncEngine] pull() skipped — already pulling');
       return;
     }
     if (processingRef.current) {
       scheduleSyncAfterCurrent();
-      console.log('[SyncEngine] pull() skipped — push in progress');
       return;
     }
     if (!navigator.onLine) {
       updateSyncState({ status: 'offline', error: '' });
-      console.log('[SyncEngine] pull() skipped — offline');
       return;
     }
     if (!hasSupabaseSession(supabaseSessionRef.current) && !canUseNotionMirror(stateRef.current, false, (supabaseSessionRef.current as any)?.user?.email || null)) {
       updateSyncState({ status: pendingCount(stateRef.current.syncQueue) ? 'queued' : 'idle', error: '' });
-      console.log('[SyncEngine] pull() skipped — no broker session');
       return;
     }
     pullingRef.current = true;
@@ -844,7 +834,6 @@ export function useSyncEngine(
               && !(receipt.tripId && deniedTrips.has(receipt.tripId))
               && !suspended.has(receipt.id));
             if (needsBackfill.length) {
-              console.log(`[SyncEngine] backfill sweep: ${needsBackfill.length} receipt(s) missing from Supabase — re-queueing`);
               freshQueue = needsBackfill.slice(0, 200).reduce((queue, receipt) => enqueueChange(queue, {
                 type: 'receipt',
                 entityId: receipt.id,
@@ -874,11 +863,9 @@ export function useSyncEngine(
           };
         });
       }
-      console.log(`[SyncEngine] pull() complete — trips: ${trips.length}, receipts: ${receipts.length}, settings: ${settings ? 'yes' : 'no'}, errors: ${pullErrors.length}`);
     } catch (error) {
       if (!isOperationCurrent(generation)) return;
       const message = redactError(error);
-      console.log('[SyncEngine] pull() error:', message);
       // Same rule as the partial-failure path: a transient network error must not paint the
       // persistent red banner on a cold boot — keep it soft and let the retry loop heal it.
       if (isTransientSyncError(error)) {
@@ -927,7 +914,6 @@ export function useSyncEngine(
     if (!isOperationCurrent(generation)) return;
     if (syncingRef.current) {
       scheduleSyncAfterCurrent();
-      console.log('[SyncEngine] sync() skipped — already syncing');
       return;
     }
     syncingRef.current = true;
@@ -937,14 +923,11 @@ export function useSyncEngine(
       await yieldToStateFlush();
       if (!isOperationCurrent(generation)) return;
       if (!navigator.onLine) {
-        console.log('[SyncEngine] Offline — skipping pull');
         return;
       }
       if (!hasSupabaseSession(supabaseSessionRef.current) && !canUseNotionMirror(stateRef.current, false, (supabaseSessionRef.current as any)?.user?.email || null)) {
-        console.log('[SyncEngine] No cloud session — skipping pull');
         return;
       }
-      console.log('[SyncEngine] Running pull()...');
       await pull();
       if (!isOperationCurrent(generation)) return;
       // Owner/admin drains the shared-trip Notion outbox (receipt_sync_jobs) when online with
@@ -968,9 +951,6 @@ export function useSyncEngine(
             archive: archiveReceipt,
           },
         }).catch(() => null);
-        if (outbox && (outbox.processed || outbox.failed)) {
-          console.log(`[SyncEngine] Notion outbox drained: ${outbox.processed} ok, ${outbox.failed} failed`);
-        }
         if (outbox?.transportError) {
           console.warn(`[SyncEngine] Notion outbox transport failure: ${outbox.transportError}`);
         }
@@ -1036,7 +1016,6 @@ export function useSyncEngine(
     tripPullDebounceRef.current = window.setTimeout(() => {
       tripPullDebounceRef.current = null;
       if (!aliveRef.current) return;
-      console.log('[SyncEngine] activeTripId changed, triggering debounced pull sync...');
       void pull();
     }, 700);
     return () => {

@@ -1,7 +1,6 @@
 import { ALLOWED_CREDENTIAL_BROKER_URLS, DEFAULT_CREDENTIAL_BROKER_URL, DEFAULT_NOTION_DB, DEFAULT_STATE, STORAGE_KEY, normalizeAiModelSettings } from './constants';
 import { restoreJournal } from './changeJournal';
 import { migrateAppState } from '../domain/trip/normalize';
-import { saveIndexedState } from '../storage/indexedDb';
 import { stripSensitiveState } from './sanitizeState';
 import type { AppCredentials, AppState } from './types';
 
@@ -133,33 +132,12 @@ export function loadState(scope?: string): AppState {
   }
 }
 
-export function hasStoredState(scope?: string): boolean {
-  try {
-    return localStorage.getItem(scopedStateKey(scope)) !== null;
-  } catch {
-    return false;
-  }
-}
-
 export function clearStoredState(scope?: string): void {
   try {
     localStorage.removeItem(scopedStateKey(scope));
   } catch {
     // Best effort only.
   }
-}
-
-export function saveState(state: AppState, scope?: string): void {
-  let localError: unknown;
-  try {
-    saveStoredSnapshot(state, scope);
-  } catch (error) {
-    localError = error;
-  }
-  void saveIndexedState(stripSensitiveState(state), scope).catch((error) => {
-    console.warn('[storage] IndexedDB snapshot write failed:', error instanceof Error ? error.message : String(error));
-  });
-  if (localError) throw localError;
 }
 
 export function stripPortableBackupState(state: AppState): Partial<AppState> {
@@ -248,16 +226,6 @@ export function saveCredentials(state: Partial<AppCredentials>): void {
     credentialBrokerUrl: normalizeCredentialBrokerUrl(state.credentialBrokerUrl),
   };
   safeLocalStorageSet(CREDENTIALS_KEY, JSON.stringify(credentials));
-}
-
-export function saveDirectNotionToken(token: string): void {
-  if (import.meta.env.PROD) {
-    localStorage.removeItem(DIRECT_NOTION_TOKEN_KEY);
-    return;
-  }
-  const cleaned = cleanSecretValue(token);
-  if (cleaned) localStorage.setItem(DIRECT_NOTION_TOKEN_KEY, cleaned);
-  else localStorage.removeItem(DIRECT_NOTION_TOKEN_KEY);
 }
 
 export function getDirectNotionToken(): string {

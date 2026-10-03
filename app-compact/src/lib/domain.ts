@@ -15,8 +15,6 @@ export const categoryById = (id: CategoryId | string | undefined) =>
 export const paymentById = (id: PaymentId | string | undefined) =>
   PAYMENTS.find((p) => p.id === id) || PAYMENTS[0];
 
-const DEFAULT_NAGOYA_START = '2026-04-20';
-const DEFAULT_NAGOYA_END = '2026-04-25';
 
 function isIsoDate(value: string | undefined): value is string {
   return !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -29,17 +27,6 @@ function itineraryRangeForTrip(state: AppState, trip: TripProfile): { start: str
   return { start, end };
 }
 
-function dateSeries(start: string, end: string): string[] {
-  const dates: string[] = [];
-  const cursor = new Date(`${start}T00:00:00Z`);
-  const last = new Date(`${end}T00:00:00Z`);
-  if (Number.isNaN(cursor.getTime()) || Number.isNaN(last.getTime()) || cursor > last) return dates;
-  while (cursor <= last) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return dates;
-}
 
 function isDefaultNagoyaTrip(state: AppState, trip: TripProfile): boolean {
   const range = itineraryRangeForTrip(state, trip);
@@ -136,7 +123,10 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
 }
 
 export function downloadJson(filename: string, value: unknown): void {
-  const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
+  downloadBlob(filename, new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' }));
+}
+
+function downloadBlob(filename: string, blob: Blob): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -204,21 +194,6 @@ export function getTripPhase(state: AppState, date?: string): TripPhase {
   return 'trip';
 }
 
-export function getReceiptPhase(state: AppState, receipt: Receipt): TripPhase {
-  if (receipt.phase === 'prep' || receipt.phase === 'trip' || receipt.phase === 'post') return receipt.phase;
-  const tripStartIso = state.tripDateRange?.start;
-  // Compare trip-local calendar dates, not a hardcoded +08:00 midnight: a UTC+9 trip's
-  // Day-1 00:30 receipt is still Day 1 in Tokyo but sits before the HKT-midnight cutoff,
-  // and a UTC+7 evening receipt is still prep but lands after it.
-  if (receipt.createdAt && tripStartIso) {
-    const trip = activeTrip(state);
-    const zone = trip.timezones?.[0] || getItinerary(state)[0]?.timezone || 'Asia/Hong_Kong';
-    const createdYmd = todayYmd(zone, receipt.createdAt);
-    if (createdYmd < tripStartIso) return 'prep';
-  }
-  return getTripPhase(state, receipt.date);
-}
-
 export function getPersons(state: AppState): Person[] {
   const fallbackPersons = [
     { id: 'p_boss', name: 'User 1', emoji: '👦', color: '#CC2929' },
@@ -233,56 +208,12 @@ export function getPersons(state: AppState): Person[] {
   return persons.length ? persons : fallbackPersons;
 }
 
-export function peopleForTrip(state: AppState, tripId?: string): Person[] {
-  const id = tripId || state.activeTripId;
-  // Active trip: live persons/shareRatios are the source of truth (Settings edits them).
-  // Maps are for other trips after cloud pull / trip switch.
-  if (!id || id === state.activeTripId) return getPersons(state);
-  if (state.peopleByTripId?.[id]?.length) return state.peopleByTripId[id];
-  return getPersons(state);
-}
-
-export function shareRatiosForTrip(state: AppState, tripId?: string): Record<string, number> {
-  const id = tripId || state.activeTripId;
-  if (!id || id === state.activeTripId) return state.shareRatios || {};
-  if (state.shareRatiosByTripId?.[id]) return state.shareRatiosByTripId[id];
-  return state.shareRatios || {};
-}
-
-/** Ratios must cover every person id or settlement treats missing keys as 0. */
-export function ensureShareRatiosCoverPersons(
-  persons: Person[],
-  ratios: Record<string, number> | undefined,
-): Record<string, number> {
-  const next = { ...(ratios || {}) };
-  let missing = false;
-  for (const person of persons) {
-    if (Number(next[person.id]) <= 0) {
-      missing = true;
-      break;
-    }
-  }
-  if (!missing) return next;
-  const equal = Math.floor(100 / Math.max(1, persons.length));
-  for (const person of persons) {
-    if (Number(next[person.id]) <= 0) next[person.id] = equal;
-  }
-  return next;
-}
-
 export function displayStore(receipt: Receipt): string {
   return receipt.store?.startsWith('⏳ ') ? receipt.store.slice(2) : receipt.store || '';
 }
 
 export function isPendingReceipt(receipt: Receipt): boolean {
   return receipt.store?.startsWith('⏳ ') || false;
-}
-
-export function jpyToHkd(jpy: number, state: AppState): number {
-  // Floor is 0.01 to match amountToHkd: a 0.1 floor corrupts currencies whose per-HKD
-  // rate sits below 0.1 (e.g. live GBP ≈ 0.095).
-  const rate = Math.max(0.01, perHkdForCurrency(state, 'JPY'));
-  return Math.round((Number(jpy) || 0) / rate);
 }
 
 export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
@@ -716,7 +647,8 @@ export function exportCsv(state: AppState): void {
       String(r.originalAmount ?? r.total ?? 0),
       r.originalCurrency || r.currency || state.tripCurrency,
       String(r.total || 0),
-      String(r.hkdAmount ?? getReceiptHkdAmount(r, state)),
+      // Same resolver as every on-screen total (pinned rate + stale-snapshot repair).
+      String(getReceiptHkdAmount(r, state)),
       person ? `${person.emoji} ${person.name}` : '',
       receiptRegion(state, r),
       r.address || '',
@@ -726,12 +658,10 @@ export function exportCsv(state: AppState): void {
     ]);
   }
   const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`;
-  a.click();
-  window.setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+  downloadBlob(
+    `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`,
+    new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+  );
 }
 
 export function csvCell(value: unknown): string {
@@ -937,7 +867,6 @@ export function openMapExternal(mapUrl: string | undefined, name: string, addres
     if (duration < 2500 && likelyFailed && !(isIOS && isStandalone && opened)) {
       const cleanQ = [name, address].filter(Boolean).join(' ') || name || '';
       const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(cleanQ)}`;
-      console.log('Detect potential launch failure, falling back to HTTPS Web Google Maps:', fallbackUrl);
       if (isIOS && isStandalone) {
         window.location.href = fallbackUrl;
       } else {

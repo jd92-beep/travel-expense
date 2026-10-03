@@ -148,7 +148,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
             <StatusPill tone="info" icon={<ReceiptText size={14} />}>{analysisReceipts.length} 筆紀錄</StatusPill>
           </span>
         </div>
-        <SpendingCompass categories={catTotals} total={trueTotal} budget={Number(state.budget) || 0} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} setState={setState} updateState={updateState} onTab={onTab} />
+        <SpendingCompass categories={catTotals} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} setState={setState} updateState={updateState} onTab={onTab} />
       </GlassCard>
 
       <DataPanel
@@ -344,7 +344,7 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
   );
 }
 
-function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage, state, setState, updateState, onTab }: { categories: StatBucket[]; total: number; budget: number; dailyBudget: number; dailyAverage: number; state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
+function SpendingCompass({ categories, dailyBudget, dailyAverage, state, setState, updateState, onTab }: { categories: StatBucket[]; dailyBudget: number; dailyAverage: number; state: AppState; setState?: Dispatch<SetStateAction<AppState>>; updateState: (patch: Partial<AppState>) => void; onTab?: (tab: any) => void }) {
   const [isEditingBudget, setIsEditingBudget] = useState(false);
   const [editBudgetVal, setEditBudgetVal] = useState('');
   const trip = activeTrip(state);
@@ -373,7 +373,6 @@ function SpendingCompass({ categories, total, budget, dailyBudget, dailyAverage,
   const storedDisplayCurrency = state.displayCurrency || 'HKD';
   // A stale selection (e.g. after switching trips) falls back to HKD gracefully.
   const displayCurrency = chipCurrencies.includes(storedDisplayCurrency) ? storedDisplayCurrency : 'HKD';
-  const showTripCurrency = displayCurrency !== 'HKD';
 
   // Convert an amount denominated in the trip currency into the selected display currency
   // (identity for the trip currency itself; everything else round-trips through the HKD anchor).

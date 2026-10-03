@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { AlertTriangle, CalendarDays, Camera, ChevronDown, ChevronRight, Mail, RefreshCw, Search, SlidersHorizontal } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Camera, ChevronRight, Mail, Search, SlidersHorizontal } from 'lucide-react';
 import { Reveal, Toast } from '../components/ui';
-import { activeTrip, scopedReceiptsForTrip, switchTrip } from '../domain/trip/normalize';
-import { hasCredentialBrokerSession } from '../lib/credentialBroker';
-import { hasDirectNotionToken } from '../lib/notion';
+import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { CATEGORIES } from '../lib/constants';
 import { takeReceiptRepairIntent } from '../lib/repairIntent';
-import type { AppState, CategoryId, Receipt, SyncQueueItem, TripProfile } from '../lib/types';
+import type { AppState, CategoryId, Receipt, SyncQueueItem } from '../lib/types';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryById, displayStore, fmt, getPersons, isPendingReceipt, safePhotoUrl, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency } from '../lib/domain';
@@ -141,35 +139,18 @@ function receiptHealthMarkers(
 export function History({
   state,
   setState,
-  updateState,
-  onImport,
-  onHydrate,
   onOpen,
   onConfirmPending,
-  onPull,
   onFlushPersist,
-  cloudSyncAvailable = false,
 }: {
   state: AppState;
   setState?: React.Dispatch<React.SetStateAction<AppState>>;
-  updateState?: (patch: Partial<AppState>) => void;
-  onImport: (receipts: Receipt[]) => void;
-  onHydrate?: (receipts: Receipt[], trips: TripProfile[]) => void;
   onOpen: (receipt: Receipt) => void;
   onConfirmPending: (receipt: Receipt) => void;
-  onPull?: () => Promise<void>;
   onFlushPersist?: () => void;
-  cloudSyncAvailable?: boolean;
 }) {
-  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth <= 768);
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<'all' | CategoryId>('all');
-  const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
 
@@ -227,30 +208,7 @@ export function History({
     ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
   ];
   const filterBadge = (category !== 'all' ? 1 : 0) + pending.length;
-  const activeTripName = trip.name || state.tripName || '東京出張之旅';
-  const handleSwitchTrip = (tripId: string) => {
-    if (!updateState) return;
-    const patch = switchTrip(state, tripId);
-    if (patch) updateState(patch);
-  };
 
-  async function handlePull(mode: 'manual' | 'auto' = 'manual') {
-    if (!cloudSyncAvailable && !hasCredentialBrokerSession(state) && !hasDirectNotionToken()) {
-      if (mode === 'manual') setStatus('未連線：請登入 Supabase 或重新解鎖 Credential Broker。');
-      return;
-    }
-    setBusy(true);
-    try {
-      if (onPull) {
-        await onPull();
-        setStatus(`${mode === 'auto' ? '已自動' : '已'}從雲端同步。`);
-      }
-    } catch (error) {
-      setStatus(`雲端 pull 失敗：${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   function handleKeepLocal(conflict: ReceiptConflictItem) {
     if (!setState) return;

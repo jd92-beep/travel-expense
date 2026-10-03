@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, CSSProperties, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import { cn } from '../lib/cn';
@@ -52,14 +52,6 @@ export function GlassCard({
       />
       {children}
     </MagicCard>
-  );
-}
-
-export function AnimatedNumber({ value, prefix = '', suffix = '' }: { value: number; prefix?: string; suffix?: string }) {
-  return (
-    <span className="animated-number">
-      {prefix}<NumberTicker value={Math.round(value)} className="animated-number-value" />{suffix}
-    </span>
   );
 }
 
@@ -149,48 +141,8 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-export function MetricCard({
-  label,
-  value,
-  detail,
-  tone = 'neutral',
-}: {
-  label: string;
-  value: ReactNode;
-  detail?: ReactNode;
-  tone?: 'neutral' | 'accent' | 'danger' | 'success';
-}) {
-  return (
-    <article className={`metric-card ${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {detail && <small>{detail}</small>}
-    </article>
-  );
-}
-
 export function ActionSheet({ children }: { children: ReactNode }) {
   return <div className="action-sheet">{children}</div>;
-}
-
-export function ModalSheet({
-  title,
-  actions,
-  children,
-}: {
-  title: string;
-  actions?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="modal-sheet" role="dialog" aria-modal="true" aria-label={title}>
-      <header>
-        <h2>{title}</h2>
-        {actions}
-      </header>
-      {children}
-    </section>
-  );
 }
 
 export function TimelineRail({

@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.09.15.1';
+const VERSION = '2026.10.04.1';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -347,18 +347,10 @@ async function listTrustedDevices(request, env) {
   const origin = request.headers.get('Origin') || '';
   const listed = await env.CREDENTIALS_VAULT.list({ prefix: 'trusted-device:' });
   const keys = listed?.keys || [];
-  const devices = [];
-  for (const item of keys.slice(0, 100)) {
-    const record = await env.CREDENTIALS_VAULT.get(item.name, 'json');
-    if (!record || record.revokedAt || record.origin !== origin || Number(record.expiresAt || 0) <= Date.now()) continue;
-    devices.push({
-      deviceId: record.deviceId,
-      deviceName: record.deviceName,
-      createdAt: record.createdAt,
-      expiresAt: record.expiresAt,
-    });
-  }
-  return devices;
+  const records = await Promise.all(keys.slice(0, 100).map((item) => env.CREDENTIALS_VAULT.get(item.name, 'json')));
+  return records
+    .filter((record) => record && !record.revokedAt && record.origin === origin && Number(record.expiresAt || 0) > Date.now())
+    .map(({ deviceId, deviceName, createdAt, expiresAt }) => ({ deviceId, deviceName, createdAt, expiresAt }));
 }
 
 async function revokeTrustedDevice(request, env, body) {

@@ -27,14 +27,11 @@ export function ReceiptPhotoModal({ receipt, onClose }: { receipt: Receipt; onCl
       setFallbackAttempted(true);
       const thumbSrc = safePhotoUrl(receipt.photoThumb);
       if (thumbSrc && thumbSrc !== imgSrc) {
-        console.log('[ReceiptPhotoModal] Main image load failed. Falling back to thumbnail.');
         setImgSrc(thumbSrc);
       } else {
-        console.log('[ReceiptPhotoModal] Main image load failed. No valid thumbnail available.');
         setError(true);
       }
     } else {
-      console.log('[ReceiptPhotoModal] Thumbnail fallback failed as well.');
       setError(true);
     }
   };

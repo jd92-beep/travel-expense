@@ -9,7 +9,6 @@ import { activeTrip, stampReceiptForTrip, stableSpotId } from './domain/trip/nor
 import { applyItineraryEdit, bakeItineraryOverrides, getItinerary } from './lib/domain';
 import { hasCredentialBrokerSession } from './lib/credentialBroker';
 import { canUseNotionMirror } from './lib/notionAccess';
-import { mergePulledData } from './lib/syncMerge';
 import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
@@ -25,9 +24,9 @@ import { useEffectsTier } from './lib/performance';
 import { acceptSupabaseTripInvite, createSupabaseTripInvite, hasSupabaseSession, useSupabaseAuth } from './lib/supabase';
 import { SupabaseGate } from './security/SupabaseGate';
 import { clearIndexedState } from './storage/indexedDb';
-import { WelcomeGuidePopup, type WelcomeGuideResult } from './components/WelcomeGuidePopup';
+import type { WelcomeGuideResult } from './components/WelcomeGuidePopup';
 import { upsertSupabaseTrip } from './lib/supabase';
-import { hasDeviceTrust, clearDeviceTrust } from './security/deviceTrust';
+import { clearDeviceTrust } from './security/deviceTrust';
 import { clearTrustedDevice } from './security/trustedDevice';
 import { TripThemeProvider } from './theme/tripTheme';
 
@@ -39,6 +38,8 @@ const Timeline = lazy(() => import('./tabs/Timeline').then((module) => ({ defaul
 const History = lazy(() => import('./tabs/History').then((module) => ({ default: module.History })));
 const Weather = lazy(() => import('./tabs/Weather').then((module) => ({ default: module.Weather })));
 const Stats = lazy(() => import('./tabs/Stats').then((module) => ({ default: module.Stats })));
+// The guide only mounts on demand; keep it (and ai.ts behind it) out of the boot chunk.
+const WelcomeGuidePopup = lazy(() => import('./components/WelcomeGuidePopup').then((module) => ({ default: module.WelcomeGuidePopup })));
 const Settings = lazy(() => import('./tabs/Settings').then((module) => ({ default: module.Settings })));
 
 const VALID_TABS = new Set<TabId>(TAB_MANIFEST.map((item) => item.id));
@@ -467,10 +468,8 @@ export function App() {
       bootSyncKeys.current.add(bootSyncKey);
       bootSyncInitiated.current = true;
       if (receiptCountRef.current === 0) {
-        console.log('[App] Boot pull — no local receipts, fetching from configured cloud sources');
         void pull();
       } else {
-        console.log('[App] Boot sync — existing local data');
         void sync({ auto: true });
       }
     }, 800);
@@ -490,7 +489,6 @@ export function App() {
       if (activeTrip(prev).sharing?.role === 'viewer') return prev;
       const baked = bakeItineraryOverrides(prev);
       if (!baked) return prev;
-      console.log('[App] Baking itinerary overrides into trip itinerary (one-shot migration)');
       return { ...applyItineraryEdit(prev, baked), itineraryOverrides: {} };
     });
   }, [isStorageReady, setState]);
@@ -506,12 +504,10 @@ export function App() {
     const needsSync = !state.autoSync;
 
     if (needsDb || needsSync) {
-      console.log('[App] Auto-connecting Notion for Boss...');
       const patch: Record<string, unknown> = {};
       if (needsDb) patch.notionDb = DEFAULT_NOTION_DB;
       if (needsSync) patch.autoSync = true;
       updateState(patch as Partial<AppState>);
-      console.log('[App] Notion auto-connected:', { notionDb: DEFAULT_NOTION_DB, autoSync: true });
     }
   }, [supabaseAuth.session, state.personalNotionConnected, state.notionDb, state.autoSync, userEmail, updateState]);
 
@@ -536,9 +532,6 @@ export function App() {
     }
   };
 
-  const importRemoteData = (receipts: Receipt[], trips: TripProfile[] = []) => {
-    setState((prev) => mergePulledData(prev, receipts, trips));
-  };
 
   const handleSyncRetry = useCallback(() => {
     syncEngine.retryFailedItems();
@@ -579,11 +572,13 @@ export function App() {
       <HyperframeBackground />
       <TuringBackdrop />
       {showGuide && (
-        <WelcomeGuidePopup
-          state={state}
-          onSave={handleSaveGuideTrip}
-          onDismiss={handleDismissGuide}
-        />
+        <Suspense fallback={null}>
+          <WelcomeGuidePopup
+            state={state}
+            onSave={handleSaveGuideTrip}
+            onDismiss={handleDismissGuide}
+          />
+        </Suspense>
       )}
       {globalOcrBusy && (
         <div className="global-ocr-floating-badge">
@@ -622,22 +617,17 @@ export function App() {
                     <History
                       state={state}
                       setState={setState}
-                      updateState={updateState}
                       onOpen={setEditing}
-                      onImport={importReceipts}
-                      onHydrate={importRemoteData}
                       onConfirmPending={(receipt) => {
                         const next = stampReceiptForTrip(state, { ...receipt, store: receipt.store.replace(/^⏳\s*/, ''), syncStatus: (isCloudSyncActive || canUseNotionMirror(state, false, userEmail)) ? 'queued' : 'local' });
                         upsertReceipt(next);
                       }}
-                      onPull={syncEngine.pull}
                       onFlushPersist={flushPersist}
-                      cloudSyncAvailable={isCloudSyncActive}
                     />
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
-                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} onPushSettings={syncEngine.pushSettings} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} onReopenGuide={handleReopenGuide} />}
+                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} onReopenGuide={handleReopenGuide} />}
                 </>
               );
               // The keyed ErrorBoundary must live INSIDE the motion.div: when it wrapped

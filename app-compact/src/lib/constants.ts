@@ -6,7 +6,7 @@ import { COMPACT_AI_MODELS, resolveCatalogAiModelId } from './providerCatalog.ts
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.25.1';
+export const APP_VERSION = '0.25.3';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -16,7 +16,6 @@ export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as
 export const APP_SCHEMA_VERSION = 4;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
 export const DEFAULT_SCAN_VOICE_MODEL_ID = 'mimo/mimo-v2.5';
-export const DEFAULT_KIMI_PRIMARY_MODEL_ID = 'kimi/kimi-for-coding';
 export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'mimo/mimo-v2.5-pro';
 
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
@@ -71,8 +70,6 @@ export const PAYMENTS = [
   { id: 'paypay', name: 'PayPay', color: '#f97316' },
   { id: 'suica', name: 'Suica', color: '#a78bfa' },
 ] as const;
-
-export const PRE_PAID_CATEGORIES = new Set(['lodging', 'ticket', 'localtour', 'transport']);
 
 export const ITINERARY: ItineraryDay[] = [
   { date: '2026-04-20', day: 1, region: '名古屋市區', highlight: 'HKG→NGO + 蓬萊軒鰻魚飯', spots: [

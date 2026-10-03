@@ -555,7 +555,6 @@ export function ReceiptEditor({
                 onError={(e) => {
                   const thumbSrc = safePhotoUrl(draft.photoThumb);
                   if (thumbSrc && e.currentTarget.src !== thumbSrc) {
-                    console.log('[ReceiptEditor] photoUrl failed, fallback to photoThumb');
                     e.currentTarget.src = thumbSrc;
                   }
                 }}
