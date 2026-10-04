@@ -4,6 +4,22 @@ Last updated: 2026-10-04 HKT
 
 ## Current Status
 
+- **`1.5.1` code ready (NOT deployed)** — performance pass on top of 1.5.0.
+  - **Root cause of slow pages:** `vercel.json` had no `regions`, so the BFF ran in Vercel's default
+    `iad1` while Supabase is `ap-southeast-1`. Every read is BFF → auth-state Edge (session verify) →
+    admin Edge (data), i.e. ~4 trans-Pacific legs from HK. Now `"regions": ["sin1"]` (unit-tested).
+    DB RPCs measured 10–20 ms and photos average 36 KB, so neither was the bottleneck.
+  - Write gate uses `/api/runtime?scope=policy` (Edge env-only answer, no frontend/broker/DB probes);
+    an older Edge ignores the scope and returns the full payload, so deploy order does not matter.
+  - Edge `/runtime` and `/providers` run their probes/DB reads concurrently (worst case ≈ slowest probe,
+    not the sum); photo path downloads and hashes in parallel.
+  - Receipt photos: session-scoped blob cache (40 entries, revoked on logout/401); click on a list row
+    starts the photo download in parallel with the detail JSON. Not prefetched on hover because every
+    photo load writes an audit row.
+  - Hover/focus prefetch of account/trip/receipt detail payloads; lazy route chunks warmed at idle.
+  - Gates: unit 36/36, contract 25/25, security scan, build, Edge deno suite 59/59 (with npm import
+    map override, esm.sh is blocked in the sandbox), smoke 53 passed (+1 new photo-cache spec).
+
 - **`1.5.0` code ready (NOT deployed; production still `1.4.1`)** — admin bug/UX/data-accuracy sweep.
   - **Live DB already migrated** (`20261003090000_admin_console_data_accuracy`, applied 2026-10-03 via
     Supabase MCP as `postgres`). The owner roles (`admin_auth_owner` / `admin_read_owner`) are held

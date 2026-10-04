@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { prefetchProps } from "../../../lib/prefetch";
 import { useEffect, useState } from "react";
 import {
   ArrowDown,
@@ -227,7 +228,7 @@ export function TripsPage() {
                             <td data-label="行程">
                               <Link
                                 className="entity-link"
-                                to={`/data/trips/${trip.id}`}
+                                to={`/data/trips/${trip.id}`} {...prefetchProps("trip", trip.id)}
                               >
                                 {trip.name}
                               </Link>
@@ -243,7 +244,7 @@ export function TripsPage() {
                               {trip.archived && <small><StatusBadge value="archived" label="已封存" /></small>}
                             </td>
                             <td data-label="Owner">
-                              <Link className="text-link" to={`/data/accounts/${trip.owner_id}`}>
+                              <Link className="text-link" to={`/data/accounts/${trip.owner_id}`} {...prefetchProps("account", trip.owner_id)}>
                                 {trip.owner_masked_email}
                               </Link>
                             </td>
@@ -686,7 +687,7 @@ export function TripDetailPage() {
         <div className="metric-block metric-identity">
           <span>Owner</span>
           <strong>
-            <Link className="text-link" to={`/data/accounts/${trip.overview.owner_id}`}>
+            <Link className="text-link" to={`/data/accounts/${trip.overview.owner_id}`} {...prefetchProps("account", trip.overview.owner_id)}>
               {trip.overview.owner_masked_email}
             </Link>
           </strong>
@@ -864,7 +865,7 @@ export function TripDetailPage() {
                   return (
                   <tr key={member.user_id}>
                     <td data-label="身份">
-                      <Link className="text-link" to={`/data/accounts/${member.user_id}`}>
+                      <Link className="text-link" to={`/data/accounts/${member.user_id}`} {...prefetchProps("account", member.user_id)}>
                         {member.masked_email || member.user_id}
                       </Link>
                     </td>
@@ -1027,7 +1028,7 @@ export function TripDetailPage() {
                       <td data-label="收據">
                         <Link
                           className="entity-link"
-                          to={`/data/receipts/${receipt.id}`}
+                          to={`/data/receipts/${receipt.id}`} {...prefetchProps("receipt", receipt.id)}
                         >
                           {receipt.store || "未命名收據"}
                         </Link>

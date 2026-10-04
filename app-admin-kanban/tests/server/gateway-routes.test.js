@@ -305,6 +305,16 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
   );
 });
 
+test('gateway forwards only the cheap policy scope on the runtime read', () => {
+  const route = resolveGatewayRoute('/api/admin/runtime', 'GET', new URLSearchParams('scope=policy'));
+  assert.equal(route.edgeRoute, '/api/runtime');
+  assert.deepEqual(route.query, { scope: 'policy' });
+  assert.throws(
+    () => resolveGatewayRoute('/api/admin/runtime', 'GET', new URLSearchParams('scope=all')),
+    /parameter is invalid/i,
+  );
+});
+
 test('gateway validates production list, search, and reconciliation inputs', () => {
   assert.throws(
     () => resolveGatewayRoute('/api/admin/accounts', 'GET', new URLSearchParams('limit=500')),

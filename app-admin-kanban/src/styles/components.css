@@ -323,7 +323,7 @@ th input[type="checkbox"], td input[type="checkbox"] { width: 18px; height: 18px
 .split-lists > div { min-width: 0; padding: 12px; background: var(--surface); }
 .split-lists h3 { margin-bottom: 8px; }
 .receipt-photo-viewer { display: grid; gap: 10px; }
-.receipt-photo-viewer img { width: 100%; max-height: min(68vh, 720px); display: block; object-fit: contain; border: 1px solid var(--border); background: var(--bg); }
+.receipt-photo-viewer img { width: 100%; height: auto; max-height: min(68vh, 720px); display: block; object-fit: contain; border: 1px solid var(--border); background: var(--bg); }
 .receipt-photo-viewer .state-panel { min-height: 240px; }
 .photo-metadata { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; border: 1px solid var(--border-soft); }
 .photo-metadata > div { min-width: 0; padding: 8px 10px; border-right: 1px solid var(--border-soft); }

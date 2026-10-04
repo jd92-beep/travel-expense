@@ -1812,9 +1812,11 @@ export async function streamAdminReceiptPhoto(
   ) {
     throw new AdminOperationError("UPSTREAM_UNAVAILABLE", "Receipt photo metadata is invalid", 502);
   }
-  const { data: blob, error: downloadError } = await context.client.storage.from(bucket).download(
-    path,
-  );
+  // The audit hash does not depend on the bytes; compute it while Storage downloads.
+  const [{ data: blob, error: downloadError }, receiptHash] = await Promise.all([
+    context.client.storage.from(bucket).download(path),
+    sha256Hex(receiptId),
+  ]);
   if (downloadError || !blob) {
     throw new AdminOperationError(
       "UPSTREAM_UNAVAILABLE",
@@ -1834,7 +1836,6 @@ export async function streamAdminReceiptPhoto(
   ) {
     throw new AdminOperationError("UPSTREAM_UNAVAILABLE", "Receipt photo content is invalid", 502);
   }
-  const receiptHash = await sha256Hex(receiptId);
   if (!HASH_RE.test(receiptHash)) {
     throw new AdminOperationError("INTERNAL_ERROR", "Receipt audit hash failed", 500);
   }

@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { prefetchProps } from "../../../lib/prefetch";
 import { useEffect, useState } from "react";
 import {
   Download,
@@ -212,7 +213,7 @@ export function AccountsPage() {
                             <td data-label="身份">
                               <Link
                                 className="entity-link"
-                                to={`/data/accounts/${account.id}`}
+                                to={`/data/accounts/${account.id}`} {...prefetchProps("account", account.id)}
                               >
                                 {account.display_name || account.masked_email}
                               </Link>
@@ -637,7 +638,7 @@ export function AccountDetailPage() {
               <Link
                 key={item.id}
                 className="compact-row"
-                to={`/data/trips/${item.id}`}
+                to={`/data/trips/${item.id}`} {...prefetchProps("trip", item.id)}
               >
                 <strong>{item.name || item.id}</strong>
                 <span>
@@ -657,7 +658,7 @@ export function AccountDetailPage() {
               <Link
                 key={item.id}
                 className="compact-row"
-                to={`/data/receipts/${item.id}`}
+                to={`/data/receipts/${item.id}`} {...prefetchProps("receipt", item.id)}
               >
                 <strong>{item.store || item.id}</strong>
                 <span>

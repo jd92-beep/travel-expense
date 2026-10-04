@@ -47,6 +47,8 @@ import {
   FilterChips,
 } from "../../../components/primitives/ConsolePrimitives";
 import { downloadCsv } from "../../../lib/csv";
+import { prefetchProps } from "../../../lib/prefetch";
+import { prefetchReceiptPhoto, useReceiptPhoto } from "../../../lib/receiptPhotos";
 import { useToast } from "../../../components/primitives/Toaster";
 import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
@@ -379,6 +381,8 @@ export function ReceiptsPage() {
                               <Link
                                 className="entity-link"
                                 to={`/data/receipts/${receipt.id}`}
+                                {...prefetchProps("receipt", receipt.id)}
+                                onClick={() => receipt.has_photo && prefetchReceiptPhoto(receipt.id)}
                               >
                                 {receipt.store}
                               </Link>
@@ -390,13 +394,14 @@ export function ReceiptsPage() {
                               <Link
                                 className="text-link"
                                 to={`/data/trips/${receipt.trip_id}`}
+                                {...prefetchProps("trip", receipt.trip_id)}
                               >
                                 {receipt.trip_name ||
                                   receipt.trip_id.slice(0, 8)}
                               </Link>
                             </td>
                             <td data-label="Owner">
-                              <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`}>
+                              <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`} {...prefetchProps("account", receipt.owner_id)}>
                                 {receipt.owner_masked_email}
                               </Link>
                             </td>
@@ -526,7 +531,6 @@ export function ReceiptDetailPage() {
   const online = useOnline();
   const writePolicy = useAdminWritePolicy();
   const [photoAttempt, setPhotoAttempt] = useState(0);
-  const [photoFailed, setPhotoFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ReceiptAmendDraft | null>(null);
   const query = useQuery({
@@ -540,6 +544,13 @@ export function ReceiptDetailPage() {
     await query.refetch();
   });
   const loadedReceipt = query.data?.data.receipt;
+  // Starts immediately when the list row said has_photo (prefetched on click),
+  // otherwise as soon as the detail payload confirms a photo exists.
+  const photo = useReceiptPhoto(
+    receiptId,
+    Boolean(query.data?.data.photo || loadedReceipt?.has_photo),
+    photoAttempt,
+  );
   useEffect(() => {
     if (!loadedReceipt) return;
     setDraft(receiptDraft(loadedReceipt));
@@ -812,7 +823,7 @@ export function ReceiptDetailPage() {
             <div>
               <dt>Owner</dt>
               <dd>
-                <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`}>
+                <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`} {...prefetchProps("account", receipt.owner_id)}>
                   {receipt.owner_masked_email}
                 </Link>
               </dd>
@@ -932,7 +943,7 @@ export function ReceiptDetailPage() {
             {detail.photo
               ? (
                 <div className="receipt-photo-viewer">
-                  {photoFailed
+                  {photo.error
                     ? (
                       <div className="state-panel state-error" role="alert">
                         <Camera size={22} />
@@ -940,22 +951,27 @@ export function ReceiptDetailPage() {
                         <button
                           className="button secondary"
                           type="button"
-                          onClick={() => {
-                            setPhotoFailed(false);
-                            setPhotoAttempt((value) => value + 1);
-                          }}
+                          onClick={() => setPhotoAttempt((value) => value + 1)}
                         >
                           <RefreshCw size={15} />重試
                         </button>
                       </div>
                     )
-                    : (
+                    : photo.url
+                    ? (
                       <img
-                        key={photoAttempt}
-                        src={`/api/admin/receipts/${receiptId}/photo`}
+                        src={photo.url}
                         alt={`${receipt.store} 收據照片`}
-                        onError={() => setPhotoFailed(true)}
+                        decoding="async"
+                        width={Number(detail.photo.width) || undefined}
+                        height={Number(detail.photo.height) || undefined}
                       />
+                    )
+                    : (
+                      <div className="state-panel" aria-live="polite">
+                        <span className="shimmer-bar skeleton-bar" style={{ width: "70%" }} />
+                        <strong>載入收據照片</strong>
+                      </div>
                     )}
                   <dl className="photo-metadata">
                     <div>

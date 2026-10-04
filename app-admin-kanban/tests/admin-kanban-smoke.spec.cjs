@@ -1045,6 +1045,20 @@ test('receipt photo is rendered through the admin BFF route', async ({ page }) =
   await expect(image).toHaveJSProperty('naturalWidth', 1);
 });
 
+test('receipt photo is downloaded once per session and reused on revisit', async ({ page }) => {
+  await setupApi(page);
+  let photoRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === `/api/admin/receipts/${receiptId}/photo`) photoRequests += 1;
+  });
+  await page.goto(`/data/receipts/${receiptId}`);
+  await expect(page.getByRole('img', { name: 'Nagoya Station 收據照片' })).toBeVisible();
+  await page.getByRole('navigation', { name: '麵包屑' }).getByRole('link', { name: '收據' }).click();
+  await page.getByRole('link', { name: 'Nagoya Station' }).first().click();
+  await expect(page.getByRole('img', { name: 'Nagoya Station 收據照片' })).toBeVisible();
+  expect(photoRequests).toBe(1);
+});
+
 test('receipt sync controls expose only server-eligible retry and cancel actions', async ({ page }) => {
   const requests = [];
   const failedJobId = '98500000-0000-4000-8000-000000000001';

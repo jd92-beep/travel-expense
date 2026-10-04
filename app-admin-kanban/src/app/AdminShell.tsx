@@ -21,7 +21,7 @@ import {
   useNavigate,
 } from "react-router";
 import { useAdminSession } from "./session";
-import { prefetchDefaultWorkspaceReads } from "./defaultWorkspacePrefetch";
+import { prefetchDefaultWorkspaceReads, warmRouteChunks } from "./defaultWorkspacePrefetch";
 import { adminGet } from "../lib/api/adminClient";
 import type { OperationListData } from "../lib/contracts/admin";
 import {
@@ -205,6 +205,7 @@ export function AdminShell() {
     if (!session || prefetchStartedRef.current) return;
     prefetchStartedRef.current = true;
     void prefetchDefaultWorkspaceReads(location.pathname);
+    warmRouteChunks();
   }, [location.pathname, session]);
 
   useEffect(() => {

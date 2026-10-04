@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { prefetchProps } from "../../lib/prefetch";
 import { useEffect, useState } from "react";
 import { RefreshCw, ScanSearch, Search, XCircle } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
@@ -374,14 +375,14 @@ export function SyncJobsPage() {
                             <td data-label="Provider">{job.provider}</td>
                             <td data-label="操作">{job.operation}</td>
                             <td data-label="Owner">
-                              <Link className="text-link" to={`/data/accounts/${job.owner_id}`}>
+                              <Link className="text-link" to={`/data/accounts/${job.owner_id}`} {...prefetchProps("account", job.owner_id)}>
                                 {job.owner_masked_email}
                               </Link>
                             </td>
                             <td data-label="Receipt">
                               <Link
                                 className="text-link"
-                                to={`/data/receipts/${job.receipt_id}`}
+                                to={`/data/receipts/${job.receipt_id}`} {...prefetchProps("receipt", job.receipt_id)}
                               >
                                 <code>{job.receipt_id.slice(0, 8)}</code>
                               </Link>

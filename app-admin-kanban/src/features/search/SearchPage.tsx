@@ -16,6 +16,7 @@ import {
   StatusBadge,
 } from "../../components/primitives/ConsolePrimitives";
 import { BlurFade } from "../../components/fx/BlurFade";
+import { type DetailKind, prefetchProps } from "../../lib/prefetch";
 
 const STAGGER_STEP_S = 0.04;
 const STAGGER_MAX_ITEMS = 8;
@@ -101,6 +102,7 @@ export function SearchPage() {
               <SearchGroup
                 title="帳戶"
                 base="/data/accounts"
+                kind="account"
                 viewAll={`/data/accounts?q=${encodeURIComponent(q)}`}
                 items={data.accounts.map((account) => ({
                   id: account.id,
@@ -112,6 +114,7 @@ export function SearchPage() {
               <SearchGroup
                 title="行程"
                 base="/data/trips"
+                kind="trip"
                 viewAll={`/data/trips?q=${encodeURIComponent(q)}`}
                 items={data.trips.map((trip) => ({
                   id: trip.id,
@@ -125,6 +128,7 @@ export function SearchPage() {
               <SearchGroup
                 title="收據"
                 base="/data/receipts"
+                kind="receipt"
                 viewAll={`/data/receipts?q=${encodeURIComponent(q)}`}
                 items={data.receipts.map((receipt) => ({
                   id: receipt.id,
@@ -143,7 +147,8 @@ export function SearchPage() {
 }
 
 function SearchGroup(
-  { title, items, base, viewAll }: {
+  { title, items, base, viewAll, kind }: {
+    kind: DetailKind;
     title: string;
     items: SearchItem[];
     base: string;
@@ -167,7 +172,11 @@ function SearchGroup(
                 key={item.id}
                 delay={Math.min(index, STAGGER_MAX_ITEMS - 1) * STAGGER_STEP_S}
               >
-                <Link className="compact-row" to={`${base}/${item.id}`}>
+                <Link
+                  className="compact-row"
+                  to={`${base}/${item.id}`}
+                  {...prefetchProps(kind, item.id)}
+                >
                   <Search size={16} />
                   <span>
                     <strong>{item.title || item.id}</strong>

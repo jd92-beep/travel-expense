@@ -24,7 +24,9 @@ type RuntimeData = {
 export function useAdminWritePolicy() {
   const query = useQuery({
     queryKey: ["admin", "runtime", "write-policy"],
-    queryFn: ({ signal }) => adminGet<RuntimeData>("/runtime", undefined, signal),
+    // scope=policy skips the slow frontend/broker health probes; an older Edge
+    // ignores the scope and still returns runtimePolicy inside the full payload.
+    queryFn: ({ signal }) => adminGet<RuntimeData>("/runtime", { scope: "policy" }, signal),
     staleTime: 60_000,
     retry: 1,
   });
