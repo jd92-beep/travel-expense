@@ -454,13 +454,17 @@ begin
     raise exception 'global search result is missing or leaked full email';
   end if;
 
-  begin
-    perform public.admin_read_search('read-owner@example.invalid');
-  exception when others then
-    v_rejected := true;
-  end;
-  if not v_rejected then
-    raise exception 'global search accepted a full email query';
+  -- Admin 1.5.0: operators may look an account up by full email (service_role only),
+  -- but every result row stays masked; the full email only appears in account detail.
+  v_search := public.admin_read_search('read-owner@example.invalid');
+  if jsonb_array_length(v_search -> 'accounts') <> 1
+    or v_search::text like '%read-owner@example.invalid%' then
+    raise exception 'full-email global search missed the account or leaked the email';
+  end if;
+  v_accounts := public.admin_read_accounts(51, null, null, 'read-owner@example.invalid', null, null);
+  if (v_accounts ->> 'total')::integer <> 1
+    or v_accounts::text like '%read-owner@example.invalid%' then
+    raise exception 'full-email account filter missed the account or leaked the email';
   end if;
 end
 $$;
