@@ -1030,11 +1030,7 @@ button.sync-status-indicator:focus-visible {
 }
 .control-icon.blue { background: linear-gradient(135deg, #1E4D6B, #3A6B8C); }
 .control-icon.red { background: linear-gradient(135deg, #C23B5E, #D47070); }
-.scan-hero {
-  display: grid;
-  gap: 12px;
-}
-.scan-hero .section-head { margin-bottom: 0; }
+
 .history-command {
   /* Inherit layout from Tailwind classes inside component */
 }
@@ -1309,49 +1305,6 @@ button.sync-status-indicator:focus-visible {
   white-space: nowrap;
   border: 0;
 }
-.scan-picker-label:focus-visible {
-  outline: 3px solid rgba(24, 57, 92, .35);
-  outline-offset: 2px;
-}
-.scan-hero-card {
-  isolation: isolate;
-}
-.scan-hero-card::before {
-  content: '';
-  position: absolute;
-  inset: 12px;
-  z-index: 1;
-  border: 1px solid rgba(30,77,107,.12);
-  border-radius: 30px;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.28), rgba(255,248,236,.16)),
-    repeating-linear-gradient(90deg, rgba(211,154,41,.08) 0 1px, transparent 1px 28px);
-  pointer-events: none;
-}
-
-.scan-screen .scan-hero-card::before {
-  inset: 0;
-  z-index: 0;
-  border: 0;
-  border-radius: inherit;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,.9) 0%, rgba(255,255,255,.62) 48%, rgba(255,255,255,.3) 100%),
-    linear-gradient(180deg, rgba(255,248,236,.28), rgba(255,255,255,.2)),
-    var(--travel-ai-atlas);
-  background-repeat: no-repeat;
-  background-size: 100% 100%, 100% 100%, 300% 100%;
-  background-position: center, center, left center;
-  opacity: .88;
-  filter: saturate(1.05) contrast(1.02);
-}
-
-.scan-screen .scan-hero-card::after {
-  z-index: 0;
-  background:
-    linear-gradient(90deg, rgba(30,77,107,.11) 0 1px, transparent 1px 30px),
-    linear-gradient(0deg, rgba(212,168,67,.10) 0 1px, transparent 1px 30px),
-    radial-gradient(circle at 18% 12%, rgba(37,99,235,.13), transparent 36%);
-}
 
 @keyframes scan-beam-y {
   0%, 100% { transform: translateY(-130%); opacity: 0; }
@@ -1365,86 +1318,12 @@ button.sync-status-indicator:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .scan-hero-button::after,
-  .scan-function-art,
-  .weather-slot-detailed::after {
+  
+  .weather-slot-detailed::after{
     animation: none !important;
   }
 }
 
-.scan-hero-button::after {
-  content: '';
-  position: absolute;
-  inset-inline: 14px;
-  top: 0;
-  height: 42%;
-  z-index: 2;
-  border-radius: 999px;
-  background: linear-gradient(180deg, transparent, rgba(255,255,255,.7), rgba(111,188,255,.62), transparent);
-  mix-blend-mode: screen;
-  filter: blur(.5px);
-  pointer-events: none;
-  animation: scan-beam-y 3.8s ease-in-out infinite;
-}
-
-.scan-function-art {
-  animation: scan-orbit-breathe 5.2s ease-in-out infinite;
-}
-.scan-helper-copy {
-  max-width: 38rem;
-}
-.scan-mode-grid {
-  min-width: 0;
-}
-.scan-mode-button {
-  position: relative;
-  min-width: 0;
-  min-height: 92px;
-  overflow: hidden;
-  color: #2A2119;
-  box-shadow:
-    0 14px 30px rgba(59,43,26,.10),
-    inset 0 1px 1px rgba(255,255,255,.86);
-}
-.scan-mode-button::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 0%, var(--scan-accent, rgba(30,77,107,.16)), transparent 58%);
-  opacity: .72;
-  pointer-events: none;
-}
-.scan-mode-button > svg,
-.scan-mode-button > span {
-  position: relative;
-  z-index: 1;
-}
-.scan-mode-button--camera { --scan-accent: rgba(30,77,107,.24); }
-.scan-mode-button--gallery { --scan-accent: rgba(124,58,237,.20); }
-.scan-mode-button--manual { --scan-accent: rgba(22,163,74,.18); }
-.scan-mode-button--voice { --scan-accent: rgba(211,154,41,.24); }
-.scan-mode-button--email { --scan-accent: rgba(217,65,50,.18); }
-.scan-mode-button--currency { --scan-accent: rgba(15,118,110,.18); }
-.scan-mode-button.is-active {
-  background: rgba(255,255,255,.92);
-  box-shadow:
-    0 16px 36px rgba(30,77,107,.15),
-    inset 0 1px 1px rgba(255,255,255,.92);
-}
-.scan-workspace {
-  border-radius: 22px;
-}
-.scan-retry-panel {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.74), rgba(255,247,232,.52)),
-    rgba(255,255,255,.48);
-}
-.scan-diagnostic {
-  margin-top: 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
 .action-sheet {
   display: flex;
   flex-wrap: wrap;
@@ -3082,20 +2961,6 @@ ul.checklist { padding-left: 20px; margin: 12px 0 0; color: var(--muted); }
 .stagger-children > *:nth-child(4) { animation-delay: 0.20s; }
 .stagger-children > *:nth-child(5) { animation-delay: 0.25s; }
 .stagger-children > *:nth-child(6) { animation-delay: 0.30s; }
-.scan-cta-btn {
-  min-height: 52px;
-  padding: 12px 28px;
-  border-radius: 18px;
-  background: linear-gradient(145deg, #1E4D6B, #35667A);
-  color: #fff;
-  font-weight: 800;
-  font-size: 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  border: none;
-  cursor: pointer;
-}
 
 /* ========== TAILOR-MADE CANVA REDESIGN LAYER ========== */
 :root {
@@ -3364,12 +3229,11 @@ body {
 }
 
 .dashboard-budget,
-.scan-hero-card,
 .timeline-command,
 .history-command,
 .weather-command-fancy,
 .stats-command,
-.settings-command {
+.settings-command{
   position: relative;
   overflow: hidden;
   border-color: rgba(255,255,255,.76) !important;
@@ -3378,12 +3242,11 @@ body {
     color-mix(in srgb, var(--screen-soft) 74%, white) !important;
 }
 .dashboard-budget::after,
-.scan-hero-card::after,
 .timeline-command::after,
 .history-command::after,
 .weather-command-fancy::after,
 .stats-command::after,
-.settings-command::after {
+.settings-command::after{
   content: '';
   position: absolute;
   inset: 12px;
@@ -3398,12 +3261,11 @@ body {
   pointer-events: none;
 }
 .dashboard-budget > *,
-.scan-hero-card > *,
 .timeline-command > *,
 .history-command > *,
 .weather-command-fancy > *,
 .stats-command > *,
-.settings-command > * {
+.settings-command > *{
   position: relative;
   z-index: 1;
 }
@@ -3426,28 +3288,6 @@ body {
   border: 1px solid rgba(255,255,255,.7);
   background: rgba(255,255,255,.62);
   color: var(--screen-accent);
-}
-
-.scan-screen .scan-hero-card {
-  background:
-    radial-gradient(circle at 14% 18%, rgba(30,77,107,.18), transparent 26%),
-    radial-gradient(circle at 86% 16%, rgba(45,110,72,.16), transparent 28%),
-    linear-gradient(135deg, rgba(255,255,255,.88), rgba(238,248,247,.62)) !important;
-}
-.scan-screen .scan-mode-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.scan-screen .scan-mode-button {
-  border-radius: 22px;
-  border: 1px solid rgba(255,255,255,.76);
-  background: rgba(255,255,255,.68);
-}
-.scan-screen textarea,
-.scan-screen input,
-.scan-screen select {
-  background: rgba(255,253,247,.92);
 }
 
 .settings-account-card {
@@ -3783,11 +3623,11 @@ body {
   --background: #fffaf2;
   box-shadow: 0 6px 16px rgba(67, 46, 24, .12);
 }
-.scan-reveal,
+
 .dashboard-reveal,
 .timeline-day-reveal,
 .weather-day-reveal,
-.history-date-reveal {
+.history-date-reveal{
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -3809,126 +3649,7 @@ body {
   min-width: 0;
   max-width: 100%;
 }
-.scan-hero-button {
-  --bg: linear-gradient(110deg,#2563eb,#4f46e5,#312e81);
-  display: grid !important;
-  grid-template-columns: minmax(0, 1fr) clamp(112px, 25%, 148px);
-  align-items: center;
-  justify-content: stretch;
-  gap: 18px;
-  white-space: normal !important;
-}
-.scan-hero-copy {
-  max-width: 34rem;
-}
-.scan-hero-copy strong,
-.scan-hero-copy p,
-.scan-utility-copy strong,
-.scan-utility-copy span {
-  overflow-wrap: anywhere;
-}
-.scan-function-art {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  width: 64px;
-  height: 64px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,.62);
-  border-radius: 18px;
-  background-color: rgba(255,255,255,.72);
-  background-repeat: no-repeat;
-  background-size: 300% 200%;
-  box-shadow:
-    0 16px 30px rgba(20,32,55,.18),
-    inset 0 1px 0 rgba(255,255,255,.82);
-}
-.scan-function-art::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background:
-    linear-gradient(145deg, rgba(255,255,255,.16), transparent 48%),
-    linear-gradient(0deg, rgba(0,0,0,.16), transparent 54%);
-  pointer-events: none;
-}
-.scan-function-art--camera {
-  width: clamp(108px, 24vw, 148px);
-  height: auto;
-  aspect-ratio: 1;
-  justify-self: end;
-  border-radius: 28px;
-  background-position: left top;
-}
-.scan-function-art--gallery { background-position: center top; }
-.scan-function-art--manual { background-position: right top; }
-.scan-function-art--voice { background-position: left bottom; }
-.scan-function-art--email { background-position: center bottom; }
-.scan-function-art--currency { background-position: right bottom; }
-.scan-utility-button {
-  min-width: 0;
-  overflow: hidden;
-}
-.scan-utility-button .scan-function-art {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
-}
-.scan-secondary-button .scan-function-art {
-  width: 86px;
-  height: 86px;
-  border-radius: 24px;
-}
-.scan-cockpit-panel {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
-  gap: 8px;
-  margin: 10px 0 12px;
-  padding: 10px;
-  border: 1px solid rgba(255,255,255,.72);
-  border-radius: 20px;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.76), rgba(244,248,255,.48)),
-    rgba(255,255,255,.5);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 12px 28px rgba(35,42,60,.1);
-}
-.scan-cockpit-panel > div {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-  padding: 7px 8px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.62);
-}
-.scan-cockpit-panel span,
-.scan-cockpit-panel small {
-  min-width: 0;
-  color: #657084;
-  font-size: 9.5px;
-  font-weight: 850;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scan-cockpit-panel strong {
-  min-width: 0;
-  color: #121826;
-  font-size: 13px;
-  font-weight: 950;
-  line-height: 1.1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.scan-cockpit-panel .status-pill {
-  align-self: center;
-  justify-self: end;
-}
+
 .batch-recovery-bar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto auto;
@@ -4857,8 +4578,7 @@ textarea {
     max-width: 132px;
     align-self: center;
   }
-  .lock-proof-strip,
-  .scan-screen .scan-mode-grid {
+  .lock-proof-strip {
     grid-template-columns: 1fr;
   }
   .lock-proof-strip span {
@@ -4921,10 +4641,7 @@ textarea {
   .app-shell {
     padding-inline: 12px;
   }
-  .scan-screen {
-    padding-left: 4px !important;
-    padding-right: 4px !important;
-  }
+  
   .history-command-row {
     min-height: 62px;
     padding: 11px 12px !important;
@@ -4954,73 +4671,27 @@ textarea {
     min-height: min(520px, calc(100svh - 132px));
     margin-bottom: 18px;
   }
-  .scan-screen .scan-hero-card,
+  
   .timeline-screen .timeline-command,
   .history-screen .history-command,
   .weather-screen .weather-command,
   .stats-screen .stats-command,
-  .settings-screen .settings-command {
+  .settings-screen .settings-command{
     margin-bottom: 16px;
   }
-  .scan-screen .scan-hero-card {
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-    padding-bottom: 24px;
-  }
-  .scan-screen .scan-hero-button {
-    grid-template-columns: minmax(0, 1fr) 88px;
-    gap: 12px;
-    min-height: 144px;
-    padding: 16px !important;
-  }
-  .scan-screen .scan-hero-copy strong {
-    font-size: 1.08rem;
-  }
-  .scan-screen .scan-hero-copy p {
-    font-size: 10.5px;
-    line-height: 1.35;
-  }
-  .scan-screen .scan-function-art--camera {
-    width: 88px;
-    border-radius: 24px;
-  }
-  .scan-hero-button::after {
-    inset-inline: 10px;
-    height: 34%;
-  }
-  .scan-screen .scan-mode-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-  .scan-screen .scan-mode-button {
-    min-height: 74px;
-    gap: 6px;
-    padding: 10px 8px !important;
-  }
-  .scan-screen .scan-mode-button svg {
-    width: 22px;
-    height: 22px;
-  }
-  .scan-screen .scan-secondary-button {
-    min-height: 132px;
-    padding: 16px !important;
-  }
-  .scan-screen .scan-secondary-button .scan-function-art {
-    width: 74px;
-    height: 74px;
-    border-radius: 22px;
-  }
-  .scan-screen .scan-utility-button {
-    gap: 10px;
-    min-height: 70px;
-    padding: 10px 12px !important;
-  }
-  .scan-screen .scan-utility-button .scan-function-art {
-    width: 46px;
-    height: 46px;
-    border-radius: 15px;
-  }
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
   .topbar-canva {
     gap: 8px;
   }
@@ -6362,12 +6033,12 @@ body {
 }
 
 .topbar-title-block h1 {
-  color: var(--compact-preview-ink);
+  color: var(--theme-text);
   font-size: clamp(30px, 3vw, 44px);
   font-weight: 900;
 }
 .topbar-trip-trigger-title {
-  color: var(--compact-preview-ink);
+  color: var(--theme-text);
   font-size: clamp(30px, 3vw, 44px);
   font-weight: 900;
 }
@@ -6400,8 +6071,7 @@ body {
 .history-command,
 .weather-command-fancy,
 .settings-command,
-.stats-command,
-.scan-hero-card {
+.stats-command {
   border: 1px solid var(--compact-preview-line) !important;
   border-radius: 22px !important;
   background:
@@ -6550,8 +6220,7 @@ body {
 .timeline-screen .timeline-title,
 .history-screen .receipt-row strong,
 .weather-screen .weather-temp,
-.settings-screen .accordion-summary,
-.scan-screen .scan-hero-copy strong {
+.settings-screen .accordion-summary {
   font-size: max(1rem, 16px);
 }
 
@@ -6559,8 +6228,7 @@ body {
 .timeline-screen .timeline-main small,
 .history-screen .receipt-row small,
 .weather-screen .weather-detail,
-.settings-screen .muted,
-.scan-screen .scan-hero-copy p {
+.settings-screen .muted {
   font-size: max(.86rem, 13px);
   line-height: 1.45;
 }
@@ -6703,8 +6371,7 @@ body {
   .history-command,
   .weather-command-fancy,
   .settings-command,
-  .stats-command,
-  .scan-hero-card {
+  .stats-command {
     border-radius: 18px !important;
     box-shadow: 0 10px 26px rgba(70, 48, 25, .09) !important;
   }
@@ -6747,12 +6414,11 @@ body {
   }
 
   .dashboard-budget,
-  .scan-hero-card,
   .timeline-command,
   .history-command,
   .weather-command-fancy,
   .stats-command,
-  .settings-command {
+  .settings-command{
     margin-bottom: 18px;
   }
 
@@ -6775,16 +6441,9 @@ body {
     line-height: 1.05;
   }
 
-  .scan-screen .scan-hero-button {
-    grid-template-columns: 1fr !important;
-    min-height: 168px;
-    padding: 20px !important;
-  }
+  
 
-  .scan-screen .scan-function-art--camera {
-    width: 112px !important;
-    justify-self: start;
-  }
+  
 
   .timeline-screen .timeline-day {
     padding: 18px !important;
@@ -7255,8 +6914,7 @@ body {
   .history-command,
   .weather-command-fancy,
   .settings-command,
-  .stats-command,
-  .scan-hero-card {
+  .stats-command {
     border-radius: 8px !important;
   }
 
@@ -7350,8 +7008,7 @@ body {
   .history-command,
   .weather-command-fancy,
   .settings-command,
-  .stats-command,
-  .scan-hero-card {
+  .stats-command {
     border-radius: 8px !important;
     border-color: rgba(111, 87, 57, .16) !important;
     background: rgba(255, 253, 248, .92) !important;
@@ -7406,35 +7063,6 @@ body {
     width: 25px !important;
     height: 25px !important;
   }
-}
-
-.scan-screen .scan-hero-card {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.94), rgba(255,250,241,.90)),
-    #fffaf2 !important;
-}
-
-.scan-screen .scan-hero-button {
-  --bg: linear-gradient(135deg, #df332c, #b9181b) !important;
-  background:
-    radial-gradient(circle at 24% 20%, rgba(255,255,255,.36), transparent 30%),
-    linear-gradient(135deg, #df332c, #b9181b) !important;
-  box-shadow: 0 16px 34px rgba(190, 30, 24, .18) !important;
-}
-
-.scan-screen .scan-hero-button .scan-card-copy span {
-  color: rgba(255,255,255,.76) !important;
-}
-
-.scan-screen .scan-secondary-button {
-  background:
-    radial-gradient(circle at 50% 10%, rgba(255,255,255,.74), transparent 34%),
-    linear-gradient(135deg, rgba(47,111,69,.16), rgba(255,255,255,.9)) !important;
-  border-color: rgba(47,111,69,.28) !important;
-}
-
-.scan-screen .scan-secondary-button strong {
-  color: #2f6f45 !important;
 }
 
 /* ========== Compact preview renovation: full visual rebuild from generated app previews ========== */
@@ -7896,8 +7524,7 @@ body {
   .history-command,
   .weather-command-fancy,
   .settings-command,
-  .stats-command,
-  .scan-hero-card {
+  .stats-command {
     border-radius: 0 !important;
     border: 0 !important;
     border-right: 1px solid var(--preview-line) !important;
@@ -7921,14 +7548,13 @@ body {
   .card::after,
   .magic-card::before,
   .magic-card::after,
-  .scan-hero-card > .absolute,
   .weather-meteor,
   .weather-command-blur,
   .stats-retro-grid,
   .timeline-command-shine,
   .timeline-command-texture,
   .timeline-command-blend,
-  .timeline-command-wash {
+  .timeline-command-wash{
     display: none !important;
   }
 
@@ -8058,29 +7684,26 @@ body {
   }
 
   .dashboard-screen,
-  .scan-screen,
   .timeline-screen,
   .history-screen,
   .weather-screen,
-  .settings-screen {
+  .settings-screen{
     padding: 24px !important;
   }
 
   .dashboard-screen > .stack,
-  .scan-screen > .stack,
   .timeline-screen > .stack,
   .history-screen > .stack,
   .weather-screen > .stack,
-  .settings-screen > .stack {
+  .settings-screen > .stack{
     gap: 16px !important;
   }
 
   .dashboard-screen .glass-card,
-  .scan-screen .scan-hero-card,
   .timeline-screen .timeline-day,
   .history-screen .card,
   .weather-screen .weather-day,
-  .settings-screen .accordion-card {
+  .settings-screen .accordion-card{
     border: 1px solid var(--preview-line) !important;
     border-radius: 8px !important;
     background: rgba(255, 252, 245, .9) !important;
@@ -8264,9 +7887,7 @@ body {
   .weather-day,
   .weather-slot-detailed,
   .settings-command,
-  .settings-screen .accordion-card,
-  .scan-hero-card,
-  .scan-workspace > div {
+  .settings-screen .accordion-card {
     border: 1px solid var(--preview-line) !important;
     border-radius: 10px !important;
     background: rgba(255, 253, 248, .94) !important;
@@ -8288,14 +7909,13 @@ body {
   .card::after,
   .magic-card::before,
   .magic-card::after,
-  .scan-hero-card > .absolute,
   .weather-meteor,
   .weather-command-blur,
   .stats-retro-grid,
   .timeline-command-shine,
   .timeline-command-texture,
   .timeline-command-blend,
-  .timeline-command-wash {
+  .timeline-command-wash{
     display: none !important;
   }
 
@@ -8420,87 +8040,29 @@ body {
     border-radius: 10px !important;
   }
 
-  .scan-screen .scan-hero-card {
-    padding: 0 !important;
-  }
+  
 
-  .scan-screen .scan-hero-card > div.relative.z-10.flex.justify-between,
-  .scan-screen .scan-hero-card .relative.z-10:first-of-type,
-  .scan-screen .scan-hero-card .relative.z-10.flex.justify-between.items-center {
-    display: flex !important;
-    min-height: 46px;
-    align-items: center !important;
-    padding: 10px 12px 0 !important;
-    margin-bottom: 0 !important;
-  }
+  
 
-  .scan-screen .scan-hero-card h2 {
-    display: flex !important;
-    color: #111820 !important;
-    font-size: 18px !important;
-    line-height: 1.1 !important;
-    letter-spacing: 0 !important;
-  }
+  
 
-  .scan-screen .scan-hero-card h2 + .status-pill {
-    display: inline-flex !important;
-  }
+  
 
-  .scan-screen .grid.grid-cols-1 {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-    padding: 12px !important;
-    margin: 0 !important;
-  }
+  
 
-  .scan-screen .scan-hero-button,
-  .scan-screen .scan-secondary-button {
-    grid-column: auto !important;
-    min-height: 156px !important;
-    border-radius: 10px !important;
-    border: 0 !important;
-  }
+  
 
-  .scan-screen .scan-hero-button {
-    --bg: linear-gradient(135deg, #dd302b, #bb171a) !important;
-    background: linear-gradient(135deg, #dd302b, #bb171a) !important;
-  }
+  
 
-  .scan-screen .scan-secondary-button {
-    background: linear-gradient(135deg, #3d7a52, #275b3a) !important;
-    color: #fff !important;
-  }
+  
 
-  .scan-screen .scan-secondary-button strong,
-  .scan-screen .scan-secondary-button span {
-    color: #fff !important;
-  }
+  
 
-  .scan-screen .grid.grid-cols-2 {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 8px !important;
-    padding: 0 12px 12px !important;
-    margin: 0 !important;
-  }
+  
 
-  .scan-screen .scan-utility-button {
-    min-height: 96px !important;
-    min-width: 64px !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    gap: 6px !important;
-    padding: 10px 6px !important;
-    border-radius: 10px !important;
-    background: #fffdf8 !important;
-    border-color: var(--preview-line) !important;
-    box-shadow: none !important;
-  }
+  
 
-  .scan-screen .scan-utility-copy {
-    align-items: center !important;
-    text-align: center !important;
-  }
+  
 
   .history-screen .filters,
   .history-screen .history-filters {
@@ -8575,24 +8137,6 @@ body {
 }
 
 /* ========== Strict generated-preview layout pass: final precedence ========== */
-.preview-scan-camera {
-  display: grid !important;
-  place-items: center;
-  min-height: 268px;
-  margin: 0 12px 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.05), transparent 45%),
-    repeating-linear-gradient(35deg, rgba(255,255,255,.035) 0 1px, transparent 1px 16px),
-    #20201f;
-}
-
-.preview-crop-corner { position: absolute; width: 42px; height: 42px; border-color: rgba(255,255,255,.92); pointer-events: none; }
-.preview-crop-corner--tl { left: 18px; top: 18px; border-left: 3px solid; border-top: 3px solid; border-radius: 10px 0 0; }
-.preview-crop-corner--tr { right: 18px; top: 18px; border-right: 3px solid; border-top: 3px solid; border-radius: 0 10px 0 0; }
-.preview-crop-corner--bl { left: 18px; bottom: 18px; border-left: 3px solid; border-bottom: 3px solid; border-radius: 0 0 0 10px; }
-.preview-crop-corner--br { right: 18px; bottom: 18px; border-right: 3px solid; border-bottom: 3px solid; border-radius: 0 0 10px; }
 
 .preview-camera-tool {
   position: absolute;
@@ -8610,43 +8154,6 @@ body {
 }
 .preview-camera-tool--flash { top: 50%; transform: translateY(-68px); }
 .preview-camera-tool--crop { top: 50%; transform: translateY(6px); }
-
-.preview-receipt-paper {
-  width: min(58%, 220px);
-  min-height: 230px;
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  gap: 8px;
-  padding: 28px 22px;
-  background: #fffdf8;
-  color: #161616;
-  box-shadow: 0 18px 34px rgba(0,0,0,.34);
-  transform: perspective(400px) rotateX(1deg) rotateZ(-1deg);
-}
-.preview-receipt-paper b { font-size: 23px; letter-spacing: .28em; }
-.preview-receipt-paper span,
-.preview-receipt-paper small { font-size: 12px; }
-.preview-receipt-paper i { width: 100%; border-top: 1px dashed #333; }
-.preview-receipt-paper strong { width: 100%; display: flex; justify-content: space-between; font-size: 22px; }
-
-.preview-scan-tip {
-  min-height: 42px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin: 0 12px 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--preview-line, #e2d4c1);
-  border-top: 0;
-  border-radius: 0 0 10px 10px;
-  background: rgba(255,253,248,.94);
-  color: #2d3135;
-  font-size: 13px;
-  font-weight: 800;
-}
-.preview-scan-tip b { font-weight: 900; white-space: nowrap; }
 
 .preview-stats-budget,
 .preview-daily-pace,
@@ -8790,10 +8297,10 @@ body {
     border-radius: 10px !important;
     padding: 14px !important;
   }
-  .preview-scan-camera { min-height: 316px !important; margin: 0 12px; }
-  .preview-receipt-paper { width: 54%; min-height: 242px; }
-  .preview-scan-tip { font-size: 12px; }
-  .scan-screen .grid.grid-cols-1 { padding-top: 0 !important; }
+  
+  
+  
+  
 }
 
 /* ========== Preview exactness pass 2: compact app contract ========== */
@@ -8969,7 +8476,7 @@ textarea,
   }
 
   .topbar-title-block h1 {
-    color: #152033 !important;
+    color: var(--theme-text) !important;
     font-size: 32px !important;
     line-height: 1 !important;
   }
@@ -9016,8 +8523,7 @@ textarea,
   .weather-day,
   .weather-slot-detailed,
   .settings-command,
-  .settings-screen .accordion-card,
-  .scan-hero-card {
+  .settings-screen .accordion-card {
     border-color: var(--preview-line) !important;
     border-radius: 0 !important;
     background: rgba(255,253,248,.72) !important;
@@ -9061,14 +8567,9 @@ textarea,
     border-bottom: 1px solid var(--preview-line-soft) !important;
   }
 
-  .app-shell--scan .scan-screen {
-    padding: 0 !important;
-  }
+  
 
-  .app-shell--scan .scan-hero-card {
-    border-left: 0 !important;
-    border-right: 0 !important;
-  }
+  
 }
 
 @media (max-width: 767px) {
@@ -9201,9 +8702,7 @@ textarea,
   .weather-day,
   .weather-slot-detailed,
   .settings-command,
-  .settings-screen .accordion-card,
-  .scan-hero-card,
-  .scan-workspace > div {
+  .settings-screen .accordion-card {
     border: 1px solid var(--preview-line) !important;
     border-radius: 10px !important;
     background:
@@ -9243,61 +8742,23 @@ textarea,
     border-width: 8px !important;
   }
 
-  .preview-scan-ai-strip {
-    min-height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin: 0 12px 10px;
-    padding: 8px 12px;
-    border: 1px solid var(--preview-line);
-    border-radius: 8px;
-    background: #fffaf2;
-    color: #6d4c19;
-    font-size: 12px;
-    font-weight: 850;
-  }
+  
 
-  .preview-scan-ai-strip b {
-    color: #493b2e;
-    font-weight: 850;
-    white-space: nowrap;
-  }
+  
 
-  .preview-scan-camera {
-    min-height: 360px !important;
-    border-radius: 8px !important;
-  }
+  
 
-  .preview-receipt-paper {
-    width: 52% !important;
-    min-height: 278px !important;
-    padding: 30px 20px !important;
-  }
+  
 
-  .scan-screen .scan-hero-card > div.relative.z-10.flex.justify-between {
-    min-height: 62px !important;
-    padding: 14px 14px 8px !important;
-  }
+  
 
-  .scan-screen .scan-hero-card h2 {
-    font-size: 22px !important;
-    font-weight: 950 !important;
-  }
+  
 
-  .scan-screen .grid.grid-cols-1 {
-    padding-top: 12px !important;
-  }
+  
 
-  .scan-screen .scan-hero-button,
-  .scan-screen .scan-secondary-button {
-    min-height: 186px !important;
-  }
+  
 
-  .scan-screen .grid.grid-cols-2 {
-    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-  }
+  
 
   .stats-tab.stats-cockpit .stats-command-title {
     font-family: "Noto Sans TC", "Noto Sans JP", system-ui, sans-serif !important;
@@ -14541,56 +14002,6 @@ input[type="checkbox"] {
 }
 
 /* Boss 2026-06-13: compact Scan/Home control polish. */
-.scan-fx-wide-button {
-  width: 100%;
-  min-height: 74px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
-  border: 1px solid rgba(255,255,255,.85);
-  border-radius: 24px;
-  background: linear-gradient(135deg, rgba(255,255,255,.86), rgba(240, 251, 248, .78));
-  box-shadow: 0 18px 38px rgba(37, 99, 235, .12), inset 0 1px 0 rgba(255,255,255,.9);
-  color: #0f172a;
-  text-align: left;
-  cursor: pointer;
-}
-
-.scan-fx-wide-button .scan-function-art {
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
-}
-
-.scan-fx-wide-button > span:nth-child(2) {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.scan-fx-wide-button strong {
-  font-size: 17px;
-  font-weight: 950;
-}
-
-.scan-fx-wide-button small {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 850;
-  text-transform: uppercase;
-}
-
-.scan-fx-wide-button > b {
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: #102a43;
-  color: #f8fafc;
-  font-size: 12px;
-  font-weight: 950;
-  white-space: nowrap;
-}
 
 .scan-fx-modal {
   max-width: 520px;
@@ -14670,35 +14081,14 @@ input[type="checkbox"] {
   margin-top: 14px;
 }
 
-.preview-receipt-paper[data-locale="ko-KR"] b,
-.preview-receipt-paper[data-locale="th-TH"] b,
-.preview-receipt-paper[data-locale="ar-AE"] b {
-  letter-spacing: .08em;
-}
-
 @media (max-width: 767px) {
-  .app-shell--scan .scan-fx-wide-button {
-    min-height: 64px !important;
-    gap: 9px !important;
-    margin-bottom: 8px !important;
-    padding: 8px 10px !important;
-    border-radius: 13px !important;
-  }
+  
 
-  .app-shell--scan .scan-fx-wide-button .scan-function-art {
-    width: 44px !important;
-    height: 44px !important;
-    border-radius: 12px !important;
-  }
+  
 
-  .app-shell--scan .scan-fx-wide-button strong {
-    font-size: 13px !important;
-  }
+  
 
-  .app-shell--scan .scan-fx-wide-button small,
-  .app-shell--scan .scan-fx-wide-button > b {
-    font-size: 9px !important;
-  }
+  
 
   .scan-fx-panel,
   .scan-fx-actions {

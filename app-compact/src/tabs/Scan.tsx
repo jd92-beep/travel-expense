@@ -1,95 +1,69 @@
-import { Camera, CheckCircle2, Mail, Mic, RefreshCw, Repeat2, X } from 'lucide-react';
-import confetti from 'canvas-confetti';
+import { Camera, Check, ImageIcon, LoaderCircle, Mail, Mic, PenLine, RefreshCw, Repeat2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
-import { getEffectsTier } from '../lib/performance';
-import { ActionRippleButton, GlassCard, Reveal, StatefulActionButton, StatusPill, Toast } from '../components/ui';
-import { ShimmerButton } from '../components/ui/shimmer-button';
+import { StatefulActionButton, Toast } from '../components/ui';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
-import { convertAmount, fetchLiveCurrencySnapshot, loadCurrencySnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
-import { compressPhoto, getResolvedTripCurrency } from '../lib/domain';
+import { convertAmount, currencyPrefix, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
+import { categoryById, compressPhoto, displayStore, getReceiptTripAmount, getResolvedTripCurrency, isPendingReceipt, todayForReceipts } from '../lib/domain';
 import { redactedError } from '../lib/credentialBroker';
 import type { AppState, Receipt } from '../lib/types';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
-import { activeTrip } from '../domain/trip/normalize';
+import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { resolveTripContext } from '../domain/trip/context';
-import scanMasterpieceSuite from '../assets/scan/scan-masterpiece-suite.png';
-import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
-
-// One subtle celebratory burst in the washi palette when a batch lands in the ledger.
-// canvas-confetti manages its own overlay canvas; disableForReducedMotion covers a11y and
-// the lite tier skips it entirely (low-end devices shouldn't pay for a party).
-function celebrateSave() {
-  if (getEffectsTier() === 'lite') return;
-  confetti({
-    particleCount: 64,
-    spread: 68,
-    startVelocity: 32,
-    gravity: 1.1,
-    ticks: 140,
-    origin: { y: 0.72 },
-    colors: ['#D4A843', '#C23B5E', '#2D6E48', '#1E4D6B', '#FFFDF7'],
-    disableForReducedMotion: true,
-  });
-}
+import '../styles/scan.css';
 
 type ScanMode = 'scan' | 'voice' | 'email';
 type BatchReceipt = Receipt & { selected?: boolean };
-type MockReceiptProfile = {
-  currency: string;
-  country: string;
-  locale: string;
-  title: string;
-  store: string;
-  address: string;
-  dateLine: string;
-  totalLabel: string;
-  total: string;
-  taxLine: string;
-  paymentLine: string;
-};
+type ReadingPhase = 'prepare' | 'read';
 
-const MOCK_RECEIPT_LIBRARY: Record<string, MockReceiptProfile> = {
-  HKD: { currency: 'HKD', country: 'Hong Kong', locale: 'zh-HK', title: '收 據', store: '海港茶餐廳', address: '香港中環德輔道中 88 號', dateLine: '2026年6月13日 12:45', totalLabel: '合計', total: 'HK$324.00', taxLine: '服務費　　　　　HK$29.45', paymentLine: '八達通　　　　　HK$324.00' },
-  JPY: { currency: 'JPY', country: 'Japan', locale: 'ja-JP', title: '領 収 書', store: '桜町商店', address: '東京都千代田区丸の内1-1-1', dateLine: '2026年6月13日（土）12:45', totalLabel: '合計', total: '¥3,240', taxLine: '（内）消費税 10%　¥294', paymentLine: '現金　　　　　　　¥3,240' },
-  KRW: { currency: 'KRW', country: 'South Korea', locale: 'ko-KR', title: '영 수 증', store: '동문시장 카페', address: '제주특별자치도 제주시 관덕로 14', dateLine: '2026년 6월 13일 12:45', totalLabel: '합계', total: '₩32,400', taxLine: '부가세 10%　　　₩2,945', paymentLine: '카드결제　　　　 ₩32,400' },
-  USD: { currency: 'USD', country: 'United States', locale: 'en-US', title: 'RECEIPT', store: 'Harbor Market', address: '120 Main Street, Seattle WA', dateLine: 'Jun 13, 2026 12:45 PM', totalLabel: 'TOTAL', total: 'US$32.40', taxLine: 'Sales tax　　　　US$2.95', paymentLine: 'Card　　　　　　US$32.40' },
-  CAD: { currency: 'CAD', country: 'Canada', locale: 'en-CA', title: 'RECEIPT', store: 'Maple Corner', address: '88 Queen Street, Toronto ON', dateLine: 'Jun 13, 2026 12:45 PM', totalLabel: 'TOTAL', total: 'CA$32.40', taxLine: 'HST　　　　　　CA$2.95', paymentLine: 'Debit　　　　　CA$32.40' },
-  AUD: { currency: 'AUD', country: 'Australia', locale: 'en-AU', title: 'RECEIPT', store: 'Harbour Grocer', address: '55 George Street, Sydney NSW', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'A$32.40', taxLine: 'GST included　　A$2.95', paymentLine: 'Card　　　　　 A$32.40' },
-  NZD: { currency: 'NZD', country: 'New Zealand', locale: 'en-NZ', title: 'RECEIPT', store: 'Koru Cafe', address: '12 Queen Street, Auckland', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'NZ$32.40', taxLine: 'GST included　 NZ$2.95', paymentLine: 'Card　　　　　NZ$32.40' },
-  GBP: { currency: 'GBP', country: 'United Kingdom', locale: 'en-GB', title: 'RECEIPT', store: 'Garden Lane Deli', address: '42 King Street, London', dateLine: '13 Jun 2026 12:45', totalLabel: 'TOTAL', total: '£32.40', taxLine: 'VAT included　　£2.95', paymentLine: 'Card　　　　　 £32.40' },
-  EUR: { currency: 'EUR', country: 'Euro Area', locale: 'fr-FR', title: 'REÇU', store: 'Café Lumière', address: '18 Rue Saint-Honoré, Paris', dateLine: '13 juin 2026 12:45', totalLabel: 'TOTAL', total: '€32,40', taxLine: 'TVA incluse　　 €2,95', paymentLine: 'Carte　　　　　€32,40' },
-  CHF: { currency: 'CHF', country: 'Switzerland', locale: 'de-CH', title: 'QUITTUNG', store: 'Alpen Markt', address: 'Bahnhofstrasse 18, Zürich', dateLine: '13.06.2026 12:45', totalLabel: 'TOTAL', total: 'CHF 32.40', taxLine: 'MwSt inkl.　　 CHF 2.95', paymentLine: 'Karte　　　　 CHF 32.40' },
-  SEK: { currency: 'SEK', country: 'Sweden', locale: 'sv-SE', title: 'KVITTO', store: 'Nord Café', address: 'Drottninggatan 12, Stockholm', dateLine: '2026-06-13 12:45', totalLabel: 'TOTALT', total: '32,40 kr', taxLine: 'Moms ingår　　 2,95 kr', paymentLine: 'Kort　　　　　32,40 kr' },
-  NOK: { currency: 'NOK', country: 'Norway', locale: 'nb-NO', title: 'KVITTERING', store: 'Fjord Bakeri', address: 'Karl Johans gate 20, Oslo', dateLine: '13.06.2026 12:45', totalLabel: 'TOTALT', total: 'kr 32,40', taxLine: 'MVA inkl.　　　kr 2,95', paymentLine: 'Kort　　　　　kr 32,40' },
-  DKK: { currency: 'DKK', country: 'Denmark', locale: 'da-DK', title: 'KVITTERING', store: 'Havn Bistro', address: 'Nyhavn 10, København', dateLine: '13.06.2026 12:45', totalLabel: 'TOTAL', total: '32,40 kr.', taxLine: 'Moms inkl.　　 2,95 kr.', paymentLine: 'Kort　　　　　32,40 kr.' },
-  SGD: { currency: 'SGD', country: 'Singapore', locale: 'en-SG', title: 'RECEIPT', store: 'Marina Food Hall', address: '10 Bayfront Avenue, Singapore', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'S$32.40', taxLine: 'GST included　 S$2.95', paymentLine: 'PayNow　　　　S$32.40' },
-  TWD: { currency: 'TWD', country: 'Taiwan', locale: 'zh-TW', title: '統 一 發 票', store: '島嶼咖啡館', address: '台北市中山區南京東路 88 號', dateLine: '2026年06月13日 12:45', totalLabel: '總計', total: 'NT$324', taxLine: '營業稅　　　　　NT$15', paymentLine: '悠遊卡　　　　　NT$324' },
-  CNY: { currency: 'CNY', country: 'China', locale: 'zh-CN', title: '销 售 小 票', store: '江南便利店', address: '上海市黄浦区南京东路 88 号', dateLine: '2026年06月13日 12:45', totalLabel: '合计', total: '¥324.00', taxLine: '税额　　　　　　¥29.45', paymentLine: '移动支付　　　　¥324.00' },
-  MOP: { currency: 'MOP', country: 'Macau', locale: 'zh-MO', title: '收 據', store: '澳門小食店', address: '澳門新馬路 28 號', dateLine: '2026年06月13日 12:45', totalLabel: '合計', total: 'MOP$324.00', taxLine: '服務費　　　　 MOP$29.45', paymentLine: '澳門通　　　　 MOP$324.00' },
-  THB: { currency: 'THB', country: 'Thailand', locale: 'th-TH', title: 'ใบเสร็จรับเงิน', store: 'ตลาดริมคลอง', address: 'ถนนสุขุมวิท กรุงเทพฯ', dateLine: '13 มิ.ย. 2026 12:45', totalLabel: 'รวม', total: '฿324.00', taxLine: 'ภาษี　　　　　฿29.45', paymentLine: 'บัตร　　　　　฿324.00' },
-  MYR: { currency: 'MYR', country: 'Malaysia', locale: 'ms-MY', title: 'RESIT', store: 'Kedai Kopi Sentral', address: 'Jalan Bukit Bintang, Kuala Lumpur', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'JUMLAH', total: 'RM32.40', taxLine: 'Cukai　　　　 RM2.95', paymentLine: 'Kad　　　　　 RM32.40' },
-  PHP: { currency: 'PHP', country: 'Philippines', locale: 'en-PH', title: 'RESIBO', store: 'Island Cafe', address: 'Roxas Boulevard, Manila', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'KABUUAN', total: '₱324.00', taxLine: 'VAT included　 ₱29.45', paymentLine: 'GCash　　　　 ₱324.00' },
-  IDR: { currency: 'IDR', country: 'Indonesia', locale: 'id-ID', title: 'STRUK', store: 'Warung Senja', address: 'Jl. Raya Ubud, Bali', dateLine: '13 Jun 2026 12:45', totalLabel: 'TOTAL', total: 'Rp324.000', taxLine: 'PPN termasuk　Rp29.455', paymentLine: 'Kartu　　　　Rp324.000' },
-  VND: { currency: 'VND', country: 'Vietnam', locale: 'vi-VN', title: 'HÓA ĐƠN', store: 'Quán Cà Phê Sông', address: 'Quận 1, Thành phố Hồ Chí Minh', dateLine: '13/06/2026 12:45', totalLabel: 'TỔNG', total: '₫324.000', taxLine: 'Thuế　　　　 ₫29.455', paymentLine: 'Thẻ　　　　　₫324.000' },
-  INR: { currency: 'INR', country: 'India', locale: 'en-IN', title: 'RECEIPT', store: 'Lotus Canteen', address: 'MG Road, Bengaluru', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: '₹324.00', taxLine: 'GST included　 ₹29.45', paymentLine: 'UPI　　　　　 ₹324.00' },
-  AED: { currency: 'AED', country: 'United Arab Emirates', locale: 'ar-AE', title: 'إيصال', store: 'مقهى الميناء', address: 'شارع الشيخ زايد، دبي', dateLine: '13 يونيو 2026 12:45', totalLabel: 'الإجمالي', total: 'AED 32.40', taxLine: 'ضريبة　　　　 AED 2.95', paymentLine: 'بطاقة　　　　 AED 32.40' },
-  TRY: { currency: 'TRY', country: 'Türkiye', locale: 'tr-TR', title: 'FİŞ', store: 'Sahil Lokantası', address: 'İstiklal Cd. 18, İstanbul', dateLine: '13.06.2026 12:45', totalLabel: 'TOPLAM', total: '₺324,00', taxLine: 'KDV dahil　　 ₺29,45', paymentLine: 'Kart　　　　　₺324,00' },
-  MXN: { currency: 'MXN', country: 'Mexico', locale: 'es-MX', title: 'RECIBO', store: 'Mercado Azul', address: 'Av. Reforma 120, CDMX', dateLine: '13 jun 2026 12:45', totalLabel: 'TOTAL', total: '$324.00 MXN', taxLine: 'IVA incluido　 $29.45', paymentLine: 'Tarjeta　　　 $324.00' },
-  BRL: { currency: 'BRL', country: 'Brazil', locale: 'pt-BR', title: 'RECIBO', store: 'Café do Porto', address: 'Rua das Flores 88, São Paulo', dateLine: '13 jun 2026 12:45', totalLabel: 'TOTAL', total: 'R$32,40', taxLine: 'Imposto　　　 R$2,95', paymentLine: 'Cartão　　　 R$32,40' },
-  ZAR: { currency: 'ZAR', country: 'South Africa', locale: 'en-ZA', title: 'RECEIPT', store: 'Cape Pantry', address: 'Long Street, Cape Town', dateLine: '13 Jun 2026 12:45 PM', totalLabel: 'TOTAL', total: 'R32.40', taxLine: 'VAT included　 R2.95', paymentLine: 'Card　　　　　R32.40' },
-};
 const CAMERA_INPUT_ID = 'scan-camera-input';
 const GALLERY_INPUT_ID = 'scan-gallery-input';
 const EMAIL_IMAGE_INPUT_ID = 'scan-email-image-input';
-const scanSuiteStyle = { backgroundImage: `url(${scanMasterpieceSuite})` };
-const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
+const DAY_MS = 86_400_000;
+const STAMP_LIMIT = 9;
+const VOICE_EXAMPLES = ['Lawson 買三文治 420 yen', '名古屋城門票 1000 yen', '鰻魚飯三吃 4800 yen', '地鐵 Suica 增值 2000 yen'];
 
-function mockReceiptForTrip(state: AppState): MockReceiptProfile {
+function tripCurrencyFor(state: AppState): string {
   const trip = activeTrip(state);
-  const tripCurrency = String(getResolvedTripCurrency(state, trip) || state.tripCurrency || 'JPY').toUpperCase();
-  const context = resolveTripContext(trip.destinationSummary || trip.name || '', tripCurrency, trip.intelligence?.countryCode || '');
-  const currency = String(context.primaryCurrency || tripCurrency).toUpperCase();
-  return MOCK_RECEIPT_LIBRARY[currency] || MOCK_RECEIPT_LIBRARY[tripCurrency] || MOCK_RECEIPT_LIBRARY.JPY;
+  const resolved = String(getResolvedTripCurrency(state, trip) || state.tripCurrency || 'JPY').toUpperCase();
+  const context = resolveTripContext(trip.destinationSummary || trip.name || '', resolved, trip.intelligence?.countryCode || '');
+  return String(context.primaryCurrency || resolved).toUpperCase();
+}
+
+function ymdMs(ymd: string | undefined): number {
+  return ymd && /^\d{4}-\d{2}-\d{2}$/.test(ymd) ? Date.parse(`${ymd}T00:00:00Z`) : Number.NaN;
+}
+
+// Where today sits in the trip: "第 3 日 / 6", "出發前 4 日" or "旅程已完".
+function tripDayLabel(today: string, start?: string, end?: string): string {
+  const t = ymdMs(today);
+  const s = ymdMs(start);
+  const e = ymdMs(end);
+  if (!Number.isFinite(t) || !Number.isFinite(s)) return '';
+  if (t < s) return `出發前 ${Math.round((s - t) / DAY_MS)} 日`;
+  if (Number.isFinite(e) && t > e) return '旅程已完';
+  const day = Math.round((t - s) / DAY_MS) + 1;
+  return Number.isFinite(e) ? `第 ${day} 日 / ${Math.round((e - s) / DAY_MS) + 1}` : `第 ${day} 日`;
+}
+
+// Passport machine-readable line: decorative, built only from the trip's own code and dates.
+function mrzLine(countryCode: string, currency: string, start?: string, end?: string): string {
+  const compact = (ymd?: string) => (ymd || '').replace(/-/g, '').slice(2) || '<<<<<<';
+  return `P<HKG${(countryCode || 'XX').toUpperCase()}<<ENTRY<${compact(start)}<${compact(end)}<<${currency}<HKD`.padEnd(44, '<').slice(0, 44);
+}
+
+// Stamp shape + ink follow the spend type: round for eating/shopping, ticket-square for getting
+// around, oval for stays and admissions — so the page reads at a glance.
+function stampKind(category?: string): 'round' | 'ticket' | 'oval' {
+  if (category === 'transport' || category === 'flight') return 'ticket';
+  if (category === 'lodging' || category === 'ticket' || category === 'localtour') return 'oval';
+  return 'round';
+}
+
+// A stable small tilt per receipt so stamps look hand-pressed but never jump between renders.
+function stampTilt(id: string): number {
+  let hash = 0;
+  for (let i = 0; i < id.length; i += 1) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  return (Math.abs(hash) % 13) - 6;
 }
 
 function safeFileStem(file: File): string {
@@ -154,19 +128,40 @@ export function Scan({
   const [inputKey, setInputKey] = useState(0);
   const [lastScanFile, setLastScanFile] = useState<File | null>(null);
   const [lastDraft, setLastDraft] = useState<Receipt | null>(null);
-  const mockReceipt = useMemo(() => mockReceiptForTrip(state), [state]);
-  const [from, setFrom] = useState(mockReceipt.currency);
+  const trip = activeTrip(state);
+  const tripCurrency = useMemo(() => tripCurrencyFor(state), [state]);
+  const [from, setFrom] = useState(tripCurrency);
   const [to, setTo] = useState('HKD');
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
   const fxAutoRefreshRef = useRef(false);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const [reading, setReading] = useState<{ preview: string; phase: ReadingPhase } | null>(null);
+  const readingUrlRef = useRef('');
+  useEffect(() => () => { if (readingUrlRef.current) URL.revokeObjectURL(readingUrlRef.current); }, []);
+  const mountedAtRef = useRef(Date.now());
+
+  const showReading = useCallback((file: File, phase: ReadingPhase) => {
+    if (!mountedRef.current) return;
+    setReading((current) => {
+      if (current) URL.revokeObjectURL(current.preview);
+      readingUrlRef.current = URL.createObjectURL(file);
+      return { preview: readingUrlRef.current, phase };
+    });
+  }, []);
+  const clearReading = useCallback(() => {
+    if (!mountedRef.current) return;
+    setReading((current) => {
+      if (current) URL.revokeObjectURL(current.preview);
+      readingUrlRef.current = '';
+      return null;
+    });
+  }, []);
 
   useEffect(() => {
-    setFrom((current) => current || mockReceipt.currency);
-  }, [mockReceipt.currency]);
-
+    setFrom((current) => current || tripCurrency);
+  }, [tripCurrency]);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -214,6 +209,21 @@ export function Scan({
     if (mountedRef.current) setLastDraft(receipt);
     onDraft(receipt);
   }, [onDraft]);
+  const today = todayForReceipts(state);
+  const ledgerCurrency = getResolvedTripCurrency(state, trip);
+  const ledgerPrefix = currencyPrefix(ledgerCurrency);
+  const todayStamps = useMemo(() => scopedReceiptsForTrip(state, trip)
+    .filter((receipt) => receipt.date === today)
+    .sort((a, b) => String(b.time || '').localeCompare(String(a.time || '')) || (b.createdAt || 0) - (a.createdAt || 0)),
+  [state, trip, today]);
+  const todayTotal = useMemo(
+    () => todayStamps.reduce((sum, receipt) => sum + getReceiptTripAmount(receipt, state, ledgerCurrency), 0),
+    [todayStamps, state, ledgerCurrency],
+  );
+  const dayLabel = tripDayLabel(today, trip.startDate, trip.endDate);
+  const rate = perHkdForCurrency(state, tripCurrency);
+  const countryCode = trip.intelligence?.countryCode || '';
+  const toggleMode = (next: ScanMode) => setMode((current) => (current === next ? 'scan' : next));
 
   const handleImage = useCallback(async (file?: File, retry = false) => {
     if (!file) {
@@ -223,6 +233,7 @@ export function Scan({
     if (!retry) setLastScanFile(file);
     setBusyWithGlobal('ocr');
     setStatus('讀取收據圖片…');
+    showReading(file, 'prepare');
     let localThumb: string | undefined = undefined;
     try {
       const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -238,6 +249,7 @@ export function Scan({
       console.warn('Pre-compressing thumbnail failed:', e);
     }
 
+    if (mountedRef.current) setReading((current) => (current ? { ...current, phase: 'read' } : current));
     try {
       const receipt = await scanReceiptImage(file, stateRef.current);
       openDraft(receipt);
@@ -253,10 +265,11 @@ export function Scan({
       openDraft(draft);
       if (mountedRef.current) setStatus('未能自動 OCR，已開啟 React 確認表俾你手動補資料。');
     } finally {
+      clearReading();
       if (mountedRef.current) setBusy('');
       onBusyChange?.('');
     }
-  }, [openDraft, setBusyWithGlobal, onBusyChange]);
+  }, [openDraft, setBusyWithGlobal, onBusyChange, showReading, clearReading]);
 
   const handleCameraChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -477,7 +490,6 @@ export function Scan({
       ? `已儲存 ${valid.length} 筆；略過 ${skipped} 筆缺資料紀錄`
       : `已儲存 ${valid.length} 筆 email 待確認紀錄。`);
     setSavingBatch(false);
-    celebrateSave();
   }
 
   async function handlePullPending() {
@@ -522,7 +534,7 @@ export function Scan({
       const snapshot = await fetchLiveCurrencySnapshot();
       if (!mountedRef.current) return;
       setFx(snapshot);
-      const toastCode = Number.isFinite(snapshot.rates[from]) ? from : mockReceipt.currency;
+      const toastCode = Number.isFinite(snapshot.rates[from]) ? from : tripCurrency;
       const destinationRate = snapshot.rates[toastCode];
       setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${toastCode}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
     } catch (error) {
@@ -571,232 +583,182 @@ export function Scan({
   }, [fxOpen]);
 
   return (
-    <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative overflow-y-auto scan-screen" style={travelAtlasStyle}>
-      <div className="japanese-sun-decor" />
-      <div className="japanese-sakura-decor" />
-      <div className="stack w-full relative z-10">
-        <input key={`camera-${inputKey}`} id={CAMERA_INPUT_ID} ref={cameraRef} className="visually-hidden-file" type="file" accept="image/*" capture="environment" onChange={handleCameraChange} />
+    <section className="scan-page w-full min-h-screen px-4 pb-28 pt-5">
+      <input key={`camera-${inputKey}`} id={CAMERA_INPUT_ID} ref={cameraRef} className="visually-hidden-file" type="file" accept="image/*" capture="environment" onChange={handleCameraChange} />
       <input key={`gallery-${inputKey}`} id={GALLERY_INPUT_ID} ref={galleryRef} className="visually-hidden-file" type="file" accept="image/*" onChange={handleGalleryChange} />
       <input key={`email-${inputKey}`} id={EMAIL_IMAGE_INPUT_ID} ref={emailImageRef} className="visually-hidden-file" type="file" accept="image/*" multiple onChange={handleEmailImagesChange} />
 
-      <Reveal className="scan-reveal">
-      <GlassCard className="scan-hero-card relative overflow-hidden p-6 sm:p-8 rounded-[40px] border-[2px] border-white shadow-[0_20px_60px_-15px_rgba(0,0,0,0.15),inset_0_0_40px_rgba(255,255,255,1)] bg-white/50 backdrop-blur-3xl mb-6">
-        <div className="absolute inset-0 bg-gradient-to-br from-white/80 via-white/50 to-transparent backdrop-blur-lg" />
-        <div className="absolute inset-0 bg-white/50 opacity-90 mix-blend-overlay rounded-[40px] shadow-[inset_0_0_30px_rgba(255,255,255,1)] pointer-events-none" />
+      <div className="scan-layout">
+        <div className="scan-desk">
+          <header className="scan-visa">
+            <div className="scan-visa-row">
+              <h2>{trip.name || state.tripName || '目前旅程'}</h2>
+              <button type="button" className="scan-rate" aria-label="匯率 Exchange Rate" onClick={() => setFxOpen(true)}>
+                <small>1 HKD</small>
+                <strong>{tripCurrency === 'HKD' ? 'HKD' : `${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(2)} ${tripCurrency}`}</strong>
+                <span>匯率</span>
+              </button>
+            </div>
+            <p className="scan-visa-trip">
+              {trip.startDate && <span>{trip.startDate.slice(5).replace('-', '/')} – {(trip.endDate || '').slice(5).replace('-', '/')}</span>}
+              {dayLabel && <b>{dayLabel}</b>}
+            </p>
+            <p className="scan-mrz" aria-hidden="true">{mrzLine(countryCode, tripCurrency, trip.startDate, trip.endDate)}</p>
+          </header>
 
-        <div className="relative z-10 flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-black text-black tracking-tight flex items-center gap-3 drop-shadow-sm">
-            <Camera size={32} className="text-blue-600" />
-            掃描收據 📸
-          </h2>
-          <StatusPill tone={busy ? 'warning' : 'ok'} icon={busy ? <RefreshCw size={14} className="spin text-slate-800" /> : <CheckCircle2 size={14} className="text-slate-800" />}>
-            {busy || '準備就緒'}
-          </StatusPill>
-        </div>
-
-        <div className="preview-scan-ai-strip relative z-10">
-          <span>AI 辨識中：自動擷取金額 · 店家 · 日期 · 類別</span>
-          <b>支援 18 種語言 · 多幣別</b>
-        </div>
-
-        <div
-          className="preview-scan-camera relative z-10 overflow-hidden cursor-pointer"
-          aria-label="收據取景框"
-          onClick={triggerCamera}
-          style={{ cursor: 'pointer' }}
-        >
-          {/* Laser scanning line */}
-          <div className="scan-laser-line" />
-          
-          {/* AI bounding boxes simulated indicators */}
-          <div className="scan-bounding-box box-1" />
-          <div className="scan-bounding-box box-2" />
-
-          <div className="preview-crop-corner preview-crop-corner--tl" aria-hidden="true" />
-          <div className="preview-crop-corner preview-crop-corner--tr" aria-hidden="true" />
-          <div className="preview-crop-corner preview-crop-corner--bl" aria-hidden="true" />
-          <div className="preview-crop-corner preview-crop-corner--br" aria-hidden="true" />
-          <div className="preview-receipt-paper" data-locale={mockReceipt.locale} aria-label={`${mockReceipt.country} ${mockReceipt.currency} mock receipt`}>
-            <b>{mockReceipt.title}</b>
-            <span>{mockReceipt.store}</span>
-            <small>{mockReceipt.address}</small>
-            <small>{mockReceipt.dateLine}</small>
-            <i />
-            <strong><span>{mockReceipt.totalLabel}</span><span>{mockReceipt.total}</span></strong>
-            <small>{mockReceipt.taxLine}</small>
-            <small>{mockReceipt.paymentLine}</small>
+          <div className="scan-press" aria-live="polite">
+            {reading ? (
+              <div className="scan-reading" role="status">
+                <span className="scan-reading-photo">
+                  <img src={reading.preview} alt="" />
+                </span>
+                <ol className="scan-reading-steps">
+                  <li className={reading.phase === 'prepare' ? 'is-active' : 'is-done'}>
+                    {reading.phase === 'prepare' ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <Check size={16} aria-hidden="true" />}
+                    整理相片
+                  </li>
+                  <li className={reading.phase === 'read' ? 'is-active' : ''}>
+                    {reading.phase === 'read' ? <LoaderCircle size={16} className="spin" aria-hidden="true" /> : <span className="scan-step-dot" aria-hidden="true" />}
+                    AI 讀緊店名、金額、日期
+                  </li>
+                  <li>
+                    <span className="scan-step-dot" aria-hidden="true" />
+                    打開確認表
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              <button type="button" className="scan-stamp-shutter" aria-label="相機：掃描收據" disabled={busy === 'ocr'} onClick={triggerCamera}>
+                <svg className="scan-stamp-ring" viewBox="0 0 200 200" aria-hidden="true">
+                  <defs>
+                    <path id="scan-stamp-arc" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0" />
+                  </defs>
+                  <circle cx="100" cy="100" r="95" />
+                  <circle cx="100" cy="100" r="88" />
+                  <circle cx="100" cy="100" r="64" />
+                  <text><textPath href="#scan-stamp-arc" startOffset="0" textLength={488} lengthAdjust="spacing">收據 · RECEIPT · 入帳 · ENTRY · 收據 · RECEIPT · 入帳 · ENTRY ·</textPath></text>
+                </svg>
+                <span className="scan-stamp-face">
+                  <Camera size={30} aria-hidden="true" />
+                  <strong>掃描收據</strong>
+                  <small>{today.replace(/-/g, '·')}</small>
+                </span>
+              </button>
+            )}
           </div>
-        </div>
 
-        <div className="preview-scan-tip relative z-10">
-          <span>將收據置於框內以獲得最佳辨識效果</span>
-          <b>影相後會自動辨識</b>
-        </div>
-
-        {/* MAIN SCAN MODES GRID */}
-        <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {/* CAMERA HERO BUTTON - Large & Prominent */}
-          <ShimmerButton
-            type="button"
-            disabled={busy === 'ocr'}
-            className={`scan-hero-button col-span-1 sm:col-span-2 relative overflow-hidden p-5 min-h-[140px] rounded-[28px] bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 text-white shadow-xl hover:shadow-2xl hover:scale-[1.01] active:scale-98 transition-all cursor-pointer whitespace-normal ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            onClick={triggerCamera}
-            background="linear-gradient(110deg,#2563eb,#4f46e5,#312e81)"
-            borderRadius="28px"
-            shimmerDuration="3.8s"
-          >
-            <div className="absolute inset-0 bg-white/10 opacity-30 pointer-events-none" />
-            <div className="scan-hero-copy scan-card-copy flex flex-col gap-1 items-center text-center relative z-10 min-w-0">
-              <strong className="text-xl sm:text-2xl font-black tracking-tight leading-tight mt-0.5">相機</strong>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Camera</span>
-            </div>
-            <div className="scan-banana-visual scan-function-art scan-function-art--camera" style={scanSuiteStyle} aria-hidden="true">
-            </div>
-          </ShimmerButton>
-
-          {/* GALLERY SECONDARY BUTTON - Medium & Elegant */}
-          <button
-            type="button"
-            disabled={busy === 'ocr'}
-            className={`scan-secondary-button col-span-1 flex flex-col items-center justify-center gap-3 p-5 min-h-[140px] rounded-[28px] bg-white/70 backdrop-blur-xl border border-white/90 shadow-lg hover:bg-white/90 hover:scale-[1.01] active:scale-98 transition-all cursor-pointer ${busy === 'ocr' ? 'opacity-50 cursor-not-allowed' : ''}`}
-            onClick={triggerGallery}
-          >
-            <span className="scan-function-art scan-function-art--gallery" style={scanSuiteStyle} aria-hidden="true" />
-            <div className="scan-card-copy flex flex-col items-center">
-              <strong className="text-base font-black text-slate-800">相簿</strong>
-              <span className="text-[11px] text-slate-400 font-medium mt-0.5">Gallery</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Secondary entry points — collapsible so the primary screen can stay Camera + Gallery. */}
-        <details className="scan-more-ways relative z-10 mb-6" open>
-          <summary style={{ cursor: 'pointer', fontWeight: 800, fontSize: '0.95rem', marginBottom: '0.75rem' }}>
-            更多方式
-          </summary>
-
-          <button
-            type="button"
-            className="scan-fx-wide-button relative z-10 mb-4"
-            aria-label="匯率 Exchange Rate"
-            onClick={() => setFxOpen(true)}
-          >
-            <span className="scan-function-art scan-function-art--currency" style={scanSuiteStyle} aria-hidden="true" />
-            <span>
-              <strong>匯率</strong>
-              <small>換算金額</small>
-            </span>
-            <b>{from} → {to}</b>
-          </button>
-
-          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <button
-              type="button"
-              onClick={onManual}
-              aria-label="手動"
-              className="scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer"
-            >
-              <span className="scan-function-art scan-function-art--manual" style={scanSuiteStyle} aria-hidden="true" />
-              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-                <strong className="text-xs font-black text-slate-800">手動記帳</strong>
-              </div>
+          <nav className="scan-routes" aria-label="其他記帳方式">
+            <button type="button" className="scan-route" disabled={busy === 'ocr'} onClick={triggerGallery}>
+              <i className="scan-route-ring" aria-hidden="true"><ImageIcon size={22} /></i>
+              <span>相簿</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setMode('voice')}
-              aria-label="語音"
-              className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'voice' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
-            >
-              <span className="scan-function-art scan-function-art--voice" style={scanSuiteStyle} aria-hidden="true" />
-              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-                <strong className="text-xs font-black text-slate-800">語音記帳</strong>
-              </div>
+            <button type="button" className="scan-route" aria-pressed={mode === 'voice'} onClick={() => toggleMode('voice')}>
+              <i className="scan-route-ring" aria-hidden="true"><Mic size={22} /></i>
+              <span>語音</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setMode('email')}
-              aria-label="Email"
-              className={`scan-utility-button flex flex-row items-center gap-3 p-3 rounded-2xl bg-white/60 backdrop-blur-xl border border-white/80 shadow-sm hover:bg-white/80 active:scale-95 transition-all cursor-pointer ${mode === 'email' ? 'ring-2 ring-blue-500 bg-white/80' : ''}`}
-            >
-              <span className="scan-function-art scan-function-art--email" style={scanSuiteStyle} aria-hidden="true" />
-              <div className="scan-card-copy scan-utility-copy flex flex-col items-start text-left">
-                <strong className="text-xs font-black text-slate-800">貼 Email</strong>
-              </div>
+            <button type="button" className="scan-route" aria-pressed={mode === 'email'} onClick={() => toggleMode('email')}>
+              <i className="scan-route-ring" aria-hidden="true"><Mail size={22} /></i>
+              <span>Email</span>
             </button>
-          </div>
-        </details>
-
-        {/* Embedded Workspaces */}
-        <div className="scan-workspace relative z-10 w-full overflow-hidden transition-all duration-300">
-          {mode === 'scan' && (lastScanFile || lastDraft) && (
-            <div className="scan-retry-panel p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm">
-              <div className="flex gap-2 flex-wrap mb-2">
-                <ActionRippleButton className="secondary bg-white text-black" type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
-                  <RefreshCw size={16} /> 重試上一張
-                </ActionRippleButton>
-                <ActionRippleButton className="secondary bg-white text-black" type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
-                  <Repeat2 size={16} /> 重開上次草稿
-                </ActionRippleButton>
-              </div>
-              <div className="text-xs text-slate-600 flex flex-col gap-1">
-                <span>上次掃描：{lastScanFile ? lastScanFile.name : '未有'}</span>
-                <span>上次草稿：{lastDraft ? lastDraft.store || '未命名' : '未有'}</span>
-              </div>
-            </div>
-          )}
+            <button type="button" className="scan-route" onClick={onManual}>
+              <i className="scan-route-ring" aria-hidden="true"><PenLine size={22} /></i>
+              <span>手動</span>
+            </button>
+          </nav>
 
           {mode === 'voice' && (
-            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
-              <div className="flex gap-2">
-                <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={startSpeech} disabled={isListening}><Mic size={18} className={isListening ? 'animate-pulse' : ''} /> {isListening ? '聆聽中…' : '開始聽'}</button>
-                <StatefulActionButton className="primary voice-sparkle-btn flex-1 font-bold shadow-md" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
+            <div className="scan-sheet">
+              <div className="scan-sheet-actions">
+                <button className="secondary" type="button" onClick={startSpeech} disabled={isListening}>
+                  <Mic size={18} className={isListening ? 'scan-listening' : ''} aria-hidden="true" /> {isListening ? '聆聽中…' : '開始聽'}
+                </button>
+                <StatefulActionButton className="primary" type="button" disabled={!voiceText.trim() || busy === 'voice'} onClick={handleVoiceParse}>解析</StatefulActionButton>
               </div>
-              <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {['Lawson 買三文治 420 yen', '名古屋城門票 1000 yen', '鰻魚飯三吃 4800 yen', '地鐵 Suica 增值 2000 yen'].map((phrase) => (
-                  <span
-                    key={phrase}
-                    onClick={() => setVoiceText(phrase)}
-                    className="text-[10px] font-semibold bg-white/60 hover:bg-white border border-white/85 rounded-full px-2.5 py-1 cursor-pointer text-slate-700 transition-all active:scale-95"
-                  >
-                    💬 {phrase}
-                  </span>
+              <textarea value={voiceText} onChange={(e) => setVoiceText(e.target.value)} rows={3} aria-label="語音文字" placeholder="例：喺全家買飯糰同飲品 580 yen，用 Suica" />
+              <div className="scan-examples">
+                {VOICE_EXAMPLES.map((phrase) => (
+                  <button key={phrase} type="button" onClick={() => setVoiceText(phrase)}>{phrase}</button>
                 ))}
               </div>
             </div>
           )}
 
           {mode === 'email' && (
-            <div className="p-4 bg-white/50 rounded-2xl border border-white/70 shadow-sm flex flex-col gap-3">
-              <div className="flex gap-2">
-                <button className="secondary bg-white text-black flex-1 font-bold" type="button" disabled={busy === 'notion' || busy === 'cloud'} onClick={handlePullPending}>
-                  <RefreshCw size={18} className={busy === 'notion' || busy === 'cloud' ? 'spin' : ''} /> 即時同步
+            <div className="scan-sheet">
+              <div className="scan-sheet-actions">
+                <button className="secondary" type="button" disabled={busy === 'notion' || busy === 'cloud'} onClick={handlePullPending}>
+                  <RefreshCw size={18} className={busy === 'notion' || busy === 'cloud' ? 'spin' : ''} aria-hidden="true" /> 即時同步
                 </button>
                 {!cloudSyncAvailable && (
-                  <button className="secondary bg-white text-black flex-1 font-bold" type="button" onClick={handleCopyGmail}>
-                    <Mail size={18} /> 複製 Gmail
+                  <button className="secondary" type="button" onClick={handleCopyGmail}>
+                    <Mail size={18} aria-hidden="true" /> 複製 Gmail
                   </button>
                 )}
               </div>
               {cloudSyncAvailable && (
-                <p className="muted">Public Supabase mode 不使用共享 Gmail inbox；請貼上 email 文字或上載截圖，資料只會入你自己帳號。</p>
+                <p className="muted">雲端帳號唔使用共享 Gmail inbox；請貼上 email 文字或上載截圖，資料只會入你自己帳號。</p>
               )}
-              <textarea className="bg-white/80 border-white/60 rounded-xl p-3 text-black font-medium" value={emailText} onChange={(e) => setEmailText(e.target.value)} rows={4} placeholder="貼 booking confirmation / email 文字" />
-              <div className="flex gap-2">
-                <StatefulActionButton className="primary flex-1 font-bold shadow-md" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
+              <textarea value={emailText} onChange={(e) => setEmailText(e.target.value)} rows={4} aria-label="Email 文字" placeholder="貼 booking confirmation / email 文字" />
+              <div className="scan-sheet-actions">
+                <StatefulActionButton className="primary" type="button" disabled={!emailText.trim() || busy === 'email'} onClick={handleEmailParse}>
                   解析文字
                 </StatefulActionButton>
-                <button className={`secondary bg-white text-black button-like scan-picker-label flex-1 text-center font-bold shadow-sm ${busy === 'email-image' ? 'opacity-50' : ''}`} type="button" disabled={busy === 'email-image'} onClick={triggerEmailImages}>
+                <button className="secondary" type="button" disabled={busy === 'email-image'} onClick={triggerEmailImages}>
                   揀 email 截圖
                 </button>
               </div>
             </div>
           )}
+
+          {(lastScanFile || lastDraft) && (
+            <div className="scan-last">
+              <span>上次掃描：{lastScanFile ? lastScanFile.name : '未有'} · 上次草稿：{lastDraft ? displayStore(lastDraft) || '未命名' : '未有'}</span>
+              <button type="button" disabled={!lastScanFile || busy === 'ocr'} onClick={() => handleImage(lastScanFile || undefined, true)}>
+                <RefreshCw size={14} aria-hidden="true" /> 重試上一張
+              </button>
+              <button type="button" disabled={!lastDraft} onClick={() => lastDraft && openDraft(lastDraft)}>
+                <Repeat2 size={14} aria-hidden="true" /> 重開上次草稿
+              </button>
+            </div>
+          )}
         </div>
-      </GlassCard>
-      </Reveal>
+
+        <section className="scan-ledger" aria-labelledby="scan-ledger-title">
+          <header className="scan-ledger-head">
+            <h3 id="scan-ledger-title">今日入帳</h3>
+            <span>{todayStamps.length} 筆 · <b>{ledgerPrefix}{Math.round(todayTotal).toLocaleString()}</b></span>
+          </header>
+          {todayStamps.length ? (
+            <ul className="scan-stamps">
+              {todayStamps.slice(0, STAMP_LIMIT).map((receipt) => {
+                const pending = isPendingReceipt(receipt);
+                const fresh = (receipt.createdAt || 0) > mountedAtRef.current;
+                return (
+                  <li key={receipt.id}>
+                    <button
+                      type="button"
+                      className={`scan-stamp scan-stamp--${stampKind(receipt.category)}${pending ? ' is-pending' : ''}${fresh ? ' is-fresh' : ''}`}
+                      style={{ '--stamp-tilt': `${stampTilt(receipt.id)}deg` } as CSSProperties}
+                      onClick={() => onDraft(receipt)}
+                    >
+                      <small>{categoryById(receipt.category).name}{receipt.time ? ` · ${receipt.time}` : ''}</small>
+                      <strong>{ledgerPrefix}{Math.round(getReceiptTripAmount(receipt, state, ledgerCurrency)).toLocaleString()}</strong>
+                      <span>{displayStore(receipt) || '未命名'}</span>
+                      {pending && <em>待確認</em>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <div className="scan-stamps-empty">
+              <span aria-hidden="true" />
+              <p><strong>今日未有入帳</strong>影第一張收據，就會喺呢頁蓋印。</p>
+            </div>
+          )}
+          {todayStamps.length > STAMP_LIMIT && <p className="scan-stamps-more">仲有 {todayStamps.length - STAMP_LIMIT} 筆，喺「紀錄」睇晒。</p>}
+        </section>
+      </div>
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
       {fxOpen && (
@@ -836,7 +798,7 @@ export function Scan({
               </label>
             </div>
             <div className="scan-fx-actions">
-              <button className="secondary" type="button" onClick={() => { setFrom(mockReceipt.currency); setTo('HKD'); }}>使用旅程貨幣</button>
+              <button className="secondary" type="button" onClick={() => { setFrom(tripCurrency); setTo('HKD'); }}>使用旅程貨幣</button>
               {!fxFixed && (
                 <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
                   <RefreshCw size={16} className={busy === 'fx' ? 'spin' : ''} /> 更新匯率
@@ -854,7 +816,7 @@ export function Scan({
                 <h2>批次確認</h2>
                 <p className="muted">核對 email / 截圖解析結果，未勾選嘅唔會保存。</p>
               </div>
-              <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setBatch([])}>×</button>
+              <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setBatch([])}><X size={18} /></button>
             </div>
             <div className="batch-recovery-bar" aria-label="Batch recovery summary">
               <span><b>{batchQuality.selected}</b> 已選</span>
@@ -887,7 +849,6 @@ export function Scan({
           </div>
         </div>
       )}
-      </div>
     </section>
   );
 }

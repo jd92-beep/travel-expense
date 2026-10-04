@@ -189,3 +189,145 @@ Glass is allowed only when text remains readable in the worst background case.
 - Contrast fallback works on noisy backgrounds.
 - Generated icons/avatars contain no private data.
 - Build/typecheck/mobile smoke are required before this spec becomes code.
+
+## Scan Surface: Passport Stamp Page
+
+Recorded 2026-10-04 from the built `src/tabs/Scan.tsx` and `src/styles/scan.css`.
+This is a surface-scope language inside the theme world, not a new app identity.
+The trip is a passport and every receipt is an entry stamp.
+
+**Divergence from Epic Glass Field.** The Glass Layer Anatomy above lists "scan
+inputs" as Layer 1 glass. The built Scan tab uses no glass, blur or refraction:
+it is an opaque theme-paper page. The bottom dock stays glass; the Scan content
+does not. The Scan-specific glossy art tiles, the mock camera viewfinder and the
+tile grid of input methods are retired. Do not reintroduce them on this tab.
+
+### Tokens
+
+Every colour and face comes from the active trip theme (`src/theme/tripTheme.tsx`,
+12 themes, light and dark). The fixed `--field-*` / `--accent-*` table above does
+not apply to this surface.
+
+| Role | Token |
+|---|---|
+| Page text / muted text | `--theme-text`, `--theme-muted` |
+| Paper (strip, shutter face, ledger, sheets) | `--theme-card` |
+| Inset fields, rate button | `--theme-surface` |
+| Perforation punch colour | `--theme-canvas` |
+| Hairlines, dashed rules, empty-stamp ring | `--theme-border` |
+| Primary ink (shutter, route stamps, round stamps, day pill) | `--theme-accent` on paper; `--theme-on-accent` when inked |
+| Ticket-stamp ink, all focus rings | `--theme-focus` |
+| Oval-stamp ink, finished reading step | `--theme-status-success` |
+| 待確認 pending mark | `--theme-status-warning` |
+| Display face (trip name, shutter label, ledger heading) | `--trip-font-display` |
+| Body face (everything else, ring text) | `--trip-font-body` |
+
+Tints are made with `color-mix(in srgb, var(--theme-accent) N%, transparent)`
+(14% day pill, 28% selection), never with new hex values.
+
+**The Theme Ink Rule.** No literal colours on this surface except the neutral
+drop-shadow `rgb(0 0 0 / .4–.5)`. If a theme looks wrong, fix the theme, not Scan.
+
+### Type
+
+- Trip name: display face, 24px / 700, line-height 1.15, -0.01em.
+- Shutter label 掃描收據: display face, 29px / 800, +0.04em.
+- Ledger heading 今日入帳: display face, 19px / 700.
+- Ring text and date: body face, 11.5–12px / 800, +0.14em tracking.
+- Machine-readable line: monospace 10.5px, +0.12em, muted, single line clipped.
+- **The Tabular Money Rule.** Every amount, rate, date and Day n count uses
+  `font-variant-numeric: tabular-nums`. Amounts are 800 weight.
+
+### Visa strip
+
+The header card: trip name left, rate button right, date range and a Day pill
+(`第 n 日 / total`, `出發前 n 日`, or `旅程已完`) below, then a dashed rule and a
+44-character passport machine-readable line built only from the trip's country
+code, dates and currencies (decorative, `aria-hidden`). Corners are 16px top,
+6px bottom; a row of 16px-pitch radial punches in `--theme-canvas` along the
+bottom edge makes the perforated tear. The rate button (min 96×64px, 12px radius,
+surface fill, border turns accent-tinted on hover) shows `1 HKD` / rate in trip
+currency / 匯率 and opens the FX sheet.
+
+### Stamp shutter
+
+The primary action: a 232px circular paper button rotated -5deg in the thumb
+zone. An SVG ring draws three concentric circles in accent ink (3.2px outer,
+1.2px inner, 1.4px dotted at 1.5/4.5) with `收據 · RECEIPT · 入帳 · ENTRY` set on
+an arc, and the face carries a camera glyph, 掃描收據 and today's date.
+
+**The One Press Rule.** The ink-flood press is the surface's one authored motion:
+on `:active` the shutter floods to `--theme-accent` with `--theme-on-accent`
+content, sinks to scale .95 and the shadow tightens (160ms,
+`cubic-bezier(.2,.8,.2,1)`). Hover only straightens it to -2deg. Every other
+motion on the page is state feedback, not choreography.
+
+### Reading state
+
+While a photo is being parsed the shutter is replaced in place (inside an
+`aria-live="polite"` region, `role="status"`) by the photo itself cropped into a
+188px circle with a 6px double accent border, under a slowly turning 2px dashed
+accent ring (2.6s linear). Beside it, three honest steps: 整理相片 → AI 讀緊店名、
+金額、日期 → 打開確認表. The active step is bold `--theme-text` with a spinner,
+done steps are `--theme-status-success` with a check, waiting steps are muted
+with a hollow 9px dot. Never show fake percentages or extra steps.
+
+### Route stamps
+
+One row of four equal columns below the shutter: 相簿, 語音, Email, 手動. Each is
+a 64px double-bordered (4px double accent) ring on paper with a 22px glyph and
+a 14px / 800 label beneath (min target 96px tall). Shapes and tilts vary so the
+row reads hand-pressed: 相簿 round -4deg, 語音 14px-radius square +3deg, Email
+oval -2deg, 手動 round +5deg. Hover straightens to 0deg; press scales to .92.
+語音 and Email are toggles with `aria-pressed`; when open the ring is inked
+(accent fill, on-accent glyph), matching the shutter's pressed state, and an
+opaque sheet (16px radius, card fill, border) opens beneath with its textarea
+and 48px actions.
+
+### Today's ledger stamps
+
+`今日入帳` card with count and total, then up to 9 stamps in a 3-column grid
+(overflow line points to 紀錄). Each stamp is a square button with a 3px double
+border in its ink, transparent fill, showing category · time, amount and store.
+
+**The Stamp Shape Rule.** Shape and ink together encode the category group:
+
+| Shape | Categories | Ink |
+|---|---|---|
+| Round (50%) | food, shopping, other (default) | `--theme-accent` |
+| Ticket square (12px radius) | transport, flight | `--theme-focus` |
+| Oval (50% / 40%) | lodging, ticket, local tour | `--theme-status-success` |
+
+Pending receipts switch to a 2px dashed border and add a 待確認 mark. A stamp
+created since the tab mounted lands once (scale 1.35 → 1, 300ms).
+
+**The Stable Tilt Rule.** Each ledger stamp tilts -6 to +6deg from a hash of its
+receipt id, so it looks hand-pressed but never jumps between renders. Hover
+straightens to 0deg at scale 1.03. Empty state: one 64px muted double ring with
+今日未有入帳.
+
+### Layout
+
+- Mobile: single column, max-width 520px, 20px gap; desk stack gap 16px.
+- ≥1024px: two columns (`minmax(380px, 440px)` desk + fluid ledger, 32px gap,
+  max-width 1120px). The ledger becomes sticky at top 24px, gains 22–24px
+  padding, and stamps auto-fill at 128–148px with 18px amounts.
+
+### Motion and reduced motion
+
+Transitions are 120–160ms ease-out or `cubic-bezier(.2,.8,.2,1)`; sheets fade
+up 6px in 180ms; the voice mic pulses while listening. Under
+`prefers-reduced-motion: reduce` every animation and transition on `.scan-page`
+is removed; states still change by fill, colour and border.
+
+### Accessibility and stable test hooks
+
+Focus is a 3px `--theme-focus` outline at 3px offset (6px on the shutter; on
+route stamps the ring carries it). Decorative SVG, glyphs, the MRZ line and the
+empty ring are `aria-hidden`. These names and ids are test contracts and must
+stay stable:
+
+- Accessible names: 相機 (shutter label 相機：掃描收據), 相簿, 手動, 語音, Email,
+  匯率 Exchange Rate, 解析, 解析文字, 重開上次草稿, 批次確認.
+- File inputs: `#scan-camera-input`, `#scan-gallery-input`,
+  `#scan-email-image-input`.

@@ -351,7 +351,6 @@
   }
 
   .dashboard-screen,
-  .scan-screen,
   .timeline-screen,
   .history-screen,
   .weather-screen,
@@ -374,8 +373,7 @@
   .weather-day,
   .weather-slot-detailed,
   .settings-command,
-  .settings-screen .accordion-card,
-  .scan-hero-card {
+  .settings-screen .accordion-card {
     border: 1px solid rgba(128, 99, 63, .15) !important;
     border-radius: 22px !important;
     background:
@@ -608,52 +606,6 @@
 
   .app-shell--stats .preview-stats-metrics .stats-metric {
     border-right: 0 !important;
-  }
-
-  /* ---------- Scan: viewfinder left, action rail right ---------- */
-  /* GlassCard nests content in one non-absolute inner wrapper */
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) {
-    display: grid !important;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr) !important;
-    grid-auto-flow: dense; /* backfill the action rail beside the viewfinder */
-    gap: 18px 26px !important;
-    align-items: start;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > div.flex {
-    grid-column: 1 / -1;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-ai-strip {
-    grid-column: 1 / -1;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-camera {
-    grid-column: 1;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .preview-scan-tip {
-    grid-column: 1;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > div.grid {
-    grid-column: 2;
-    grid-template-columns: 1fr !important;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .scan-fx-wide-button {
-    grid-column: 2;
-  }
-
-  .app-shell--scan .scan-hero-card > div:not([class*="absolute"]) > .scan-workspace {
-    grid-column: 1 / -1;
-  }
-
-  /* tighten the oversized mobile touch targets inside the desktop action rail */
-  .app-shell--scan .scan-hero-card .scan-hero-button,
-  .app-shell--scan .scan-hero-card .scan-secondary-button {
-    min-height: 104px;
-    border-radius: 22px;
   }
 
   /* ---------- Timeline: command full width, days in pairs ---------- */

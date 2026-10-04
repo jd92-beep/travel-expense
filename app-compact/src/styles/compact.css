@@ -258,10 +258,7 @@ body {
 
 .compact-touch-action:focus-visible,
 .app-floating-dock-mobile button:focus-visible,
-.scan-hero-button:focus-visible,
-.scan-secondary-button:focus-visible,
-.scan-utility-button:focus-visible,
-.settings-preview-controls button:focus-visible {
+.settings-preview-controls button:focus-visible{
   outline: 2px solid rgba(194, 59, 94, .72) !important;
   outline-offset: 3px !important;
   box-shadow: 0 0 0 5px rgba(194, 59, 94, .14), var(--compact-control-shadow) !important;
@@ -366,7 +363,6 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 6px 16px rgba(194, 59, 94, 0.4) !important;
 }
-
 
 /* Sleek 2px Itinerary timeline rail beam overrides */
 .timeline-rail {
@@ -496,16 +492,6 @@ body {
 }
 
 /* Scan AI Laser line & simulated Bounding Boxes */
-.scan-laser-line {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: linear-gradient(90deg, transparent 5%, var(--compact-gold) 50%, transparent 95%);
-  box-shadow: 0 0 14px var(--compact-gold), 0 0 4px #FFF;
-  animation: scan-sweep 2.4s ease-in-out infinite;
-  z-index: 5;
-}
 
 @keyframes scan-sweep {
   0% { top: 0%; opacity: 0.1; }
@@ -514,57 +500,12 @@ body {
   100% { top: 100%; opacity: 0.1; }
 }
 
-.scan-bounding-box {
-  position: absolute;
-  border: 1.5px dashed rgba(212, 168, 67, 0.74);
-  border-radius: 6px;
-  background: rgba(212, 168, 67, 0.08);
-  box-shadow: 0 0 8px rgba(212, 168, 67, 0.2);
-  z-index: 4;
-  opacity: 0;
-  animation: box-blink 3s infinite ease-in-out;
-}
-
-.scan-bounding-box.box-1 {
-  top: 15%;
-  left: 20%;
-  width: 50%;
-  height: 12%;
-  animation-delay: 0.2s;
-}
-
-.scan-bounding-box.box-2 {
-  top: 60%;
-  left: 35%;
-  width: 40%;
-  height: 15%;
-  animation-delay: 1.1s;
-}
-
 @keyframes box-blink {
   0%, 100% { opacity: 0; }
   30%, 70% { opacity: 0.85; }
 }
 
 /* Voice Parse Sparkle Button */
-.voice-sparkle-btn {
-  background: linear-gradient(135deg, var(--compact-red), #e2587a) !important;
-  color: white !important;
-  border: none !important;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 4px 14px rgba(194, 59, 94, 0.4) !important;
-}
-
-.voice-sparkle-btn::after {
-  content: '✨';
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 14px;
-  opacity: 0.85;
-}
 
 /* Weather Tab hourly rail glassmorphism overrides */
 .preview-weather-hourly-rail {

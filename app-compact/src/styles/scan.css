@@ -1,0 +1,696 @@
+/* Scan tab — passport stamp page. Every colour and face comes from the active trip theme. */
+
+.scan-page {
+  color: var(--theme-text);
+  font-family: var(--trip-font-body);
+}
+
+.scan-page ::selection {
+  background: color-mix(in srgb, var(--theme-accent) 28%, transparent);
+  color: var(--theme-text);
+}
+
+.scan-layout {
+  display: grid;
+  gap: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.scan-desk {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- visa strip */
+
+.scan-visa {
+  position: relative;
+  padding: 16px 16px 14px;
+  border-radius: 16px 16px 6px 6px;
+  background: var(--theme-card);
+  box-shadow: 0 1px 0 var(--theme-border), 0 12px 26px -20px rgb(0 0 0 / 0.4);
+}
+
+/* Perforated tear edge, punched in the page's own ground colour. */
+.scan-visa::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: -4px;
+  height: 8px;
+  background: radial-gradient(circle at 8px 4px, var(--theme-canvas) 3.4px, transparent 3.9px) 0 0 / 16px 8px repeat-x;
+  pointer-events: none;
+}
+
+.scan-visa-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scan-page .scan-visa h2 {
+  margin: 4px 0 0;
+  color: var(--theme-text);
+  font-family: var(--trip-font-display);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.scan-rate {
+  display: grid;
+  justify-items: end;
+  gap: 1px;
+  min-width: 96px;
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition: border-color 140ms ease-out, background-color 140ms ease-out;
+}
+
+.scan-rate small {
+  color: var(--theme-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.scan-rate strong {
+  font-size: 16px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.scan-rate span {
+  color: var(--theme-accent);
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.scan-rate:hover {
+  border-color: color-mix(in srgb, var(--theme-accent) 55%, var(--theme-border));
+}
+
+.scan-visa-trip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin: 10px 0 0;
+  font-size: 14px;
+}
+
+.scan-visa-trip span {
+  color: var(--theme-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-visa-trip b {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-accent) 14%, transparent);
+  color: var(--theme-accent);
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.scan-mrz {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  overflow: hidden;
+  border-top: 1px dashed var(--theme-border);
+  color: var(--theme-muted);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- the stamp shutter */
+
+.scan-press {
+  display: grid;
+  place-items: center;
+  min-height: 268px;
+  padding: 14px 0 4px;
+}
+
+.scan-stamp-shutter {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 232px;
+  height: 232px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--theme-card);
+  color: var(--theme-accent);
+  box-shadow: 0 2px 0 var(--theme-border), 0 22px 34px -20px rgb(0 0 0 / 0.5);
+  transform: rotate(-5deg);
+  cursor: pointer;
+  transition:
+    transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 120ms ease-out,
+    color 120ms ease-out,
+    box-shadow 160ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scan-stamp-shutter:hover {
+  transform: rotate(-2deg);
+}
+
+/* The press is the one authored moment: the stamp sinks and floods with ink. */
+.scan-stamp-shutter:active {
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+  box-shadow: 0 1px 0 var(--theme-border), 0 8px 14px -10px rgb(0 0 0 / 0.5);
+  transform: rotate(-5deg) scale(0.95);
+}
+
+.scan-stamp-shutter:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.scan-stamp-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.scan-stamp-ring circle {
+  fill: none;
+  stroke: currentColor;
+}
+
+.scan-stamp-ring circle:nth-of-type(1) { stroke-width: 3.2; }
+.scan-stamp-ring circle:nth-of-type(2) { stroke-width: 1.2; }
+.scan-stamp-ring circle:nth-of-type(3) { stroke-width: 1.4; stroke-dasharray: 1.5 4.5; }
+
+.scan-stamp-ring text {
+  fill: currentColor;
+  font-family: var(--trip-font-body);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.scan-stamp-face {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.scan-stamp-face strong {
+  font-family: var(--trip-font-display);
+  font-size: 29px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+}
+
+.scan-stamp-face small {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.14em;
+}
+
+/* ---------------------------------------------------------------- reading state */
+
+.scan-reading {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
+.scan-reading-photo {
+  position: relative;
+  display: block;
+  width: 188px;
+  height: 188px;
+  padding: 10px;
+}
+
+.scan-reading-photo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--theme-accent);
+  border-radius: 50%;
+  animation: scan-reading-turn 2.6s linear infinite;
+}
+
+.scan-reading-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 6px double var(--theme-accent);
+  border-radius: 50%;
+  background: var(--theme-surface);
+  object-fit: cover;
+}
+
+.scan-reading-steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-reading-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--theme-muted);
+  font-size: 14.5px;
+}
+
+.scan-reading-steps li.is-active {
+  color: var(--theme-text);
+  font-weight: 800;
+}
+
+.scan-reading-steps li.is-done {
+  color: var(--theme-status-success);
+}
+
+.scan-step-dot {
+  width: 9px;
+  height: 9px;
+  margin: 0 3.5px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+@keyframes scan-reading-turn {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------------------------------------------------------------- other routes */
+
+.scan-routes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scan-route {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 6px;
+  min-height: 96px;
+  padding: 4px 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--theme-text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.scan-route-ring {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border: 4px double var(--theme-accent);
+  border-radius: 50%;
+  background: var(--theme-card);
+  color: var(--theme-accent);
+  font-style: normal;
+  transform: rotate(var(--route-tilt, -4deg));
+  transition: background-color 120ms ease-out, color 120ms ease-out, transform 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.scan-route:nth-child(2) .scan-route-ring { --route-tilt: 3deg; border-radius: 14px; }
+.scan-route:nth-child(3) .scan-route-ring { --route-tilt: -2deg; border-radius: 50% / 40%; }
+.scan-route:nth-child(4) .scan-route-ring { --route-tilt: 5deg; }
+
+.scan-route:hover .scan-route-ring {
+  transform: rotate(0deg);
+}
+
+.scan-route:active .scan-route-ring {
+  transform: rotate(var(--route-tilt, -4deg)) scale(0.92);
+}
+
+/* An open route is an inked stamp, matching the shutter's pressed state. */
+.scan-route[aria-pressed="true"] .scan-route-ring {
+  background: var(--theme-accent);
+  color: var(--theme-on-accent);
+}
+
+.scan-route:disabled {
+  cursor: progress;
+  opacity: 0.55;
+}
+
+.scan-sheet {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: 16px;
+  background: var(--theme-card);
+  animation: scan-sheet-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.scan-sheet .muted {
+  margin: 0;
+  color: var(--theme-muted);
+  font-size: 13px;
+}
+
+.scan-sheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.scan-sheet-actions > * {
+  flex: 1;
+  min-height: 48px;
+}
+
+.scan-sheet textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--theme-border);
+  border-radius: 12px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.scan-sheet textarea::placeholder {
+  color: var(--theme-muted);
+}
+
+.scan-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scan-examples button {
+  min-height: 34px;
+  padding: 6px 11px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.scan-listening {
+  animation: scan-listen 1s ease-in-out infinite alternate;
+}
+
+@keyframes scan-listen {
+  from { opacity: 1; }
+  to { opacity: 0.35; }
+}
+
+@keyframes scan-sheet-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+.scan-last {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--theme-border);
+  border-radius: 12px;
+  color: var(--theme-muted);
+  font-size: 13px;
+}
+
+.scan-last span {
+  flex: 1 1 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-last button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--theme-border);
+  border-radius: 999px;
+  background: var(--theme-surface);
+  color: var(--theme-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.scan-last button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ---------------------------------------------------------------- today's stamps */
+
+.scan-ledger {
+  padding: 16px 16px 18px;
+  border-radius: 16px;
+  background: var(--theme-card);
+  box-shadow: 0 1px 0 var(--theme-border), 0 14px 28px -22px rgb(0 0 0 / 0.42);
+}
+
+.scan-ledger-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scan-page .scan-ledger-head h3 {
+  margin: 0;
+  color: var(--theme-text);
+  font-family: var(--trip-font-display);
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.scan-ledger-head span {
+  color: var(--theme-muted);
+  font-size: 13px;
+}
+
+.scan-ledger-head b {
+  color: var(--theme-text);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-stamps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 12px;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scan-stamp {
+  --stamp-ink: var(--theme-accent);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 8px 6px;
+  border: 3px double var(--stamp-ink);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--theme-text);
+  font: inherit;
+  text-align: center;
+  transform: rotate(var(--stamp-tilt, 0deg));
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.scan-stamp--ticket {
+  --stamp-ink: var(--theme-focus);
+  border-radius: 12px;
+}
+
+.scan-stamp--oval {
+  --stamp-ink: var(--theme-status-success);
+  border-radius: 50% / 40%;
+}
+
+.scan-stamp:hover {
+  transform: rotate(0deg) scale(1.03);
+}
+
+.scan-stamp small {
+  color: var(--theme-muted);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.06em;
+}
+
+.scan-stamp strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(13.5px, 3.9vw, 16px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-stamp span {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--theme-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-stamp em {
+  color: var(--theme-status-warning);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.scan-stamp.is-pending {
+  border-style: dashed;
+  border-width: 2px;
+}
+
+.scan-stamp.is-fresh {
+  animation: scan-stamp-land 300ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+@keyframes scan-stamp-land {
+  from {
+    opacity: 0;
+    transform: rotate(var(--stamp-tilt, 0deg)) scale(1.35);
+  }
+}
+
+.scan-stamps-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.scan-stamps-empty span {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border: 3px double var(--theme-border);
+  border-radius: 50%;
+}
+
+.scan-stamps-empty p {
+  margin: 0;
+  color: var(--theme-muted);
+  font-size: 14px;
+}
+
+.scan-stamps-empty strong {
+  display: block;
+  color: var(--theme-text);
+  font-size: 15px;
+}
+
+.scan-stamps-more {
+  margin: 14px 0 0;
+  color: var(--theme-muted);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- focus + motion + desktop */
+
+.scan-page .scan-route:focus-visible {
+  outline: none;
+}
+
+.scan-page .scan-route:focus-visible .scan-route-ring {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+.scan-page :is(.scan-rate, .scan-stamp-shutter, .scan-stamp, .scan-last button, .scan-examples button):focus-visible {
+  outline: 3px solid var(--theme-focus);
+  outline-offset: 3px;
+}
+
+.scan-page .scan-stamp-shutter:focus-visible {
+  outline-offset: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-page *,
+  .scan-page *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .scan-layout {
+    grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
+    align-items: start;
+    gap: 32px;
+    max-width: 1120px;
+  }
+
+  .scan-ledger {
+    position: sticky;
+    top: 24px;
+    padding: 22px 24px 26px;
+  }
+
+  .scan-stamps {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 148px));
+    gap: 22px 20px;
+  }
+
+  .scan-stamp strong {
+    font-size: 18px;
+  }
+}

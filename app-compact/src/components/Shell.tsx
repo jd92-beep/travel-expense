@@ -124,6 +124,9 @@ const icons: Record<TabId, ReactNode> = {
   settings: <Settings size={20} />,
 };
 
+// Theme tokens, not fixed hues: the old navy-to-ochre ink vanished on the dark themes' header.
+const SHELL_TITLE_INK = ['var(--theme-text)', 'var(--theme-accent)', 'var(--theme-chart-3)', 'var(--theme-text)'];
+
 const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: string; status: string }> = {
   dashboard: { title: 'Travel Ledger', mobileTitle: '我的旅程', subtitle: '開始記錄你的旅程', status: '進行中' },
   scan: { title: 'Receipt Studio', mobileTitle: '收據掃描工作室', subtitle: '掃描 · 辨識 · 記帳', status: '就緒 · 可掃描' },
@@ -539,7 +542,7 @@ export function Shell({
               >
                 <span className="topbar-trip-trigger-title" role="heading" aria-level={1}>
                   {motionOk
-                    ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeTripName}</AuroraText>
+                    ? <AuroraText colors={SHELL_TITLE_INK} speed={1.2}>{activeTripName}</AuroraText>
                     : activeTripName}
                 </span>
               </TripDropdown>
@@ -547,7 +550,7 @@ export function Shell({
           ) : (
             <h1>
               {motionOk
-                ? <AuroraText colors={['#18395c', '#d94132', '#d39a29', '#2d6e48']} speed={1.2}>{activeCopy.title}</AuroraText>
+                ? <AuroraText colors={SHELL_TITLE_INK} speed={1.2}>{activeCopy.title}</AuroraText>
                 : activeCopy.title}
             </h1>
           )}
