@@ -440,6 +440,13 @@ Verified for current production promotion:
 
 ## CI And Runbooks
 
+**Automated Edge provenance (optional):** add an `admin-production` environment secret
+`SUPABASE_ACCESS_TOKEN` (Supabase personal access token). After the approval gate the production job
+then sets `ADMIN_EDGE_SOURCE_SHA` / `ADMIN_EXPECTED_EDGE_SOURCE_SHA` / `ADMIN_FRONTEND_GIT_SHA` to
+`github.sha`, bakes and deploys `admin-kanban` (`--use-api`), restores the provenance file, then runs the
+Vercel promotion. Without the secret the step is a no-op and the manual
+`scripts/deploy-admin-edge.mjs` path applies.
+
 `.github/workflows/admin-console.yml` uses pinned actions and checks Admin, Edge, Compact, React,
 Broker, shared contracts and a disposable Supabase. Pull requests and ordinary pushes receive no
 production secrets. A manual `main`-only job can promote only after all seven gates and the protected
