@@ -311,7 +311,7 @@ function rpcResult<T>(result: { data: T | null; error?: unknown }, message: stri
     // SQLSTATEs — generic constraint/DB text must not become UNAUTHORIZED.
     if (
       /active admin session|authentication required|not authenticated|unauthorized|csrf/i
-          .test(raw) ||
+        .test(raw) ||
       sqlState === "28000" || sqlState === "42501"
     ) {
       throw new AdminOperationError("UNAUTHORIZED", "Admin session is not authorized", 401);
