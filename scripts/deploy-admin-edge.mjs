@@ -29,5 +29,7 @@ execFileSync('supabase', [
   'functions', 'deploy', 'admin-kanban',
   '--project-ref', 'fbnnjoahvtdrnigevrtw',
   '--import-map', 'supabase/functions/import_map.json',
+  // Server-side bundling: no local Docker daemon needed (CI runners and laptops alike).
+  '--use-api',
 ], { cwd: repoRoot, stdio: 'inherit' });
 console.log('Edge deploy complete');
