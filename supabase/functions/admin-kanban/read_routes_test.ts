@@ -254,3 +254,17 @@ Deno.test("integrity list preserves the scan state and run metadata", async () =
     "completed",
   );
 });
+
+Deno.test("itinerary with an invalid trip range stays readable for repair", () => {
+  const normalized = canonicalizeItinerary({
+    tripId: "11111111-1111-4111-8111-111111111111",
+    startDate: null,
+    endDate: "2026-04-25",
+    version: 3,
+    itinerary: [{ date: "2026-04-20", spots: [] }],
+  });
+  assertEquals(normalized.data.days, []);
+  assertEquals(normalized.data.startDate, "");
+  assertEquals(normalized.data.integrityIssues, [{ code: "INVALID_RANGE", count: 1 }]);
+  assertEquals(normalized.warnings, ["ITINERARY_INVALID_RANGE"]);
+});

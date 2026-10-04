@@ -524,7 +524,9 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
       affectedCount: 1,
       before: current,
       consequence: input.action === "receipt_amend"
-        ? "Updates one canonical receipt and queues its eligible Notion mirror."
+        ? fields.includes("amount") || fields.includes("currency")
+          ? "Updates one canonical receipt, recomputes its home-currency (HKD) snapshot, and queues its eligible Notion mirror."
+          : "Updates one canonical receipt and queues its eligible Notion mirror."
         : input.action === "receipt_trash"
         ? "Creates a durable tombstone and queues an eligible Notion archive."
         : "Creates a new active receipt version and queues an eligible Notion upsert.",
@@ -1810,9 +1812,11 @@ export async function streamAdminReceiptPhoto(
   ) {
     throw new AdminOperationError("UPSTREAM_UNAVAILABLE", "Receipt photo metadata is invalid", 502);
   }
-  const { data: blob, error: downloadError } = await context.client.storage.from(bucket).download(
-    path,
-  );
+  // The audit hash does not depend on the bytes; compute it while Storage downloads.
+  const [{ data: blob, error: downloadError }, receiptHash] = await Promise.all([
+    context.client.storage.from(bucket).download(path),
+    sha256Hex(receiptId),
+  ]);
   if (downloadError || !blob) {
     throw new AdminOperationError(
       "UPSTREAM_UNAVAILABLE",
@@ -1832,7 +1836,6 @@ export async function streamAdminReceiptPhoto(
   ) {
     throw new AdminOperationError("UPSTREAM_UNAVAILABLE", "Receipt photo content is invalid", 502);
   }
-  const receiptHash = await sha256Hex(receiptId);
   if (!HASH_RE.test(receiptHash)) {
     throw new AdminOperationError("INTERNAL_ERROR", "Receipt audit hash failed", 500);
   }

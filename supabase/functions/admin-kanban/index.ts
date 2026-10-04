@@ -151,6 +151,19 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
   let brokerVerified = false;
   let brokerSource: "live" | "unavailable" = "unavailable";
   const warnings: string[] = [];
+  // DB telemetry/probe history do not depend on the broker; read them while the
+  // broker status call (up to 5 s, plus a 2 s health fallback) is in flight.
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const databaseReads = Promise.all([
+    supabase
+      .from("app_usage_events")
+      .select("provider,model,outcome,duration_ms,error_code,event_name,created_at")
+      .gte("created_at", since)
+      .not("provider", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(5000),
+    supabase.rpc("admin_operation_list", { p_status: "all", p_limit: 50 }),
+  ]);
   try {
     const response = await fetchNoRedirect(`${baseUrl}/credentials/status`, {
       headers: {
@@ -173,19 +186,11 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
     else warnings.push("BROKER_UNAVAILABLE");
   }
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data: usageRows, error: usageError } = await supabase
-    .from("app_usage_events")
-    .select("provider,model,outcome,duration_ms,error_code,event_name,created_at")
-    .gte("created_at", since)
-    .not("provider", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(5000);
+  const [
+    { data: usageRows, error: usageError },
+    { data: operationRows, error: operationError },
+  ] = await databaseReads;
   if (usageError) warnings.push("PROVIDER_TELEMETRY_UNAVAILABLE");
-  const { data: operationRows, error: operationError } = await supabase.rpc(
-    "admin_operation_list",
-    { p_status: "all", p_limit: 50 },
-  );
   if (operationError) warnings.push("PROVIDER_PROBE_HISTORY_UNAVAILABLE");
   const rows = aggregateProviderRows({
     brokerProviders,
@@ -234,29 +239,39 @@ async function adminProviderRead(supabase: SupabaseClientAny) {
 }
 
 async function adminRuntimeRead(supabase: SupabaseClientAny) {
-  let frontend: Record<string, unknown> = {};
-  let frontendHealth = "unavailable";
-  try {
-    const response = await fetchNoRedirect(`${ADMIN_FRONTEND_ORIGIN}/api/health`, {}, 3000);
-    frontend = await response.json();
-    frontendHealth = response.ok && frontend?.acceptingReadTraffic === true ? "healthy" : "failed";
-  } catch {
-    frontendHealth = "unavailable";
-  }
-
-  const brokerHealth = await fetchBrokerHealth();
+  // Four independent probes; running them concurrently caps the page at the
+  // slowest one (~3 s worst case) instead of their sum (~5 s + DB).
+  const frontendRead = (async () => {
+    try {
+      const response = await fetchNoRedirect(`${ADMIN_FRONTEND_ORIGIN}/api/health`, {}, 3000);
+      const body = await response.json();
+      return {
+        frontend: (body || {}) as Record<string, unknown>,
+        frontendHealth: response.ok && body?.acceptingReadTraffic === true ? "healthy" : "failed",
+      };
+    } catch {
+      return { frontend: {} as Record<string, unknown>, frontendHealth: "unavailable" };
+    }
+  })();
+  const [
+    { frontend, frontendHealth },
+    brokerHealth,
+    { data: clientRows },
+    { data: runtimeContract, error: runtimeContractError },
+  ] = await Promise.all([
+    frontendRead,
+    fetchBrokerHealth(),
+    supabase
+      .from("app_usage_events")
+      .select("app_surface,app_build,created_at")
+      .in("app_surface", ["compact", "android"])
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabase.rpc("admin_read_runtime_contract"),
+  ]);
   const brokerVersion = brokerHealth?.version || "unknown";
   const brokerStatus = brokerHealth ? "healthy" : "unavailable";
 
-  const { data: clientRows } = await supabase
-    .from("app_usage_events")
-    .select("app_surface,app_build,created_at")
-    .in("app_surface", ["compact", "android"])
-    .order("created_at", { ascending: false })
-    .limit(1000);
-  const { data: runtimeContract, error: runtimeContractError } = await supabase.rpc(
-    "admin_read_runtime_contract",
-  );
   const latestVersion = (surface: string) =>
     String(
       ((clientRows || []) as ClientVersionRow[]).find((row) => row.app_surface === surface)
@@ -670,6 +685,22 @@ Deno.serve(async (req) => {
           sources: providerRead.sources,
           warnings: providerRead.warnings,
         }),
+      );
+    }
+    if (
+      req.method === "GET" && signed.route === "/api/runtime" &&
+      url.searchParams.get("scope") === "policy"
+    ) {
+      // Cheap path for the UI write gate: env-only, no frontend/broker/DB probes.
+      return json(
+        req,
+        200,
+        adminReadEnvelope(signed.requestId, {
+          runtimePolicy: runtimePolicyFor(
+            Deno.env.get("ADMIN_WRITE_MODE"),
+            Deno.env.get("ADMIN_ALLOW_R3_USER_PURGE") === "true",
+          ),
+        }, { sources: { "shared-cloud": "live" }, staleAfterSeconds: 60 }),
       );
     }
     if (req.method === "GET" && signed.route === "/api/runtime") {

@@ -908,6 +908,33 @@ test('provider cooldown is visible and blocks duplicate probes', async ({ page }
   await expect(page.getByRole('button', { name: 'Probe Google Gemma' })).toBeEnabled({ timeout: 2_000 });
 });
 
+test('probe-only write mode explains disabled writes once in a dismissible banner', async ({ page }) => {
+  await setupApi(page, {
+    runtimePolicy: { status: 'provider_probe_only', version: 'admin-write-mode-v1', source: 'ADMIN_WRITE_MODE', expiresAt: null, writable: false },
+  });
+  await page.goto('/overview');
+  const banner = page.locator('.write-policy-banner');
+  await expect(banner).toContainText('只允許 AI provider probe');
+  await expect(banner).toContainText('ADMIN_WRITE_MODE');
+  await banner.getByRole('button', { name: '知道了' }).click();
+  await expect(banner).toHaveCount(0);
+  await page.goto('/data/accounts');
+  await expect(page.locator('.write-policy-banner')).toHaveCount(0);
+});
+
+test('global search accepts a full email and links each result with context', async ({ page }) => {
+  await setupApi(page);
+  let searched = '';
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/api/admin/search') searched = url.searchParams.get('q') || '';
+  });
+  await page.goto('/search?q=boss%40example.com');
+  await expect(page.getByRole('heading', { name: '帳戶' })).toBeVisible();
+  expect(searched).toBe('boss@example.com');
+  await expect(page.locator('.write-policy-banner')).toHaveCount(0);
+});
+
 test('infrastructure reports the backend deny-all runtime policy', async ({ page }) => {
   await setupApi(page, {
     runtimePolicy: { status: 'deny_all', version: 'admin-write-mode-v1', source: 'default', expiresAt: null, writable: false },
@@ -1016,6 +1043,20 @@ test('receipt photo is rendered through the admin BFF route', async ({ page }) =
   const image = page.getByRole('img', { name: 'Nagoya Station 收據照片' });
   await expect(image).toBeVisible();
   await expect(image).toHaveJSProperty('naturalWidth', 1);
+});
+
+test('receipt photo is downloaded once per session and reused on revisit', async ({ page }) => {
+  await setupApi(page);
+  let photoRequests = 0;
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname === `/api/admin/receipts/${receiptId}/photo`) photoRequests += 1;
+  });
+  await page.goto(`/data/receipts/${receiptId}`);
+  await expect(page.getByRole('img', { name: 'Nagoya Station 收據照片' })).toBeVisible();
+  await page.getByRole('navigation', { name: '麵包屑' }).getByRole('link', { name: '收據' }).click();
+  await page.getByRole('link', { name: 'Nagoya Station' }).first().click();
+  await expect(page.getByRole('img', { name: 'Nagoya Station 收據照片' })).toBeVisible();
+  expect(photoRequests).toBe(1);
 });
 
 test('receipt sync controls expose only server-eligible retry and cancel actions', async ({ page }) => {
@@ -1140,8 +1181,9 @@ test('receipt R2 editor creates a versioned before-and-after preview', async ({ 
   await page.getByRole('button', { name: '預覽修改' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('R2');
-  await expect(dialog.getByRole('heading', { name: '現行資料' })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '提交後資料' })).toBeVisible();
+  await expect(dialog.getByRole('columnheader', { name: '現行' })).toBeVisible();
+  await expect(dialog.getByRole('columnheader', { name: '提交後' })).toBeVisible();
+  await expect(dialog.locator('tr.changed').first()).toContainText('version');
   await expect(dialog.getByLabel('目前通行片語')).toBeVisible();
   if (process.env.CAPTURE_UI === '1') await page.screenshot({ path: 'test-results/visual-audit/receipt-r2-preview.png', fullPage: true });
 });

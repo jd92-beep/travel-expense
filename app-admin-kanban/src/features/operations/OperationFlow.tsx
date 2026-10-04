@@ -95,7 +95,7 @@ export function useOperationFlow(
     mutationFn: async ({ operation, passphrase }: { operation: AdminOperation; passphrase: string }) => {
       let grantId: string | undefined;
       commitRequestStarted.current = false;
-      if (operation.risk === "R2") {
+      if (operation.risk === "R2" || operation.risk === "R3") {
         const grant = await reauthenticateAdmin(passphrase, {
           action: operation.action,
           previewHash: operation.previewHash,
@@ -210,6 +210,61 @@ function OperationError({ error }: { error: unknown }) {
   );
 }
 
+function displayValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/** Field-by-field before/after table; changed rows are highlighted. */
+function OperationDiff({ before, proposed }: { before: unknown; proposed: unknown }) {
+  const left = before && typeof before === "object" && !Array.isArray(before)
+    ? before as Record<string, unknown>
+    : null;
+  const right = proposed && typeof proposed === "object" && !Array.isArray(proposed)
+    ? proposed as Record<string, unknown>
+    : null;
+  if (!left || !right) {
+    return (
+      <div className="operation-diff" aria-label="操作前後差異">
+        <section>
+          <h3>現行資料</h3>
+          <pre>{JSON.stringify(before ?? {}, null, 2)}</pre>
+        </section>
+        <section>
+          <h3>提交後資料</h3>
+          <pre>{JSON.stringify(proposed ?? {}, null, 2)}</pre>
+        </section>
+      </div>
+    );
+  }
+  const keys = Array.from(new Set([...Object.keys(left), ...Object.keys(right)]));
+  const changed = (key: string) => JSON.stringify(left[key]) !== JSON.stringify(right[key]);
+  const ordered = [...keys.filter(changed), ...keys.filter((key) => !changed(key))];
+  return (
+    <div className="table-scroll" aria-label="操作前後差異">
+      <table className="diff-table">
+        <thead>
+          <tr>
+            <th scope="col">欄位</th>
+            <th scope="col">現行</th>
+            <th scope="col">提交後</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map((key) => (
+            <tr key={key} className={changed(key) ? "changed" : undefined}>
+              <td><code>{key}</code></td>
+              <td>{displayValue(left[key])}</td>
+              <td>{displayValue(right[key])}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function OperationDialog({ flow }: { flow: OperationFlow }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [copied, setCopied] = useState(false);
@@ -220,7 +275,7 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
     if (!flow.open && dialog.open) dialog.close();
   }, [flow.open]);
   useEffect(() => setCopied(false), [flow.completed?.operation.id]);
-  const requiresStepUp = flow.operation?.risk === "R2";
+  const requiresStepUp = flow.operation?.risk === "R2" || flow.operation?.risk === "R3";
   const supportsPasskey = supportsR2Passkey();
   const resultUnknown = flow.outcomeUnknown || flow.operation?.status === "outcome_unknown";
   const activeAfterSubmit = flow.submitted && Boolean(flow.operation) &&
@@ -275,16 +330,10 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
             </div>
             {(flow.operation.preview.before !== undefined ||
               flow.operation.preview.proposed !== undefined) && (
-              <div className="operation-diff" aria-label="操作前後差異">
-                <section>
-                  <h3>現行資料</h3>
-                  <pre>{JSON.stringify(flow.operation.preview.before ?? {}, null, 2)}</pre>
-                </section>
-                <section>
-                  <h3>提交後資料</h3>
-                  <pre>{JSON.stringify(flow.operation.preview.proposed ?? {}, null, 2)}</pre>
-                </section>
-              </div>
+              <OperationDiff
+                before={flow.operation.preview.before}
+                proposed={flow.operation.preview.proposed}
+              />
             )}
             <dl className="operation-impact">
               <div>
@@ -307,17 +356,25 @@ export function OperationDialog({ flow }: { flow: OperationFlow }) {
             {requiresStepUp && (
               supportsPasskey
                 ? (
-                  <label className="operation-passphrase">
-                    <span>目前通行片語</span>
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      value={flow.passphrase}
-                      disabled={flow.committing}
-                      onChange={(event) => flow.setPassphrase(event.target.value)}
-                    />
-                    <small>提交時會再要求 Boss device passkey。</small>
-                  </label>
+                  <form
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      if (flow.passphrase && !flow.committing && !flow.previewError) flow.commit();
+                    }}
+                  >
+                    <label className="operation-passphrase">
+                      <span>目前通行片語</span>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        autoFocus
+                        value={flow.passphrase}
+                        disabled={flow.committing}
+                        onChange={(event) => flow.setPassphrase(event.target.value)}
+                      />
+                      <small>按 Enter 或「驗證並執行」；提交時會再要求 Boss device passkey。</small>
+                    </label>
+                  </form>
                 )
                 : (
                   <div className="operation-error" role="status">

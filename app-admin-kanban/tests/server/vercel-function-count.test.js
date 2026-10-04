@@ -33,3 +33,9 @@ test('Vercel routes every admin API request through the gateway before the SPA f
     },
   ]);
 });
+
+test('Vercel functions run in Singapore next to the Supabase project (ap-southeast-1)', () => {
+  // Every admin read is BFF -> auth-state Edge -> admin Edge; the default iad1
+  // region turned each one into four trans-Pacific legs from Hong Kong.
+  assert.deepEqual(vercelConfig.regions, ['sin1']);
+});

@@ -68,3 +68,27 @@ export async function prefetchDefaultWorkspaceReads(currentPathname: string) {
   // can never block or fail the rest of the batch.
   await Promise.allSettled(reads.map(({ prefetch }) => prefetch()));
 }
+
+// Route chunks are lazy (routes.tsx); without a warm-up the first click into
+// each workspace waits for its JS before its data request can even start.
+const ROUTE_CHUNKS = [
+  () => import("../features/overview/OverviewPage"),
+  () => import("../features/data/accounts/AccountsPage"),
+  () => import("../features/data/trips/TripsPage"),
+  () => import("../features/data/receipts/ReceiptsPage"),
+  () => import("../features/reliability/ReliabilityPages"),
+  () => import("../features/system/SystemPages"),
+  () => import("../features/audit/AuditPages"),
+  () => import("../features/search/SearchPage"),
+];
+
+export function warmRouteChunks() {
+  const run = () => {
+    for (const load of ROUTE_CHUNKS) void load().catch(() => undefined);
+  };
+  const idle = (window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+  }).requestIdleCallback;
+  if (idle) idle(run, { timeout: 3000 });
+  else window.setTimeout(run, 1200);
+}

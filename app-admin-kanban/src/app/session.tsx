@@ -23,6 +23,7 @@ function dropCachedAdminQueries() {
   void import("./queryClient").then((m) => {
     m.queryClient.removeQueries({ queryKey: ["admin"] });
   });
+  void import("../lib/receiptPhotos").then((m) => m.clearReceiptPhotoCache());
 }
 
 export function AdminSessionProvider(

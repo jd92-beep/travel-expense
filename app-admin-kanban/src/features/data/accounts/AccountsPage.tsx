@@ -1,8 +1,9 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { prefetchProps } from "../../../lib/prefetch";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft,
   Download,
+  ExternalLink,
   MonitorSmartphone,
   RefreshCw,
   Search,
@@ -31,7 +32,9 @@ import {
   useCursorPagination,
   WorkspaceNav,
   Breadcrumbs,
+  DetailError,
 } from "../../../components/primitives/ConsolePrimitives";
+import { downloadCsv } from "../../../lib/csv";
 import { ConfirmDialog } from "../../../components/primitives/ConfirmDialog";
 import { useToast } from "../../../components/primitives/Toaster";
 import {
@@ -83,6 +86,28 @@ export function AccountsPage() {
         title="帳戶"
         description="Supabase identities、client installations 及每帳戶同步健康狀態"
         actions={
+          <>
+          <button
+            className="button secondary"
+            type="button"
+            disabled={!query.data?.data.items.length}
+            onClick={() =>
+              downloadCsv("admin-accounts", query.data?.data.items ?? [], [
+                ["id", (row) => row.id],
+                ["display_name", (row) => row.display_name],
+                ["masked_email", (row) => row.masked_email],
+                ["status", (row) => row.status],
+                ["last_seen_at", (row) => row.last_seen_at],
+                ["compact_version", (row) => row.compact_version],
+                ["android_version", (row) => row.android_version],
+                ["trips", (row) => row.trip_count],
+                ["receipts", (row) => row.receipt_count],
+                ["failed_sync_jobs", (row) => row.failed_sync_jobs],
+                ["open_risk", (row) => row.open_risk],
+              ])}
+          >
+            <Download size={16} />匯出本頁 CSV
+          </button>
           <button
             className="button secondary"
             type="button"
@@ -94,6 +119,7 @@ export function AccountsPage() {
               size={16}
             />更新
           </button>
+          </>
         }
       />
       <form
@@ -109,7 +135,7 @@ export function AccountsPage() {
           <input
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
-            placeholder="以 UUID、顯示名稱或 masked email prefix 搜尋"
+            placeholder="以 UUID、顯示名稱或 email 搜尋"
           />
         </label>
         <select
@@ -154,7 +180,7 @@ export function AccountsPage() {
                   <h2>帳戶清單</h2>
                   <p>
                     {query.data.meta.total ?? query.data.data.items.length}{" "}
-                    個結果；email 預設遮罩
+                    個結果；清單 email 遮罩，詳情頁顯示完整 email
                   </p>
                 </div>
               </header>
@@ -187,7 +213,7 @@ export function AccountsPage() {
                             <td data-label="身份">
                               <Link
                                 className="entity-link"
-                                to={`/data/accounts/${account.id}`}
+                                to={`/data/accounts/${account.id}`} {...prefetchProps("account", account.id)}
                               >
                                 {account.display_name || account.masked_email}
                               </Link>
@@ -311,6 +337,7 @@ type AccountAuditRow = {
 
 type AccountDetail = {
   identity: AccountRow & {
+    last_sign_in_at?: string | null;
     email?: string;
     emailConfirmedAt?: string;
     bannedUntil?: string | null;
@@ -379,9 +406,11 @@ export function AccountDetailPage() {
   if (account.isLoading) return <LoadingState label="載入帳戶詳情" />;
   if (account.isError || !account.data) {
     return (
-      <ErrorState
+      <DetailError
         error={account.error}
         retry={() => void account.refetch()}
+        backTo="/data/accounts"
+        backLabel="返回帳戶清單"
       />
     );
   }
@@ -401,6 +430,12 @@ export function AccountDetailPage() {
         actions={
           <>
             <StatusBadge value={detail.identity.status} />
+            <Link className="button secondary" to={`/data/receipts?ownerId=${accountId}&trash=all`}>
+              <ExternalLink size={16} />全部收據
+            </Link>
+            <Link className="button secondary" to={`/reliability/sync?userId=${accountId}`}>
+              <ExternalLink size={16} />同步工作
+            </Link>
             <button
               className="button secondary"
               type="button"
@@ -468,6 +503,20 @@ export function AccountDetailPage() {
             <div>
               <dt>Email confirmed</dt>
               <dd>{formatDateTime(detail.identity.emailConfirmedAt)}</dd>
+            </div>
+            <div>
+              <dt>最後登入</dt>
+              <dd>{formatDateTime(detail.identity.last_sign_in_at)}</dd>
+            </div>
+            <div>
+              <dt>Compact / Android 版本</dt>
+              <dd>
+                {detail.identity.compact_version || "—"} / {detail.identity.android_version || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt>停權至</dt>
+              <dd>{detail.identity.bannedUntil ? formatDateTime(detail.identity.bannedUntil) : "未停權"}</dd>
             </div>
             <div>
               <dt>SSO / anonymous</dt>
@@ -583,28 +632,43 @@ export function AccountDetailPage() {
         </header>
         <div className="split-lists">
           <div>
-            <h3>行程 ({detail.trips.length})</h3>
+            <h3>行程 ({detail.trips.length}{detail.trips.length >= 20 ? "，最多 20" : ""})</h3>
+            {detail.trips.length === 0 && <EmptyState title="未有行程" />}
             {detail.trips.map((item) => (
               <Link
                 key={item.id}
                 className="compact-row"
-                to={`/data/trips/${item.id}`}
+                to={`/data/trips/${item.id}`} {...prefetchProps("trip", item.id)}
               >
                 <strong>{item.name || item.id}</strong>
-                <span>{item.destination_summary || "未有目的地"}</span>
+                <span>
+                  {item.destination_summary || "未有目的地"} · {item.start_date || "?"} 至 {item.end_date || "?"}
+                  {item.owner_id === accountId ? " · Owner" : " · 成員"}
+                </span>
               </Link>
             ))}
           </div>
           <div>
-            <h3>近期收據 ({detail.recentReceipts.length})</h3>
+            <h3>
+              近期收據 ({detail.recentReceipts.length}){" "}
+              <Link className="text-link" to={`/data/receipts?ownerId=${accountId}&trash=all`}>查看全部</Link>
+            </h3>
+            {detail.recentReceipts.length === 0 && <EmptyState title="未有收據" />}
             {detail.recentReceipts.map((item) => (
               <Link
                 key={item.id}
                 className="compact-row"
-                to={`/data/receipts/${item.id}`}
+                to={`/data/receipts/${item.id}`} {...prefetchProps("receipt", item.id)}
               >
                 <strong>{item.store || item.id}</strong>
-                <span>{formatMoney(item.amount, item.currency)}</span>
+                <span>
+                  {item.record_date} · {formatMoney(item.amount, item.currency)}
+                  {item.home_amount !== undefined && item.home_amount !== null &&
+                    item.currency !== (item.home_currency || "HKD")
+                    ? ` ≈ ${formatMoney(item.home_amount, item.home_currency || "HKD")}`
+                    : ""}
+                  {item.deleted_at ? " · Trash" : ""}
+                </span>
               </Link>
             ))}
           </div>
@@ -693,7 +757,7 @@ export function AccountDetailPage() {
             <h2>最近審計</h2>
             <p>與此帳戶 target hash 對應的最近 20 項操作</p>
           </div>
-          <Link className="text-link" to={`/audit?targetId=${accountId}`}>
+          <Link className="text-link" to={`/audit?targetId=${accountId}&range=all`}>
             查看全部
           </Link>
         </header>
@@ -703,7 +767,7 @@ export function AccountDetailPage() {
               {detail.audit.map((event) => (
                 <li key={event.id}>
                   <span>
-                    <strong>{event.action}</strong>
+                    <strong><Link className="text-link" to={`/audit/${event.id}`}>{event.action}</Link></strong>
                     <small>
                       {event.target_type} · {event.request_id || "no request id"}
                     </small>

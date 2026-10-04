@@ -1,7 +1,6 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowLeft,
   Camera,
   CircleX,
   Download,
@@ -40,7 +39,16 @@ import {
   useOnline,
   WorkspaceNav,
   Breadcrumbs,
+  CATEGORY_OPTIONS,
+  PAYMENT_OPTIONS,
+  categoryLabel,
+  paymentLabel,
+  DetailError,
+  FilterChips,
 } from "../../../components/primitives/ConsolePrimitives";
+import { downloadCsv } from "../../../lib/csv";
+import { prefetchProps } from "../../../lib/prefetch";
+import { prefetchReceiptPhoto, useReceiptPhoto } from "../../../lib/receiptPhotos";
 import { useToast } from "../../../components/primitives/Toaster";
 import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
@@ -50,39 +58,47 @@ const DATA_NAV = [
   { to: "/data/receipts", label: "收據" },
 ];
 
-function csvCell(value: unknown) {
-  const raw = value === null || value === undefined ? "" : String(value);
-  const safe = /^[\t\r ]*[=+\-@]/.test(raw) ? `'${raw}` : raw;
-  return `"${safe.replace(/"/g, '""')}"`;
+function homeAmountOf(receipt: ReceiptRow) {
+  if (receipt.currency === (receipt.home_currency || "HKD")) return Number(receipt.amount);
+  if (receipt.home_amount === null || receipt.home_amount === undefined || receipt.home_amount === "") {
+    return null;
+  }
+  const value = Number(receipt.home_amount);
+  return Number.isFinite(value) ? value : null;
+}
+
+function HomeAmount({ receipt }: { receipt: ReceiptRow }) {
+  const home = receipt.home_currency || "HKD";
+  if (receipt.currency === home || receipt.home_amount === undefined) return null;
+  const value = homeAmountOf(receipt);
+  return (
+    <span className="money-sub">
+      {value === null ? `${home} 未換算` : `≈ ${formatMoney(value, home)}`}
+    </span>
+  );
 }
 
 function downloadReceiptCsv(receipts: ReceiptRow[]) {
-  const columns: Array<[string, (receipt: ReceiptRow) => unknown]> = [
+  downloadCsv("admin-receipts", receipts, [
     ["id", (receipt) => receipt.id],
     ["date", (receipt) => receipt.record_date],
     ["time", (receipt) => receipt.record_time],
     ["store", (receipt) => receipt.store],
     ["trip", (receipt) => receipt.trip_name],
+    ["trip_id", (receipt) => receipt.trip_id],
     ["owner", (receipt) => receipt.owner_masked_email],
     ["amount", (receipt) => receipt.amount],
     ["currency", (receipt) => receipt.currency],
+    ["home_amount", (receipt) => homeAmountOf(receipt)],
+    ["home_currency", (receipt) => receipt.home_currency || "HKD"],
+    ["category", (receipt) => receipt.category],
+    ["payment_method", (receipt) => receipt.payment_method],
     ["record_kind", (receipt) => receipt.record_kind],
     ["visibility", (receipt) => receipt.visibility],
     ["notion_status", (receipt) => receipt.notion_sync_status],
+    ["deleted_at", (receipt) => receipt.deleted_at],
     ["updated_at", (receipt) => receipt.updated_at],
-  ];
-  const csv = [
-    columns.map(([name]) => csvCell(name)).join(","),
-    ...receipts.map((receipt) =>
-      columns.map(([, value]) => csvCell(value(receipt))).join(",")
-    ),
-  ].join("\r\n");
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `admin-receipts-${new Date().toISOString().slice(0, 10)}.csv`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  ]);
 }
 
 export function ReceiptsPage() {
@@ -136,6 +152,27 @@ export function ReceiptsPage() {
   const allPageSelected = pageReceipts.length > 0 && pageReceipts.every((receipt) =>
     selectedSet.has(receipt.id)
   );
+  const pageExpenses = pageReceipts.filter((receipt) =>
+    receipt.record_kind === "expense" && !receipt.deleted_at
+  );
+  const pageHomeTotal = pageExpenses.reduce((sum, receipt) => sum + (homeAmountOf(receipt) ?? 0), 0);
+  const pageUnconverted = pageExpenses.filter((receipt) => homeAmountOf(receipt) === null).length;
+  const pageTripName = pageReceipts.find((receipt) => receipt.trip_id === searchParams.get("tripId"))?.trip_name;
+  const pageOwner = pageReceipts.find((receipt) => receipt.owner_id === searchParams.get("ownerId"))
+    ?.owner_masked_email;
+  const chips = [
+    searchParams.get("tripId") && {
+      key: "tripId",
+      label: "行程",
+      value: pageTripName || searchParams.get("tripId")!.slice(0, 8),
+    },
+    searchParams.get("ownerId") && {
+      key: "ownerId",
+      label: "Owner",
+      value: pageOwner || searchParams.get("ownerId")!.slice(0, 8),
+    },
+    searchParams.get("q") && { key: "q", label: "搜尋", value: searchParams.get("q")! },
+  ].filter(Boolean) as Array<{ key: string; label: string; value: string }>;
   return (
     <div className="workspace-stack">
       <WorkspaceNav items={DATA_NAV} />
@@ -143,16 +180,31 @@ export function ReceiptsPage() {
         title="收據"
         description="收據完整性、同步、可見範圍、照片及 30 日 Trash"
         actions={
-          <button
-            className="button secondary"
-            type="button"
-            onClick={() => void query.refetch()}
-          >
-            <RefreshCw
-              className={query.isFetching ? "spin" : ""}
-              size={16}
-            />更新
-          </button>
+          <>
+            {selectedReceipts.length === 0 && (
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!pageReceipts.length || query.isPlaceholderData}
+                onClick={() => {
+                  downloadReceiptCsv(pageReceipts);
+                  toast.push("CSV 匯出已開始", { variant: "success" });
+                }}
+              >
+                <Download size={16} />匯出本頁 CSV
+              </button>
+            )}
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => void query.refetch()}
+            >
+              <RefreshCw
+                className={query.isFetching ? "spin" : ""}
+                size={16}
+              />更新
+            </button>
+          </>
         }
       />
       <form
@@ -211,6 +263,7 @@ export function ReceiptsPage() {
           <Search size={16} />搜尋
         </button>
       </form>
+      <FilterChips chips={chips} onClear={(key) => setFilter(key, "")} />
       {query.isLoading
         ? <LoadingState label="載入收據" />
         : query.isError || !query.data
@@ -251,7 +304,11 @@ export function ReceiptsPage() {
                   <h2>收據清單</h2>
                   <p>
                     {query.data.meta.total ?? query.data.data.items.length}{" "}
-                    個結果；清單不載入 notes、地址、items 或 storage path
+                    個結果
+                    {pageExpenses.length > 0 &&
+                      ` · 本頁支出合計 ${formatMoney(pageHomeTotal, "HKD")}${
+                        pageUnconverted ? `（${pageUnconverted} 張未換算）` : ""
+                      }`}
                   </p>
                 </div>
               </header>
@@ -287,7 +344,7 @@ export function ReceiptsPage() {
                           <th scope="col">行程</th>
                           <th scope="col">Owner</th>
                           <th scope="col">金額</th>
-                          <th scope="col">種類</th>
+                          <th scope="col">分類</th>
                           <th scope="col">可見</th>
                           <th scope="col">Notion</th>
                           <th scope="col">照片</th>
@@ -324,6 +381,8 @@ export function ReceiptsPage() {
                               <Link
                                 className="entity-link"
                                 to={`/data/receipts/${receipt.id}`}
+                                {...prefetchProps("receipt", receipt.id)}
+                                onClick={() => receipt.has_photo && prefetchReceiptPhoto(receipt.id)}
                               >
                                 {receipt.store}
                               </Link>
@@ -335,18 +394,27 @@ export function ReceiptsPage() {
                               <Link
                                 className="text-link"
                                 to={`/data/trips/${receipt.trip_id}`}
+                                {...prefetchProps("trip", receipt.trip_id)}
                               >
                                 {receipt.trip_name ||
                                   receipt.trip_id.slice(0, 8)}
                               </Link>
                             </td>
                             <td data-label="Owner">
-                              {receipt.owner_masked_email}
+                              <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`} {...prefetchProps("account", receipt.owner_id)}>
+                                {receipt.owner_masked_email}
+                              </Link>
                             </td>
                             <td data-label="金額">
                               {formatMoney(receipt.amount, receipt.currency)}
+                              <HomeAmount receipt={receipt} />
                             </td>
-                            <td data-label="種類">{receipt.record_kind}</td>
+                            <td data-label="分類">
+                              {receipt.record_kind === "settlement"
+                                ? <StatusBadge value="settlement" />
+                                : categoryLabel(receipt.category)}
+                              <small>{paymentLabel(receipt.payment_method)}</small>
+                            </td>
                             <td data-label="可見">
                               <StatusBadge value={receipt.visibility} />
                             </td>
@@ -463,7 +531,6 @@ export function ReceiptDetailPage() {
   const online = useOnline();
   const writePolicy = useAdminWritePolicy();
   const [photoAttempt, setPhotoAttempt] = useState(0);
-  const [photoFailed, setPhotoFailed] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<ReceiptAmendDraft | null>(null);
   const query = useQuery({
@@ -477,6 +544,13 @@ export function ReceiptDetailPage() {
     await query.refetch();
   });
   const loadedReceipt = query.data?.data.receipt;
+  // Starts immediately when the list row said has_photo (prefetched on click),
+  // otherwise as soon as the detail payload confirms a photo exists.
+  const photo = useReceiptPhoto(
+    receiptId,
+    Boolean(query.data?.data.photo || loadedReceipt?.has_photo),
+    photoAttempt,
+  );
   useEffect(() => {
     if (!loadedReceipt) return;
     setDraft(receiptDraft(loadedReceipt));
@@ -484,9 +558,11 @@ export function ReceiptDetailPage() {
   if (query.isLoading) return <LoadingState label="載入收據詳情" />;
   if (query.isError || !query.data) {
     return (
-      <ErrorState
+      <DetailError
         error={query.error}
         retry={() => void query.refetch()}
+        backTo="/data/receipts"
+        backLabel="返回收據清單"
       />
     );
   }
@@ -513,9 +589,13 @@ export function ReceiptDetailPage() {
       />
       <PageHeader
         title={receipt.store}
-        description={`${receipt.record_date} · ${
+        description={`${receipt.record_date}${receipt.record_time ? ` ${receipt.record_time.slice(0, 5)}` : ""} · ${
           formatMoney(receipt.amount, receipt.currency)
-        }`}
+        }${
+          homeAmountOf(receipt) !== null && receipt.currency !== (receipt.home_currency || "HKD")
+            ? ` ≈ ${formatMoney(homeAmountOf(receipt), receipt.home_currency || "HKD")}`
+            : ""
+        } · ${receipt.trip_name || "未知行程"}`}
         actions={
           <>
             <button
@@ -652,21 +732,46 @@ export function ReceiptDetailPage() {
               </label>
               <label>
                 <span>分類</span>
-                <input
-                  maxLength={80}
+                <select
                   disabled={draft.recordKind === "settlement"}
                   value={draft.recordKind === "settlement" ? "" : draft.category}
                   onChange={(event) => setDraft({ ...draft, category: event.target.value })}
-                />
+                >
+                  <option value="">未分類</option>
+                  {CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                  {draft.category && !CATEGORY_OPTIONS.some((option) => option.id === draft.category) && (
+                    <option value={draft.category}>{draft.category}（非標準，client 會當「其他」）</option>
+                  )}
+                </select>
               </label>
               <label>
                 <span>付款方式</span>
-                <input
-                  maxLength={80}
+                <select
                   value={draft.paymentMethod}
                   onChange={(event) => setDraft({ ...draft, paymentMethod: event.target.value })}
-                />
+                >
+                  <option value="">未設定</option>
+                  {PAYMENT_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>{option.label}</option>
+                  ))}
+                  {draft.paymentMethod &&
+                    !PAYMENT_OPTIONS.some((option) => option.id === draft.paymentMethod) && (
+                    <option value={draft.paymentMethod}>{draft.paymentMethod}（非標準）</option>
+                  )}
+                </select>
               </label>
+              {(patch.amount !== undefined || patch.currency !== undefined) && (
+                <p className="field-hint">
+                  金額或貨幣有變：server 會按此收據原有匯率重算 HKD；轉為其他外幣時會清空 HKD 快照，交由 client 用最新匯率重算。
+                </p>
+              )}
+              {patch.visibility === "private" && (
+                <p className="field-hint">
+                  轉為私人：只有 owner 見到、唔入旅伴分帳，亦唔會同步 Notion。有跨人代付（beneficiary）嘅收據會被 server 拒絕。
+                </p>
+              )}
             </div>
             <footer className="form-actions">
               <span>{Object.keys(patch).length} 個欄位有變更</span>
@@ -717,11 +822,39 @@ export function ReceiptDetailPage() {
             </div>
             <div>
               <dt>Owner</dt>
-              <dd>{receipt.owner_masked_email}</dd>
+              <dd>
+                <Link className="text-link" to={`/data/accounts/${receipt.owner_id}`} {...prefetchProps("account", receipt.owner_id)}>
+                  {receipt.owner_masked_email}
+                </Link>
+              </dd>
             </div>
             <div>
-              <dt>種類</dt>
-              <dd>{receipt.record_kind}</dd>
+              <dt>金額</dt>
+              <dd>
+                {formatMoney(receipt.amount, receipt.currency)}
+                <HomeAmount receipt={receipt} />
+              </dd>
+            </div>
+            <div>
+              <dt>匯率（每 {receipt.home_currency || "HKD"}）</dt>
+              <dd>{receipt.exchange_rate ? String(receipt.exchange_rate) : "未有"}</dd>
+            </div>
+            <div>
+              <dt>種類 / 分類</dt>
+              <dd>
+                <StatusBadge value={receipt.record_kind} /> {receipt.record_kind === "settlement"
+                  ? ""
+                  : categoryLabel(receipt.category)}
+              </dd>
+            </div>
+            <div>
+              <dt>分帳</dt>
+              <dd>
+                {receipt.split_mode === "private" || receipt.visibility === "private"
+                  ? receipt.beneficiary_id ? `代付 → ${receipt.beneficiary_id}` : "自付（不入分帳）"
+                  : `共同分帳${receipt.split_type ? ` · ${receipt.split_type}` : ""}`}
+                {receipt.person_id && <small className="money-sub">付款人 {receipt.person_id}</small>}
+              </dd>
             </div>
             <div>
               <dt>可見</dt>
@@ -730,8 +863,8 @@ export function ReceiptDetailPage() {
               </dd>
             </div>
             <div>
-              <dt>Payment</dt>
-              <dd>{String(receipt.payment_method || "未設定")}</dd>
+              <dt>付款方式</dt>
+              <dd>{paymentLabel(receipt.payment_method)}</dd>
             </div>
             <div>
               <dt>Notion</dt>
@@ -739,6 +872,20 @@ export function ReceiptDetailPage() {
                 <StatusBadge value={receipt.notion_sync_status} />
               </dd>
             </div>
+            <div>
+              <dt>建立 / 更新</dt>
+              <dd>
+                {formatDateTime(receipt.created_at)} / {formatDateTime(receipt.updated_at)}
+              </dd>
+            </div>
+            {Boolean(receipt.notionSyncError) && (
+              <div>
+                <dt>Notion 錯誤</dt>
+                <dd className="error-line">
+                  {String(receipt.notionSyncError)} · {String(receipt.notionSyncAttempts ?? 0)} 次嘗試
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Trash</dt>
               <dd>
@@ -796,7 +943,7 @@ export function ReceiptDetailPage() {
             {detail.photo
               ? (
                 <div className="receipt-photo-viewer">
-                  {photoFailed
+                  {photo.error
                     ? (
                       <div className="state-panel state-error" role="alert">
                         <Camera size={22} />
@@ -804,22 +951,27 @@ export function ReceiptDetailPage() {
                         <button
                           className="button secondary"
                           type="button"
-                          onClick={() => {
-                            setPhotoFailed(false);
-                            setPhotoAttempt((value) => value + 1);
-                          }}
+                          onClick={() => setPhotoAttempt((value) => value + 1)}
                         >
                           <RefreshCw size={15} />重試
                         </button>
                       </div>
                     )
-                    : (
+                    : photo.url
+                    ? (
                       <img
-                        key={photoAttempt}
-                        src={`/api/admin/receipts/${receiptId}/photo`}
+                        src={photo.url}
                         alt={`${receipt.store} 收據照片`}
-                        onError={() => setPhotoFailed(true)}
+                        decoding="async"
+                        width={Number(detail.photo.width) || undefined}
+                        height={Number(detail.photo.height) || undefined}
                       />
+                    )
+                    : (
+                      <div className="state-panel" aria-live="polite">
+                        <span className="shimmer-bar skeleton-bar" style={{ width: "70%" }} />
+                        <strong>載入收據照片</strong>
+                      </div>
                     )}
                   <dl className="photo-metadata">
                     <div>
@@ -841,6 +993,7 @@ export function ReceiptDetailPage() {
           </div>
           <div>
             <h3>Sync jobs ({detail.syncJobs.length})</h3>
+            {detail.syncJobs.length === 0 && <EmptyState title="此收據未有同步工作" />}
             {detail.syncJobs.map((job) => {
               const jobId = String(job.id || "");
               const status = String(job.status || "unknown");
@@ -895,6 +1048,36 @@ export function ReceiptDetailPage() {
             })}
           </div>
         </div>
+      </section>
+      <section className="data-section">
+        <header>
+          <div>
+            <h2>最近審計</h2>
+            <p>與此收據 target hash 對應的最近 20 項操作</p>
+          </div>
+          <Link className="text-link" to={`/audit?targetId=${receipt.id}&range=all`}>
+            查看全部
+          </Link>
+        </header>
+        {detail.audit.length
+          ? (
+            <ol className="operation-list">
+              {detail.audit.map((event) => (
+                <li key={String(event.id)}>
+                  <span>
+                    <strong>
+                      <Link className="text-link" to={`/audit/${String(event.id)}`}>
+                        {String(event.action)}
+                      </Link>
+                    </strong>
+                    <small>{String(event.request_id || "no request id")}</small>
+                  </span>
+                  <time>{formatDateTime(String(event.created_at || ""))}</time>
+                </li>
+              ))}
+            </ol>
+          )
+          : <EmptyState title="未有相關審計事件" />}
       </section>
       <OperationDialog flow={operationFlow} />
     </div>

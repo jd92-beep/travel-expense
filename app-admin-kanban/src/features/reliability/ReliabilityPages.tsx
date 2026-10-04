@@ -1,4 +1,5 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { prefetchProps } from "../../lib/prefetch";
 import { useEffect, useState } from "react";
 import { RefreshCw, ScanSearch, Search, XCircle } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
@@ -8,6 +9,7 @@ import type {
   IntegrityData,
   PagedData,
   SyncJobRow,
+  TripRow,
 } from "../../lib/contracts/admin";
 import {
   EmptyState,
@@ -23,7 +25,26 @@ import {
   useCursorPagination,
   useOnline,
   WorkspaceNav,
+  FilterChips,
 } from "../../components/primitives/ConsolePrimitives";
+
+const ENTITY_ROUTES: Record<string, string> = {
+  account: "/data/accounts",
+  user: "/data/accounts",
+  trip: "/data/trips",
+  receipt: "/data/receipts",
+};
+
+function EntityLink({ type, id }: { type: string; id: string | null }) {
+  if (!id) return <code>—</code>;
+  const base = ENTITY_ROUTES[type.toLowerCase()];
+  if (!base || !/^[0-9a-f-]{36}$/i.test(id)) return <code>{id}</code>;
+  return (
+    <Link className="text-link" to={`${base}/${id}`}>
+      <code>{id.slice(0, 8)}</code>
+    </Link>
+  );
+}
 import {
   OperationDialog,
   useOperationFlow,
@@ -286,6 +307,12 @@ export function SyncJobsPage() {
           <option value="">全部 provider</option>
           <option value="notion">Notion</option>
         </select>
+        <FilterChips
+          chips={searchParams.get("userId")
+            ? [{ key: "userId", label: "帳戶", value: searchParams.get("userId")!.slice(0, 8) }]
+            : []}
+          onClear={(key) => setFilter(key, "")}
+        />
         <button
           className="button secondary"
           type="button"
@@ -347,11 +374,15 @@ export function SyncJobsPage() {
                             </td>
                             <td data-label="Provider">{job.provider}</td>
                             <td data-label="操作">{job.operation}</td>
-                            <td data-label="Owner">{job.owner_masked_email}</td>
+                            <td data-label="Owner">
+                              <Link className="text-link" to={`/data/accounts/${job.owner_id}`} {...prefetchProps("account", job.owner_id)}>
+                                {job.owner_masked_email}
+                              </Link>
+                            </td>
                             <td data-label="Receipt">
                               <Link
                                 className="text-link"
-                                to={`/data/receipts/${job.receipt_id}`}
+                                to={`/data/receipts/${job.receipt_id}`} {...prefetchProps("receipt", job.receipt_id)}
                               >
                                 <code>{job.receipt_id.slice(0, 8)}</code>
                               </Link>
@@ -640,7 +671,7 @@ export function IntegrityPage() {
                                 </td>
                                 <td data-label="Entity">{item.entity_type}</td>
                                 <td data-label="ID">
-                                  <code>{item.entity_id || "—"}</code>
+                                  <EntityLink type={item.entity_type} id={item.entity_id} />
                                 </td>
                                 <td data-label="建立">
                                   {formatDateTime(item.created_at)}
@@ -748,6 +779,12 @@ export function ReconciliationPage() {
     enabled: Boolean(selected),
     staleTime: 30_000,
   });
+  const trips = useQuery({
+    queryKey: ["admin", "trips", { limit: "200" }],
+    queryFn: ({ signal }) => adminGet<PagedData<TripRow>>("/trips", { limit: "200" }, signal),
+    staleTime: 60_000,
+  });
+  const tripOptions = trips.data?.data.items ?? [];
   const reconciliation = query.data?.data;
   const reconciliationIncomplete = Boolean(
     reconciliation &&
@@ -770,13 +807,32 @@ export function ReconciliationPage() {
           setSearchParams(next);
         }}
       >
+        <select
+          aria-label="選擇行程"
+          value={tripOptions.some((trip) => trip.id === tripId) ? tripId : ""}
+          onChange={(event) => {
+            setTripId(event.target.value);
+            const next = new URLSearchParams();
+            if (event.target.value) next.set("tripId", event.target.value);
+            setSearchParams(next);
+          }}
+        >
+          <option value="">
+            {trips.isLoading ? "載入行程中…" : `選擇行程（${tripOptions.length}）`}
+          </option>
+          {tripOptions.map((trip) => (
+            <option key={trip.id} value={trip.id}>
+              {trip.name} · {trip.start_date || "?"} · {trip.owner_masked_email}
+            </option>
+          ))}
+        </select>
         <label className="filter-search">
           <Search size={16} />
           <span className="sr-only">Trip UUID</span>
           <input
             value={tripId}
             onChange={(event) => setTripId(event.target.value)}
-            placeholder="輸入完整 Trip UUID"
+            placeholder="或貼上 Trip UUID"
           />
         </label>
         <button className="button primary" type="submit">
@@ -787,7 +843,7 @@ export function ReconciliationPage() {
         ? (
           <EmptyState
             title="選擇一個行程"
-            detail="輸入完整 Trip UUID；console 不接受 browser 提交 Notion database ID。"
+            detail="由上方下拉揀行程，或貼上 Trip UUID；console 不接受 browser 提交 Notion database ID。"
           />
         )
         : query.isLoading
@@ -836,7 +892,11 @@ export function ReconciliationPage() {
             <section className="data-section">
               <header>
                 <div>
-                  <h2>{query.data.data.tripName}</h2>
+                  <h2>
+                    <Link className="text-link" to={`/data/trips/${query.data.data.tripId}`}>
+                      {query.data.data.tripName}
+                    </Link>
+                  </h2>
                   <p>
                     <code>{query.data.data.tripId}</code>
                   </p>
@@ -948,7 +1008,7 @@ export function ReconciliationPage() {
                             </td>
                             <td data-label="Supabase receipt">
                               {item.supabaseReceiptId
-                                ? <code>{item.supabaseReceiptId.slice(0, 8)}</code>
+                                ? <EntityLink type="receipt" id={item.supabaseReceiptId} />
                                 : "—"}
                             </td>
                             <td data-label="Notion copies">{item.notionCopies}</td>

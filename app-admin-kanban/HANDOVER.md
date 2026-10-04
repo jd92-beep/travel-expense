@@ -1,8 +1,61 @@
 # Travel Expense Admin Console Handover
 
-Last updated: 2026-09-20 HKT
+Last updated: 2026-10-04 HKT
 
 ## Current Status
+
+- **`1.5.1` code ready (NOT deployed)** — performance pass on top of 1.5.0.
+  - **Root cause of slow pages:** `vercel.json` had no `regions`, so the BFF ran in Vercel's default
+    `iad1` while Supabase is `ap-southeast-1`. Every read is BFF → auth-state Edge (session verify) →
+    admin Edge (data), i.e. ~4 trans-Pacific legs from HK. Now `"regions": ["sin1"]` (unit-tested).
+    DB RPCs measured 10–20 ms and photos average 36 KB, so neither was the bottleneck.
+  - Write gate uses `/api/runtime?scope=policy` (Edge env-only answer, no frontend/broker/DB probes);
+    an older Edge ignores the scope and returns the full payload, so deploy order does not matter.
+  - Edge `/runtime` and `/providers` run their probes/DB reads concurrently (worst case ≈ slowest probe,
+    not the sum); photo path downloads and hashes in parallel.
+  - Receipt photos: session-scoped blob cache (40 entries, revoked on logout/401); click on a list row
+    starts the photo download in parallel with the detail JSON. Not prefetched on hover because every
+    photo load writes an audit row.
+  - Hover/focus prefetch of account/trip/receipt detail payloads; lazy route chunks warmed at idle.
+  - Gates: unit 36/36, contract 25/25, security scan, build, Edge deno suite 59/59 (with npm import
+    map override, esm.sh is blocked in the sandbox), smoke 53 passed (+1 new photo-cache spec).
+
+- **`1.5.0` code ready (NOT deployed; production still `1.4.1`)** — admin bug/UX/data-accuracy sweep.
+  - **Live DB already migrated** (`20261003090000_admin_console_data_accuracy`, applied 2026-10-03 via
+    Supabase MCP as `postgres`). The owner roles (`admin_auth_owner` / `admin_read_owner`) are held
+    `WITH ADMIN, SET FALSE` and lack schema CREATE, so the migration adds a *postgres-granted* SET
+    membership + schema CREATE inside the same transaction and revokes both before commit. Verified
+    afterwards: memberships (only the `supabase_admin` grant, SET false), CREATE privileges, function
+    owners and ACLs are identical to before. All function edits are anchored text patches of the live
+    definition with idempotency markers (`admin-1.5.0:*`).
+    - `receipt_amend` commit now recomputes `home_amount` / `exchange_rate` / `original_*` when amount or
+      currency changes (previously the HKD snapshot went stale and a currency change kept the old rate).
+    - `admin_receipt_read` + `home_amount, home_currency, exchange_rate, person_id, beneficiary_id`;
+      `admin_trip_read` + `total_member_count, expense_total_home, expense/settlement/private/trash/
+      missing_home counts, last_receipt_at`; `admin_read_trip.spend` (byCategory/byCurrency/byOwner);
+      overview counts + `totalAccounts/totalTrips/totalReceipts/trashReceipts/spend30dHome/pendingJobs`;
+      accounts + search accept a full email (lists stay masked).
+  - **Edge (needs protected redeploy)**: search/accounts no longer reject `@`; itinerary read returns
+    an empty `INVALID_RANGE` itinerary instead of a 502 so trips with broken dates can be repaired;
+    receipt_amend preview states the HKD recompute. **BFF** allows `@` for search/accounts only.
+    Until Edge is redeployed an email search returns a typed 400, which the UI explains.
+  - **Frontend**: global write-policy banner (explains `provider_probe_only` and the exact
+    `ADMIN_WRITE_MODE=allowlisted` switch); data-quality `ITINERARY_*` warnings no longer disable the
+    writes that repair them; status badges label every live token (trip/private/synced/
+    not_configured/trash…) and fall back to the raw token instead of 「未知狀態」; receipts list HKD
+    column, page totals, filter chips for deep-link `tripId`/`ownerId`, page CSV (BOM + HKD +
+    category/payment); receipt detail shows HKD/rate/split/payer/created/Notion error + audit list,
+    category/payment are compact-ID selects (free text was silently coerced to `other` by clients);
+    trip detail spend breakdown, owner-inclusive member count, budget %, Notion-reconcile shortcut,
+    member → account links; itinerary spot up/down reorder; reconciliation trip picker (no more
+    UUID pasting); integrity/sync entity links; account detail shortcuts to all receipts/sync jobs;
+    search page has its own input + result context; field-level diff table in the operation dialog,
+    Enter submits passphrase; detail-route errors keep a back link; "view all audit" links use
+    `range=all` (they silently showed only 24 h); probe button no longer enabled while policy loads.
+  - Gates: typecheck, build, unit, contract 24/24, Edge read/system/runtime deno tests 14/14,
+    smoke 52 passed + 1 intentional skip (2 new specs: write-policy banner, email search).
+  - **Writes stay disabled in production** until Boss flips `ADMIN_WRITE_MODE=allowlisted` and
+    redeploys Edge via the protected workflow — deliberately not done by the agent.
 
 - **Production `1.4.1` LIVE** — Session 93 perf/UX overhaul, promoted by protected workflow
   `35483016157` at exact SHA `9eb662743306ada242a42315d3219a1969879d38`. Live `/api/health`

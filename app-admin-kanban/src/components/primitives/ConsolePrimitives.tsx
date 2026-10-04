@@ -115,6 +115,11 @@ const HEALTHY = new Set([
   "no_issues",
   "live",
   "matched",
+  "synced",
+  "confirmed",
+  "accepted",
+  "resolved",
+  "configured",
 ]);
 const DANGER = new Set([
   "danger",
@@ -132,6 +137,10 @@ const DANGER = new Set([
   "duplicate_in_supabase",
   "missing_in_notion",
   "unavailable",
+  "banned",
+  "removed",
+  "revoked",
+  "open",
 ]);
 const WARNING = new Set([
   "warning",
@@ -152,6 +161,10 @@ const WARNING = new Set([
   "partial",
   "P2",
   "awaiting_heartbeat",
+  "trash",
+  "acknowledged",
+  "legacy_binding",
+  "invalid_dates",
 ]);
 
 const STATUS_LABELS: Record<string, string> = {
@@ -185,6 +198,37 @@ const STATUS_LABELS: Record<string, string> = {
   deleted: "已刪除",
   issue: "有問題",
   invalid: "無效",
+  synced: "已同步",
+  confirmed: "已確認",
+  disabled: "已停用",
+  not_configured: "未設定",
+  unconfigured: "未設定",
+  legacy_binding: "舊式綁定",
+  trash: "Trash",
+  trip: "旅伴可見",
+  private: "私人",
+  expense: "支出",
+  settlement: "結算",
+  banned: "已停權",
+  error: "錯誤",
+  open: "未處理",
+  acknowledged: "已確認",
+  resolved: "已解決",
+  removed: "已移除",
+  owner: "Owner",
+  admin: "Admin",
+  editor: "Editor",
+  viewer: "Viewer",
+  accepted: "已接受",
+  revoked: "已撤銷",
+  invalid_dates: "日期無效",
+  configured: "已設定",
+  running: "執行中",
+  never_run: "未執行",
+  reported: "已回報",
+  dry_run: "Dry run",
+  admin_ui: "Admin",
+  client: "Client",
   P0: "P0",
   P1: "P1",
   P2: "P2",
@@ -211,7 +255,10 @@ export function StatusBadge(
     : tone === "warning"
     ? TriangleAlert
     : Info;
-  const text = label || STATUS_LABELS[normalized] || "未知狀態";
+  // Show the raw token for values without a label: hiding a real server value
+  // behind 「未知狀態」 made distinct states (trip/private, synced…) unreadable.
+  const text = label || STATUS_LABELS[normalized] ||
+    (value ? normalized.replace(/_/g, " ") : "未知狀態");
   return (
     <span className={`status-badge status-${tone}${SEVERITY.has(normalized) ? " status-severity" : ""}`}>
       <Icon size={13} />
@@ -220,12 +267,21 @@ export function StatusBadge(
   );
 }
 
+// Data-quality findings (e.g. an itinerary missing days) are reported through
+// meta.warnings too, but they describe the record, not a degraded source. They
+// must never disable the very writes that would repair them.
+const DATA_QUALITY_WARNING = /^ITINERARY_/;
+
+export function blockingWarnings(meta: AdminMeta) {
+  return meta.warnings.filter((warning) => !DATA_QUALITY_WARNING.test(warning));
+}
+
 function blockingSourceLabels(meta: AdminMeta) {
   const labels: string[] = [];
   for (const [key, state] of Object.entries(meta.sources ?? {})) {
     if (state !== "live") labels.push(key);
   }
-  if (meta.warnings.length > 0) labels.push("warnings");
+  labels.push(...blockingWarnings(meta));
   return labels;
 }
 
@@ -279,7 +335,7 @@ export function adminMetaState(meta: AdminMeta, now = Date.now()) {
   const stale = !Number.isFinite(generatedAt) || age > staleAfter || age < -60_000;
   const sources = Object.values(meta.sources ?? {});
   const partial = sources.length === 0 || sources.some((source) => source !== "live") ||
-    meta.warnings.length > 0;
+    blockingWarnings(meta).length > 0;
   return { partial, stale };
 }
 
@@ -585,4 +641,91 @@ export function formatMoney(
 
 export function safeText(value: unknown, fallback = "未有資料") {
   return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+/** Compact client receipt categories (app-compact/src/lib/constants.ts). */
+export const CATEGORY_OPTIONS = [
+  { id: "flight", label: "機票" },
+  { id: "transport", label: "交通" },
+  { id: "food", label: "餐飲" },
+  { id: "shopping", label: "購物" },
+  { id: "lodging", label: "住宿" },
+  { id: "ticket", label: "門票" },
+  { id: "localtour", label: "當地旅遊" },
+  { id: "medicine", label: "藥品" },
+  { id: "other", label: "其他" },
+] as const;
+
+/** Compact client payment methods (app-compact/src/lib/constants.ts). */
+export const PAYMENT_OPTIONS = [
+  { id: "cash", label: "現金" },
+  { id: "credit", label: "信用卡" },
+  { id: "paypay", label: "PayPay" },
+  { id: "suica", label: "Suica" },
+] as const;
+
+export function categoryLabel(value: string | null | undefined) {
+  if (!value) return "未分類";
+  return CATEGORY_OPTIONS.find((option) => option.id === value.toLowerCase())?.label || value;
+}
+
+export function paymentLabel(value: string | null | undefined) {
+  if (!value) return "未設定";
+  return PAYMENT_OPTIONS.find((option) => option.id === value.toLowerCase())?.label || value;
+}
+
+/**
+ * Active URL filters that have no visible control (e.g. ?tripId= from a deep
+ * link) were invisible before, so a filtered list looked like missing data.
+ */
+export function FilterChips(
+  { chips, onClear }: {
+    chips: Array<{ key: string; label: string; value: string }>;
+    onClear: (key: string) => void;
+  },
+) {
+  if (chips.length === 0) return null;
+  return (
+    <div className="filter-chips" role="group" aria-label="已套用篩選">
+      {chips.map((chip) => (
+        <button
+          key={chip.key}
+          type="button"
+          className="filter-chip"
+          aria-label={`移除篩選 ${chip.label}`}
+          onClick={() => onClear(chip.key)}
+        >
+          <span>{chip.label}</span>
+          <code>{chip.value}</code>
+          <span aria-hidden="true">×</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function BackLink({ to, label }: { to: string; label: string }) {
+  return (
+    <Link className="back-link" to={to}>
+      <ArrowLeft size={16} />
+      {label}
+    </Link>
+  );
+}
+
+/** Detail-route error with a way back (bare ErrorState left operators stranded). */
+export function DetailError(
+  { error, retry, backTo, backLabel }: {
+    error: unknown;
+    retry?: () => void;
+    backTo: string;
+    backLabel: string;
+  },
+) {
+  return (
+    <div className="workspace-stack">
+      <BackLink to={backTo} label={backLabel} />
+      <ErrorState error={error} retry={retry} />
+    </div>
+  );
 }

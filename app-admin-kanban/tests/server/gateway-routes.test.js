@@ -305,13 +305,33 @@ test('gateway validates operation actions and strips no unchecked fields', () =>
   );
 });
 
+test('gateway forwards only the cheap policy scope on the runtime read', () => {
+  const route = resolveGatewayRoute('/api/admin/runtime', 'GET', new URLSearchParams('scope=policy'));
+  assert.equal(route.edgeRoute, '/api/runtime');
+  assert.deepEqual(route.query, { scope: 'policy' });
+  assert.throws(
+    () => resolveGatewayRoute('/api/admin/runtime', 'GET', new URLSearchParams('scope=all')),
+    /parameter is invalid/i,
+  );
+});
+
 test('gateway validates production list, search, and reconciliation inputs', () => {
   assert.throws(
     () => resolveGatewayRoute('/api/admin/accounts', 'GET', new URLSearchParams('limit=500')),
     /limit is invalid/i,
   );
   assert.throws(
+    () => resolveGatewayRoute('/api/admin/search', 'GET', new URLSearchParams(`q=${'x'.repeat(101)}`)),
+    /search query is invalid/i,
+  );
+  assert.doesNotThrow(
     () => resolveGatewayRoute('/api/admin/search', 'GET', new URLSearchParams('q=boss@example.com')),
+  );
+  assert.doesNotThrow(
+    () => resolveGatewayRoute('/api/admin/accounts', 'GET', new URLSearchParams('q=boss@example.com')),
+  );
+  assert.throws(
+    () => resolveGatewayRoute('/api/admin/receipts', 'GET', new URLSearchParams('q=boss@example.com')),
     /search query is invalid/i,
   );
   assert.throws(

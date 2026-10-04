@@ -69,7 +69,8 @@ function validateListQuery(route, query, sort) {
   if (query.sort !== undefined && query.sort !== sort) {
     throw new HttpError('VALIDATION_FAILED', 'List sort is invalid', 400);
   }
-  if (query.q !== undefined && (query.q.length > 100 || query.q.includes('@'))) {
+  // Accounts may be looked up by full email (service-role read; lists stay masked).
+  if (query.q !== undefined && (query.q.length > 100 || (route !== 'accounts' && query.q.includes('@')))) {
     throw new HttpError('VALIDATION_FAILED', 'Search query is invalid', 400);
   }
 
@@ -150,14 +151,14 @@ export function resolveGatewayRoute(pathname, method, searchParams) {
     ['reconciliation', ['/api/reconciliation', new Set(['tripId'])]],
     ['providers', ['/api/providers', new Set()]],
     ['audit', ['/api/audit', new Set(['action', 'cursor', 'direction', 'endAt', 'limit', 'requestId', 'result', 'risk', 'sort', 'startAt', 'targetId', 'targetType'])]],
-    ['runtime', ['/api/runtime', new Set()]],
+    ['runtime', ['/api/runtime', new Set(['scope'])]],
     ['operations', ['/api/operations', new Set(['limit', 'status'])]],
   ]);
   if (fixed.has(route)) {
     const [edgeRoute, allowed] = fixed.get(route);
     const query = queryObject(searchParams, allowed);
     if (route === 'search') {
-      if (!query.q || query.q.length < 2 || query.q.length > 100 || query.q.includes('@')) {
+      if (!query.q || query.q.length < 2 || query.q.length > 100) {
         throw new HttpError('VALIDATION_FAILED', 'Search query is invalid', 400);
       }
     } else if (route === 'reconciliation') {
@@ -168,6 +169,9 @@ export function resolveGatewayRoute(pathname, method, searchParams) {
         query,
         ['accounts', 'trips', 'receipts', 'sync-jobs'].includes(route) ? 'updated_at' : 'created_at',
       );
+    } else if (route === 'runtime') {
+      // scope=policy is the cheap write-policy read (no outbound health probes).
+      validateEnum(query, 'scope', ['policy']);
     } else if (route === 'operations') {
       validateEnum(query, 'status', ['active', 'terminal', 'all']);
       if (query.limit !== undefined && !['10', '20', '50'].includes(query.limit)) {
