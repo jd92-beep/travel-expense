@@ -66,7 +66,13 @@ export type CanonicalItineraryDay = {
 };
 
 export type ItineraryIntegrityIssue = {
-  code: "DUPLICATE_DAY" | "OUT_OF_RANGE_DAY" | "INVALID_DAY" | "MISSING_DAY" | "INVALID_SPOT";
+  code:
+    | "DUPLICATE_DAY"
+    | "OUT_OF_RANGE_DAY"
+    | "INVALID_DAY"
+    | "MISSING_DAY"
+    | "INVALID_SPOT"
+    | "INVALID_RANGE";
   date?: string;
   count?: number;
   spotCount?: number;
@@ -409,10 +415,7 @@ export function canonicalizeItinerary(input: unknown): {
   const tripId = input.tripId;
   const startDate = input.startDate;
   const endDate = input.endDate;
-  if (
-    typeof tripId !== "string" || !UUID_RE.test(tripId) || typeof startDate !== "string" ||
-    typeof endDate !== "string"
-  ) {
+  if (typeof tripId !== "string" || !UUID_RE.test(tripId)) {
     throw new ReadFault(
       "UPSTREAM_UNAVAILABLE",
       502,
@@ -420,8 +423,30 @@ export function canonicalizeItinerary(input: unknown): {
       true,
     );
   }
+  // A trip with missing/inverted dates must still open so an operator can set a
+  // valid range; returning 502 here made the broken trip unrepairable.
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
+  if (!start || !end || end.epochDay < start.epochDay || end.epochDay - start.epochDay > 3660) {
+    const rawCount = Array.isArray(input.itinerary)
+      ? input.itinerary.length
+      : Array.isArray(input.days)
+      ? input.days.length
+      : 0;
+    return {
+      data: {
+        tripId,
+        startDate: typeof startDate === "string" ? startDate : "",
+        endDate: typeof endDate === "string" ? endDate : "",
+        version: Number.isInteger(Number(input.version)) ? Number(input.version) : 0,
+        days: [],
+        integrityIssues: [{ code: "INVALID_RANGE", count: rawCount }],
+      },
+      warnings: ["ITINERARY_INVALID_RANGE"],
+    };
+  }
 
-  const expectedDates = inclusiveDates(startDate, endDate);
+  const expectedDates = inclusiveDates(start.value, end.value);
   const expectedSet = new Set(expectedDates);
   const rawDays = Array.isArray(input.itinerary)
     ? input.itinerary
@@ -534,8 +559,8 @@ export function canonicalizeItinerary(input: unknown): {
   return {
     data: {
       tripId,
-      startDate,
-      endDate,
+      startDate: start.value,
+      endDate: end.value,
       version: Number.isInteger(Number(input.version)) ? Number(input.version) : 0,
       days,
       integrityIssues,
@@ -556,7 +581,7 @@ async function executeRoute(context: ReadContext): Promise<AdminReadResult | nul
 
   if (route === "/api/search") {
     const values = parseQuery(searchParams, new Set(["q"]));
-    const q = textValue(values, "q", { min: 2, max: 100, rejectEmail: true, required: true });
+    const q = textValue(values, "q", { min: 2, max: 100, required: true });
     return success(context, await rpc(context, "admin_read_search", { p_q: q }));
   }
 
@@ -576,7 +601,7 @@ async function executeRoute(context: ReadContext): Promise<AdminReadResult | nul
         p_cursor_updated_at: cursor?.timestamp ?? null,
         p_limit: limit + 1,
         p_platform: enumValue(values, "platform", ["all", "compact", "android"]),
-        p_q: textValue(values, "q", { max: 100, rejectEmail: true }),
+        p_q: textValue(values, "q", { max: 100 }),
         p_status: enumValue(values, "status", ["all", "active", "banned", "deleted", "risk"]),
       },
       limit,

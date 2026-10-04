@@ -311,7 +311,17 @@ test('gateway validates production list, search, and reconciliation inputs', () 
     /limit is invalid/i,
   );
   assert.throws(
+    () => resolveGatewayRoute('/api/admin/search', 'GET', new URLSearchParams(`q=${'x'.repeat(101)}`)),
+    /search query is invalid/i,
+  );
+  assert.doesNotThrow(
     () => resolveGatewayRoute('/api/admin/search', 'GET', new URLSearchParams('q=boss@example.com')),
+  );
+  assert.doesNotThrow(
+    () => resolveGatewayRoute('/api/admin/accounts', 'GET', new URLSearchParams('q=boss@example.com')),
+  );
+  assert.throws(
+    () => resolveGatewayRoute('/api/admin/receipts', 'GET', new URLSearchParams('q=boss@example.com')),
     /search query is invalid/i,
   );
   assert.throws(

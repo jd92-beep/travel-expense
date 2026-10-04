@@ -13,6 +13,7 @@ import {
   EmptyState,
   ErrorState,
   formatDateTime,
+  formatMoney,
   FreshnessBanner,
   LoadingState,
   Metric,
@@ -144,7 +145,7 @@ export function OverviewPage() {
       <section className="metric-strip" aria-label="核心指標">
         <Metric label="活躍帳戶" value={data.counts.activeAccounts} delay={0 * STAGGER_STEP_S} href="/data/accounts?status=active" />
         <Metric label="進行中行程" value={data.counts.openTrips} delay={1 * STAGGER_STEP_S} href="/data/trips?status=open" />
-        <Metric label="近期收據" value={data.counts.recentReceipts} delay={2 * STAGGER_STEP_S} href="/data/receipts" />
+        <Metric label="30 日新收據" value={data.counts.recentReceipts} delay={2 * STAGGER_STEP_S} href="/data/receipts" />
         <Metric
           label="失敗工作"
           value={data.counts.failedJobs}
@@ -160,6 +161,37 @@ export function OverviewPage() {
           href="/reliability/integrity"
         />
       </section>
+
+      {data.counts.totalAccounts !== undefined && (
+        <section className="summary-strip" aria-label="平台總量">
+          <div>
+            <span>帳戶總數</span>
+            <strong><Link className="text-link" to="/data/accounts">{data.counts.totalAccounts}</Link></strong>
+          </div>
+          <div>
+            <span>行程總數</span>
+            <strong><Link className="text-link" to="/data/trips">{data.counts.totalTrips ?? 0}</Link></strong>
+          </div>
+          <div>
+            <span>有效收據 / Trash</span>
+            <strong>
+              <Link className="text-link" to="/data/receipts">{data.counts.totalReceipts ?? 0}</Link>
+              {" / "}
+              <Link className="text-link" to="/data/receipts?trash=trash">{data.counts.trashReceipts ?? 0}</Link>
+            </strong>
+          </div>
+          <div>
+            <span>30 日支出（HKD）</span>
+            <strong>{formatMoney(data.counts.spend30dHome ?? 0, "HKD")}</strong>
+          </div>
+          <div>
+            <span>待處理同步工作</span>
+            <strong>
+              <Link className="text-link" to="/reliability/sync?status=pending">{data.counts.pendingJobs ?? 0}</Link>
+            </strong>
+          </div>
+        </section>
+      )}
 
       <div className="overview-columns">
         <section className="data-section">
@@ -234,7 +266,7 @@ export function OverviewPage() {
                 {data.recentOperations.map((operation) => (
                   <li key={operation.id}>
                     <span>
-                      <strong>{operation.action}</strong>
+                      <strong>{operation.action.replace(/_/g, " ")}</strong>
                       <small>
                         {operation.target_type} ·{" "}
                         {operation.target_id_hash || "no target"}

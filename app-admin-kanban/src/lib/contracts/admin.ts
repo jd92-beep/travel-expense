@@ -27,6 +27,13 @@ export type OverviewData = {
     recentReceipts: number;
     failedJobs: number;
     integrityIssues: number;
+    // admin 1.5.0 additions (absent until the matching DB migration is live).
+    totalAccounts?: number;
+    totalTrips?: number;
+    totalReceipts?: number;
+    trashReceipts?: number;
+    spend30dHome?: number | string;
+    pendingJobs?: number;
   };
   incidents: Array<{
     id: string;
@@ -103,6 +110,15 @@ export type TripRow = {
   itinerary_coverage: number;
   notion_binding_status: string;
   updated_at: string;
+  // admin 1.5.0 spend/membership columns.
+  total_member_count?: number;
+  expense_total_home?: number | string;
+  expense_count?: number;
+  settlement_count?: number;
+  private_count?: number;
+  trash_count?: number;
+  missing_home_count?: number;
+  last_receipt_at?: string | null;
 };
 
 export type ReceiptRow = {
@@ -127,6 +143,15 @@ export type ReceiptRow = {
   has_photo: boolean;
   integrity_status: string;
   updated_at: string;
+  created_at?: string;
+  split_mode?: string | null;
+  split_type?: string | null;
+  // admin 1.5.0: HKD snapshot + payer/beneficiary.
+  home_amount?: number | string | null;
+  home_currency?: string | null;
+  exchange_rate?: number | string | null;
+  person_id?: string | null;
+  beneficiary_id?: string | null;
 };
 
 export type IncidentRow = {

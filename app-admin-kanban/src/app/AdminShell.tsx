@@ -32,6 +32,62 @@ import { PasskeyManagerDialog } from "../features/system/PasskeyManagerDialog";
 import { RouteTransition } from "../components/fx/RouteTransition";
 import { ToastProvider } from "../components/primitives/Toaster";
 import { useEffectsTier } from "../lib/performance";
+import { useAdminWritePolicy } from "../lib/writePolicy";
+
+const WRITE_BANNER_KEY = "admin-write-policy-banner-dismissed";
+
+function readDismissed() {
+  try {
+    return window.sessionStorage.getItem(WRITE_BANNER_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Production normally runs ADMIN_WRITE_MODE=provider_probe_only, which silently
+ * greys out every amend/trash/member button. Say so once, globally, with the
+ * exact switch, instead of leaving operators to hover each disabled control.
+ */
+function WritePolicyBanner() {
+  const policy = useAdminWritePolicy();
+  const [dismissed, setDismissed] = useState(readDismissed);
+  const status = policy.policy.status;
+  if (policy.loading || status === "allowlisted" || dismissed === status) return null;
+  return (
+    <div className="write-policy-banner" role="status">
+      <ShieldCheck size={18} />
+      <div>
+        <strong>
+          {status === "provider_probe_only"
+            ? "目前只允許 AI provider probe：修改收據、行程、行程表、成員等寫入已停用"
+            : policy.error
+            ? "未能讀取寫入政策，寫入操作暫時停用（fail closed）"
+            : "Console 目前為唯讀：所有寫入操作已停用"}
+        </strong>
+        <p>
+          讀取所有資料不受影響。要開放修改，需要將 Edge secret <code>ADMIN_WRITE_MODE</code>{" "}
+          設為 <code>allowlisted</code>（用戶永久刪除另需 <code>ADMIN_ALLOW_R3_USER_PURGE=true</code>），
+          再經 protected workflow 重新部署；每項修改仍需通行片語 + passkey step-up。
+        </p>
+      </div>
+      <button
+        className="button secondary"
+        type="button"
+        onClick={() => {
+          try {
+            window.sessionStorage.setItem(WRITE_BANNER_KEY, status);
+          } catch {
+            // Storage blocked: dismiss for this render tree only.
+          }
+          setDismissed(status);
+        }}
+      >
+        知道了
+      </button>
+    </div>
+  );
+}
 
 const PRIMARY_NAV = [
   { to: "/overview", match: "/overview", label: "總覽", icon: LayoutDashboard },
@@ -137,6 +193,13 @@ export function AdminShell() {
     });
     return () => cancelAnimationFrame(frame);
   }, [location.pathname]);
+
+  useEffect(() => {
+    // Keep the top-bar field in sync with the query actually shown on /search.
+    if (location.pathname === "/search") {
+      setSearch(new URLSearchParams(location.search).get("q") || "");
+    }
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!session || prefetchStartedRef.current) return;
@@ -262,6 +325,7 @@ export function AdminShell() {
               const q = search.trim();
               if (q) {
                 navigate(`/search?q=${encodeURIComponent(q)}`);
+                searchInputRef.current?.blur();
               }
             }}
           >
@@ -274,7 +338,7 @@ export function AdminShell() {
               id="admin-global-search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="搜尋名稱或 UUID"
+              placeholder="搜尋名稱、email、商戶或 UUID（/ 或 ⌘K）"
               autoComplete="off"
             />
           </form>
@@ -423,6 +487,7 @@ export function AdminShell() {
         />
 
         <main className="workspace" id="main-content">
+          <WritePolicyBanner />
           <RouteTransition />
         </main>
       </div>

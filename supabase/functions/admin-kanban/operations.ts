@@ -524,7 +524,9 @@ async function receiptR2Preview(context: OperationContext, input: PreviewInput) 
       affectedCount: 1,
       before: current,
       consequence: input.action === "receipt_amend"
-        ? "Updates one canonical receipt and queues its eligible Notion mirror."
+        ? fields.includes("amount") || fields.includes("currency")
+          ? "Updates one canonical receipt, recomputes its home-currency (HKD) snapshot, and queues its eligible Notion mirror."
+          : "Updates one canonical receipt and queues its eligible Notion mirror."
         : input.action === "receipt_trash"
         ? "Creates a durable tombstone and queues an eligible Notion archive."
         : "Creates a new active receipt version and queues an eligible Notion upsert.",

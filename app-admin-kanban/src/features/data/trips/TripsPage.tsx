@@ -1,8 +1,11 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
+  Download,
+  GitCompareArrows,
   MapPin,
   Pencil,
   Plus,
@@ -45,7 +48,11 @@ import {
   useOnline,
   WorkspaceNav,
   Breadcrumbs,
+  BackLink,
+  categoryLabel,
+  DetailError,
 } from "../../../components/primitives/ConsolePrimitives";
+import { downloadCsv } from "../../../lib/csv";
 import { useAdminWritePolicy } from "../../../lib/writePolicy";
 
 const DATA_NAV = [
@@ -89,18 +96,45 @@ export function TripsPage() {
       <WorkspaceNav items={DATA_NAV} />
       <PageHeader
         title="行程"
-        description="日期範圍、成員、行程覆蓋、Notion binding 及完整性"
+        description="日期範圍、成員、消費、行程覆蓋、Notion binding 及完整性"
         actions={
-          <button
-            className="button secondary"
-            type="button"
-            onClick={() => void query.refetch()}
-          >
-            <RefreshCw
-              className={query.isFetching ? "spin" : ""}
-              size={16}
-            />更新
-          </button>
+          <>
+            <button
+              className="button secondary"
+              type="button"
+              disabled={!query.data?.data.items.length}
+              onClick={() =>
+                downloadCsv("admin-trips", query.data?.data.items ?? [], [
+                  ["id", (trip) => trip.id],
+                  ["name", (trip) => trip.name],
+                  ["destination", (trip) => trip.destination_summary],
+                  ["start_date", (trip) => trip.start_date],
+                  ["end_date", (trip) => trip.end_date],
+                  ["owner", (trip) => trip.owner_masked_email],
+                  ["members_incl_owner", (trip) => trip.total_member_count ?? trip.member_count + 1],
+                  ["receipts", (trip) => trip.receipt_count],
+                  ["expense_total_home", (trip) => trip.expense_total_home],
+                  ["home_currency", (trip) => trip.home_currency],
+                  ["budget", (trip) => trip.budget_amount],
+                  ["budget_currency", (trip) => trip.budget_currency],
+                  ["itinerary_coverage", (trip) => trip.itinerary_coverage],
+                  ["integrity", (trip) => trip.integrity_status],
+                  ["archived", (trip) => trip.archived],
+                ])}
+            >
+              <Download size={16} />匯出本頁 CSV
+            </button>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => void query.refetch()}
+            >
+              <RefreshCw
+                className={query.isFetching ? "spin" : ""}
+                size={16}
+              />更新
+            </button>
+          </>
         }
       />
       <form
@@ -180,7 +214,7 @@ export function TripsPage() {
                           <th scope="col">日期</th>
                           <th scope="col">Owner</th>
                           <th scope="col">成員</th>
-                          <th scope="col">收據</th>
+                          <th scope="col">收據 / 消費</th>
                           <th scope="col">Itinerary</th>
                           <th scope="col">完整性</th>
                           <th scope="col">Notion</th>
@@ -206,12 +240,22 @@ export function TripsPage() {
                             <td data-label="日期">
                               {trip.start_date || "未設定"}
                               <br />至 {trip.end_date || "未設定"}
+                              {trip.archived && <small><StatusBadge value="archived" label="已封存" /></small>}
                             </td>
                             <td data-label="Owner">
-                              {trip.owner_masked_email}
+                              <Link className="text-link" to={`/data/accounts/${trip.owner_id}`}>
+                                {trip.owner_masked_email}
+                              </Link>
                             </td>
-                            <td data-label="成員">{trip.member_count}</td>
-                            <td data-label="收據">{trip.receipt_count}</td>
+                            <td data-label="成員">{trip.total_member_count ?? trip.member_count + 1}</td>
+                            <td data-label="收據 / 消費">
+                              <Link className="text-link" to={`/data/receipts?tripId=${trip.id}`}>
+                                {trip.receipt_count}
+                              </Link>
+                              {trip.expense_total_home !== undefined && (
+                                <small>{formatMoney(trip.expense_total_home, trip.home_currency)}</small>
+                              )}
+                            </td>
                             <td data-label="Itinerary">
                               <Link
                                 className="coverage-link"
@@ -294,6 +338,7 @@ type TripInviteRow = {
 
 type TripReceiptRow = {
   id: string;
+  category?: string | null;
   store: string | null;
   record_date: string | null;
   amount: number | string | null;
@@ -323,7 +368,34 @@ type TripIntegration = {
   updatedAt: string | null;
 };
 
+type TripSpend = {
+  byCategory: Array<{ category: string; receipts: number; home_total: number | string }>;
+  byCurrency: Array<{ currency: string; receipts: number; amount_total: number | string; home_total: number | string }>;
+  byOwner: Array<{ owner_id: string; masked_email: string | null; receipts: number; home_total: number | string }>;
+};
+
+function SpendBars(
+  { rows, currency }: {
+    rows: Array<{ key: string; label: React.ReactNode; receipts: number; total: number }>;
+    currency: string;
+  },
+) {
+  const max = Math.max(0, ...rows.map((row) => row.total));
+  return (
+    <ul className="spend-bars">
+      {rows.map((row) => (
+        <li key={row.key}>
+          <span>{row.label}</span>
+          <i style={{ "--share": `${max > 0 ? Math.round((row.total / max) * 100) : 0}%` } as React.CSSProperties} />
+          <small>{formatMoney(row.total, currency)} · {row.receipts} 張</small>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 type TripDetail = {
+  spend?: TripSpend;
   overview: TripRow;
   members: TripMemberRow[];
   invites: TripInviteRow[];
@@ -427,13 +499,19 @@ export function TripDetailPage() {
   if (query.isLoading) return <LoadingState label="載入行程詳情" />;
   if (query.isError || !query.data) {
     return (
-      <ErrorState
+      <DetailError
         error={query.error}
         retry={() => void query.refetch()}
+        backTo="/data/trips"
+        backLabel="返回行程清單"
       />
     );
   }
   const trip = query.data.data;
+  const homeCurrency = trip.overview.home_currency || "HKD";
+  const spendTotal = Number(trip.overview.expense_total_home ?? NaN);
+  const budget = trip.overview.budget_amount === null ? null : Number(trip.overview.budget_amount);
+  const budgetComparable = budget !== null && budget > 0 && trip.overview.budget_currency === homeCurrency;
   const auditEvents: Array<AuditRow | TripAuditRow> = auditQuery.data?.data.items || [];
   const canMutate = adminMetaAllowsMutation(query.data.meta, query.isFetching, online)
     && writePolicy.canMutateCanonical;
@@ -473,6 +551,9 @@ export function TripDetailPage() {
             >
               <Pencil size={16} />修改
             </button>
+            <Link className="button secondary" to={`/reliability/reconciliation?tripId=${tripId}`}>
+              <GitCompareArrows size={16} />Notion 對數
+            </Link>
             <Link
               className="button primary"
               to={`/data/trips/${tripId}/itinerary`}
@@ -604,16 +685,35 @@ export function TripDetailPage() {
       <section className="metric-strip">
         <div className="metric-block metric-identity">
           <span>Owner</span>
-          <strong>{trip.overview.owner_masked_email}</strong>
+          <strong>
+            <Link className="text-link" to={`/data/accounts/${trip.overview.owner_id}`}>
+              {trip.overview.owner_masked_email}
+            </Link>
+          </strong>
         </div>
         <div className="metric-block">
-          <span>Members</span>
-          <strong>{trip.overview.member_count}</strong>
+          <span>成員（含 Owner）</span>
+          <strong>{trip.overview.total_member_count ?? trip.overview.member_count + 1}</strong>
         </div>
         <div className="metric-block">
-          <span>Receipts</span>
-          <strong>{trip.overview.receipt_count}</strong>
+          <span>收據</span>
+          <strong>
+            <Link className="text-link" to={`/data/receipts?tripId=${tripId}`}>
+              {trip.overview.receipt_count}
+            </Link>
+          </strong>
         </div>
+        {Number.isFinite(spendTotal) && (
+          <div className="metric-block">
+            <span>
+              總支出{budgetComparable ? ` / 預算 ${formatMoney(budget, homeCurrency)}` : ""}
+            </span>
+            <strong>
+              {formatMoney(spendTotal, homeCurrency)}
+              {budgetComparable && ` · ${Math.round((spendTotal / budget!) * 100)}%`}
+            </strong>
+          </div>
+        )}
         <div className="metric-block">
           <span>Itinerary</span>
           <strong>{trip.overview.itinerary_coverage}%</strong>
@@ -623,12 +723,82 @@ export function TripDetailPage() {
           <strong>{trip.overview.version}</strong>
         </div>
       </section>
+      {trip.spend && (
+        <section className="detail-grid">
+          <div className="data-section">
+            <header>
+              <div>
+                <h2>支出分類</h2>
+                <p>
+                  只計未刪除支出（不含結算）· {trip.overview.expense_count ?? 0} 張
+                  {trip.overview.missing_home_count
+                    ? ` · ${trip.overview.missing_home_count} 張未換算 ${homeCurrency}`
+                    : ""}
+                  {trip.overview.private_count ? ` · ${trip.overview.private_count} 張私人` : ""}
+                  {trip.overview.trash_count ? ` · Trash ${trip.overview.trash_count}` : ""}
+                </p>
+              </div>
+            </header>
+            {trip.spend.byCategory.length
+              ? (
+                <SpendBars
+                  currency={homeCurrency}
+                  rows={trip.spend.byCategory.map((row) => ({
+                    key: row.category,
+                    label: categoryLabel(row.category),
+                    receipts: row.receipts,
+                    total: Number(row.home_total) || 0,
+                  }))}
+                />
+              )
+              : <EmptyState title="未有支出" />}
+          </div>
+          <div className="data-section">
+            <header>
+              <div>
+                <h2>付款人 / 貨幣</h2>
+                <p>按收據 owner 及原始貨幣合計</p>
+              </div>
+            </header>
+            {trip.spend.byOwner.length
+              ? (
+                <SpendBars
+                  currency={homeCurrency}
+                  rows={trip.spend.byOwner.map((row) => ({
+                    key: row.owner_id,
+                    label: (
+                      <Link className="text-link" to={`/data/accounts/${row.owner_id}`}>
+                        {row.masked_email || row.owner_id.slice(0, 8)}
+                      </Link>
+                    ),
+                    receipts: row.receipts,
+                    total: Number(row.home_total) || 0,
+                  }))}
+                />
+              )
+              : <EmptyState title="未有支出" />}
+            {trip.spend.byCurrency.length > 0 && (
+              <dl className="detail-list">
+                {trip.spend.byCurrency.map((row) => (
+                  <div key={row.currency}>
+                    <dt>{row.currency} · {row.receipts} 張</dt>
+                    <dd>
+                      {formatMoney(row.amount_total, row.currency)}
+                      {row.currency !== homeCurrency && ` ≈ ${formatMoney(row.home_total, homeCurrency)}`}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        </section>
+      )}
       <section className="detail-grid trip-member-grid">
         <div className="data-section member-section">
           <header>
             <div>
               <h2>成員</h2>
-              <p>Owner 不會重複計算</p>
+              <p>加入現有帳戶即時生效；未註冊電郵會產生 14 日邀請連結</p>
             </div>
           </header>
           <form
@@ -694,7 +864,9 @@ export function TripDetailPage() {
                   return (
                   <tr key={member.user_id}>
                     <td data-label="身份">
-                      {member.masked_email || member.user_id}
+                      <Link className="text-link" to={`/data/accounts/${member.user_id}`}>
+                        {member.masked_email || member.user_id}
+                      </Link>
                     </td>
                     <td data-label="角色">
                       {protectedOwner
@@ -843,7 +1015,7 @@ export function TripDetailPage() {
                     <th scope="col">收據</th>
                     <th scope="col">日期</th>
                     <th scope="col">金額</th>
-                    <th scope="col">種類</th>
+                    <th scope="col">分類</th>
                     <th scope="col">可見</th>
                     <th scope="col">Notion</th>
                     <th scope="col">完整性</th>
@@ -864,7 +1036,11 @@ export function TripDetailPage() {
                       <td data-label="金額">
                         {formatMoney(receipt.amount, receipt.currency)}
                       </td>
-                      <td data-label="種類">{receipt.record_kind}</td>
+                      <td data-label="分類">
+                        {receipt.record_kind === "settlement"
+                          ? <StatusBadge value="settlement" />
+                          : categoryLabel(receipt.category)}
+                      </td>
                       <td data-label="可見">
                         <StatusBadge value={receipt.visibility} />
                       </td>
@@ -937,7 +1113,7 @@ export function TripDetailPage() {
               <h2>最近審計</h2>
               <p>與此行程 target hash 對應的最近操作</p>
             </div>
-            <Link className="text-link" to={`/audit?targetId=${tripId}`}>
+            <Link className="text-link" to={`/audit?targetId=${tripId}&range=all`}>
               查看全部
             </Link>
           </header>
@@ -951,7 +1127,7 @@ export function TripDetailPage() {
                 {auditEvents.map((event) => (
                   <li key={event.id}>
                     <span>
-                      <strong>{event.action}</strong>
+                      <strong><Link className="text-link" to={`/audit/${event.id}`}>{event.action}</Link></strong>
                       <small>
                         {event.request_id || "no request id"} · {auditResultLabel(
                           event.result,
@@ -1059,9 +1235,11 @@ export function ItineraryPage() {
   if (query.isLoading) return <LoadingState label="載入行程表" />;
   if (query.isError || !query.data) {
     return (
-      <ErrorState
+      <DetailError
         error={query.error}
         retry={() => void query.refetch()}
+        backTo={`/data/trips/${tripId}`}
+        backLabel="返回行程詳情"
       />
     );
   }
@@ -1112,12 +1290,12 @@ export function ItineraryPage() {
   }
   return (
     <div className="workspace-stack">
-      <Link className="back-link" to={`/data/trips/${tripId}`}>
-        <ArrowLeft size={16} />返回行程詳情
-      </Link>
+      <BackLink to={`/data/trips/${tripId}`} label="返回行程詳情" />
       <PageHeader
         title="行程表"
-        description={`${itinerary.startDate} 至 ${itinerary.endDate} · ${itinerary.days.length} 日 · Version ${itinerary.version}`}
+        description={itinerary.days.length
+          ? `${itinerary.startDate} 至 ${itinerary.endDate} · ${itinerary.days.length} 日 · Version ${itinerary.version}`
+          : `日期範圍無效或未設定 · Version ${itinerary.version}；請編輯行程設定開始及結束日期`}
         actions={
           <button
             className="button secondary"
@@ -1325,6 +1503,38 @@ export function ItineraryPage() {
                               }))}
                           />
                         </label>
+                        <span className="spot-move">
+                          <button
+                            className="icon-button"
+                            type="button"
+                            title="上移"
+                            aria-label={`上移 ${spot.name || "景點"}`}
+                            disabled={spotIndex === 0}
+                            onClick={() =>
+                              updateDraftDay(day.date, (current) => {
+                                const spots = [...current.spots];
+                                [spots[spotIndex - 1], spots[spotIndex]] = [spots[spotIndex], spots[spotIndex - 1]];
+                                return { ...current, spots };
+                              })}
+                          >
+                            <ArrowUp size={15} />
+                          </button>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            title="下移"
+                            aria-label={`下移 ${spot.name || "景點"}`}
+                            disabled={spotIndex === day.spots.length - 1}
+                            onClick={() =>
+                              updateDraftDay(day.date, (current) => {
+                                const spots = [...current.spots];
+                                [spots[spotIndex + 1], spots[spotIndex]] = [spots[spotIndex], spots[spotIndex + 1]];
+                                return { ...current, spots };
+                              })}
+                          >
+                            <ArrowDown size={15} />
+                          </button>
+                        </span>
                         <button
                           className="icon-button danger-action"
                           type="button"

@@ -32,7 +32,7 @@ export function useAdminWritePolicy() {
   const policy = query.data?.data.runtimePolicy ?? DEFAULT_POLICY;
   const writesEnabled = policy.writable || policy.status === "allowlisted";
   const probesOnly = policy.status === "provider_probe_only";
-  const canProbe = writesEnabled || probesOnly || query.isLoading;
+  const canProbe = (writesEnabled || probesOnly) && !query.isLoading;
   const canMutateCanonical = writesEnabled && !query.isLoading;
   const canPurgeUsers = writesEnabled && Boolean(policy.r3UserPurge) && !query.isLoading;
   const policyLabel = policy.status === "allowlisted"

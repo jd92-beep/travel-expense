@@ -69,7 +69,8 @@ function validateListQuery(route, query, sort) {
   if (query.sort !== undefined && query.sort !== sort) {
     throw new HttpError('VALIDATION_FAILED', 'List sort is invalid', 400);
   }
-  if (query.q !== undefined && (query.q.length > 100 || query.q.includes('@'))) {
+  // Accounts may be looked up by full email (service-role read; lists stay masked).
+  if (query.q !== undefined && (query.q.length > 100 || (route !== 'accounts' && query.q.includes('@')))) {
     throw new HttpError('VALIDATION_FAILED', 'Search query is invalid', 400);
   }
 
@@ -157,7 +158,7 @@ export function resolveGatewayRoute(pathname, method, searchParams) {
     const [edgeRoute, allowed] = fixed.get(route);
     const query = queryObject(searchParams, allowed);
     if (route === 'search') {
-      if (!query.q || query.q.length < 2 || query.q.length > 100 || query.q.includes('@')) {
+      if (!query.q || query.q.length < 2 || query.q.length > 100) {
         throw new HttpError('VALIDATION_FAILED', 'Search query is invalid', 400);
       }
     } else if (route === 'reconciliation') {
