@@ -959,10 +959,16 @@ async function rpcErrorCode(
 
 Deno.test("RPC errors map required/validation text to VALIDATION_FAILED, not UNAUTHORIZED", async () => {
   assertEquals(await rpcErrorCode({ message: "Receipt store is required" }), "VALIDATION_FAILED");
-  assertEquals(await rpcErrorCode({ message: "Expected receipt version required" }), "VALIDATION_FAILED");
+  assertEquals(
+    await rpcErrorCode({ message: "Expected receipt version required" }),
+    "VALIDATION_FAILED",
+  );
   assertEquals(await rpcErrorCode({ message: "Receipt date is invalid" }), "VALIDATION_FAILED");
   // Generic constraint/DB text must not become UNAUTHORIZED.
-  assertEquals(await rpcErrorCode({ message: "permission denied for table receipts" }), "INTERNAL_ERROR");
+  assertEquals(
+    await rpcErrorCode({ message: "permission denied for table receipts" }),
+    "INTERNAL_ERROR",
+  );
   assertEquals(
     await rpcErrorCode({
       message: 'duplicate key value violates unique constraint "receipts_pkey"',
@@ -987,7 +993,10 @@ Deno.test("RPC errors map explicit auth phrases and SQLSTATEs to UNAUTHORIZED", 
 });
 
 Deno.test("RPC SQLSTATE still drives not-found, dependency and validation families", async () => {
-  assertEquals(await rpcErrorCode({ message: "Target user not found", code: "P0002" }), "NOT_FOUND");
+  assertEquals(
+    await rpcErrorCode({ message: "Target user not found", code: "P0002" }),
+    "NOT_FOUND",
+  );
   assertEquals(
     await rpcErrorCode({ message: "operation cannot be committed", code: "55000" }),
     "DEPENDENCY_CONFLICT",

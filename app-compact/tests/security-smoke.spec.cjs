@@ -244,11 +244,24 @@ test('Scoped bootstrap waits for canonical hydration before exposing snapshot st
       const request = get.call(this, key);
       if (key !== indexedKey) return request;
       window.__bootstrapHydrationPending = true;
+      // Reads resolve on the transaction's complete event (src/storage/indexedDb.ts runTx), so
+      // the deferral must hold back both request success and transaction complete.
+      const held = { success: null, complete: null };
+      const tx = this.transaction;
+      Object.defineProperty(tx, 'oncomplete', { configurable: true, set: (handler) => { held.complete = handler; } });
+      let completeEvent = null;
+      tx.addEventListener('complete', (event) => { completeEvent = event; });
       const delayed = {};
       Object.defineProperties(delayed, {
         result: { get: () => request.result },
         error: { get: () => request.error },
-        onsuccess: { set: (handler) => { request.onsuccess = (event) => { window.__releaseBootstrapHydration = () => handler(event); }; } },
+        onsuccess: { set: (handler) => { request.onsuccess = (event) => {
+          window.__releaseBootstrapHydration = () => {
+            handler(event);
+            const fire = () => (completeEvent ? held.complete?.(completeEvent) : setTimeout(fire, 10));
+            fire();
+          };
+        }; } },
         onerror: { set: (handler) => { request.onerror = handler; } },
       });
       return delayed;
@@ -723,6 +736,13 @@ test('Delayed old scope hydration cannot overwrite or persist after an account s
     IDBObjectStore.prototype.get = function(key) {
       const request = get.call(this, key);
       if (key !== oldIndexedKey) return request;
+      // Reads resolve on the transaction's complete event (src/storage/indexedDb.ts runTx), so
+      // the deferral must hold back both request success and transaction complete.
+      const held = { complete: null };
+      const tx = this.transaction;
+      Object.defineProperty(tx, 'oncomplete', { configurable: true, set: (handler) => { held.complete = handler; } });
+      let completeEvent = null;
+      tx.addEventListener('complete', (event) => { completeEvent = event; });
       const delayed = {};
       Object.defineProperties(delayed, {
         result: { get: () => request.result },
@@ -731,7 +751,11 @@ test('Delayed old scope hydration cannot overwrite or persist after an account s
           set: (handler) => {
             request.onsuccess = (event) => {
               window.__oldScopeHydrationReady = true;
-              window.__releaseOldScopeHydration = () => handler(event);
+              window.__releaseOldScopeHydration = () => {
+                handler(event);
+                const fire = () => (completeEvent ? held.complete?.(completeEvent) : setTimeout(fire, 10));
+                fire();
+              };
             };
           },
         },
