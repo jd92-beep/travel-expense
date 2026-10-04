@@ -53,18 +53,24 @@
   inset: 0;
   pointer-events: none;
   background: var(--aug-border-bg, currentColor);
+  /* Vertex sequence replicates augmented-ui's generated polygon (measured
+     from the live build), including its per-corner AA notch points at
+     chamfer + border/2 — minus its no-op duplicate vertices — so Chromium
+     tessellates and antialiases the ring identically. Inner loop (the hole)
+     runs clockwise, outer loop counter-clockwise; opposite windings make
+     nonzero winding cut the hole. */
   clip-path: polygon(
-    /* inner loop (clockwise, y-down): the host shape inset by the border width —
-       the hole. Inner TL cut endpoints sit at (b, tl + b) / (tl + b, b), the
-       same coordinates augmented-ui's border math produced. */
     var(--chamfer-border) calc(var(--chamfer-tl) + var(--chamfer-border)),
+    var(--chamfer-border) calc(var(--chamfer-tl) + var(--chamfer-border) / 2),
+    calc(var(--chamfer-tl) + var(--chamfer-border) / 2) var(--chamfer-border),
     calc(var(--chamfer-tl) + var(--chamfer-border)) var(--chamfer-border),
     calc(100% - var(--chamfer-border)) var(--chamfer-border),
     calc(100% - var(--chamfer-border)) calc(100% - var(--chamfer-br) - var(--chamfer-border)),
+    calc(100% - var(--chamfer-border)) calc(100% - var(--chamfer-br) - var(--chamfer-border) / 2),
+    calc(100% - var(--chamfer-br) - var(--chamfer-border) / 2) calc(100% - var(--chamfer-border)),
     calc(100% - var(--chamfer-br) - var(--chamfer-border)) calc(100% - var(--chamfer-border)),
     var(--chamfer-border) calc(100% - var(--chamfer-border)),
-    /* outer loop (counter-clockwise): the full box, expanded 1px so the ring
-       antialiases the same way at the edges */
+    -1px calc(var(--chamfer-tl) + var(--chamfer-border)),
     -1px calc(100% + 1px),
     calc(100% + 1px) calc(100% + 1px),
     calc(100% + 1px) -1px,
