@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Work in `/Users/tommy/Documents/Codex/travel-expense` on `main`.
+- Work in `/Users/tommy_1/Documents/Projects/travel-expense` on `main`.
 - Run `node .gitnexus/run.cjs status`; refresh with `node .gitnexus/run.cjs analyze` only when stale.
 - Before editing each named function, run GitNexus upstream impact and warn Boss before a HIGH or CRITICAL result.
 - Preserve `boss-japan-tracker`, account-scoped keys, `AppState`, queue identity `type + entityId`, and the 500-item bound.

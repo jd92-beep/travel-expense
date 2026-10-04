@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Main source: `/Users/tommy/Documents/Codex/travel-expense` on `origin/main`.
-- Android target: `/Users/tommy/Documents/Codex/travel-expense-android-shell` on `codex/admin-console-1.0-android`.
+- Main source: `/Users/tommy_1/Documents/Projects/travel-expense` on `origin/main`.
+- Android target: `/Users/tommy_1/Documents/Projects/travel-expense-android-shell` on `codex/admin-console-1.0-android`.
 - Do not merge, rebase, or cherry-pick `main` into the Android branch.
 - Preserve Android native reachability, Capacitor imports, Kimi K3 selector exposure, package ID, signing setup, and deep links.
 - Preserve storage keys, `AppState`, queue identity, 500-item bound, terminal sync evidence, and ledger-first semantics.
@@ -61,10 +61,10 @@ Main 0.16.13 Change Journal green
 Run:
 
 ```bash
-git -C /Users/tommy/Documents/Codex/travel-expense fetch origin
-git -C /Users/tommy/Documents/Codex/travel-expense log origin/main -4 --oneline
-git -C /Users/tommy/Documents/Codex/travel-expense-android-shell status --short --branch
-git -C /Users/tommy/Documents/Codex/travel-expense-android-shell log -1 --oneline
+git -C /Users/tommy_1/Documents/Projects/travel-expense fetch origin
+git -C /Users/tommy_1/Documents/Projects/travel-expense log origin/main -4 --oneline
+git -C /Users/tommy_1/Documents/Projects/travel-expense-android-shell status --short --branch
+git -C /Users/tommy_1/Documents/Projects/travel-expense-android-shell log -1 --oneline
 ```
 
 Expected: `origin/main` contains all four named architecture commits; Android is clean at `1c03a9b` or a documented successor on `codex/admin-console-1.0-android`.
@@ -88,8 +88,8 @@ Expected: the Android branch is indexed and native sync callers appear. Stop and
 Inspect the exact main files:
 
 ```bash
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/src/lib/changeJournal.ts
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/scripts/change-journal.test.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/src/lib/changeJournal.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/scripts/change-journal.test.ts
 ```
 
 Create the same two files in the Android worktree with `apply_patch`. Add:
@@ -102,7 +102,7 @@ Create the same two files in the Android worktree with `apply_patch`. Add:
 The Android branch does not currently contain the sync-regression spec. Inspect and create the verified main file with `apply_patch`:
 
 ```bash
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/tests/sync-regression-smoke.spec.cjs
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/tests/sync-regression-smoke.spec.cjs
 ```
 
 Run:
@@ -140,8 +140,8 @@ Use `settleChange` for `syncing`, success, retryable error, terminal error, and 
 Before editing each Android integration file, compare it with main:
 
 ```bash
-git diff --no-index /Users/tommy/Documents/Codex/travel-expense/app-compact/src/lib/useSyncEngine.ts app-compact/src/lib/useSyncEngine.ts
-git diff --no-index /Users/tommy/Documents/Codex/travel-expense/app-compact/src/lib/useAppState.ts app-compact/src/lib/useAppState.ts
+git diff --no-index /Users/tommy_1/Documents/Projects/travel-expense/app-compact/src/lib/useSyncEngine.ts app-compact/src/lib/useSyncEngine.ts
+git diff --no-index /Users/tommy_1/Documents/Projects/travel-expense/app-compact/src/lib/useAppState.ts app-compact/src/lib/useAppState.ts
 ```
 
 Keep Android's `useNativeNetworkStatus`/Capacitor path and patch queue calls only.
@@ -217,8 +217,8 @@ Expected: Android session and persistence flows are listed. Stop before edits fo
 Inspect:
 
 ```bash
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/src/lib/scopedPersistence.ts
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/scripts/scoped-persistence.test.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/src/lib/scopedPersistence.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/scripts/scoped-persistence.test.ts
 ```
 
 Create them exactly with `apply_patch`, add:
@@ -317,8 +317,8 @@ Expected: no Account Scope leakage or secret persistence; debug APK and all gate
 
 ```bash
 node .gitnexus/run.cjs impact drainSharedTripNotionOutbox --direction upstream
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/src/lib/sharedTripNotionOutbox.ts
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:app-compact/scripts/shared-trip-notion-outbox.test.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/src/lib/sharedTripNotionOutbox.ts
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:app-compact/scripts/shared-trip-notion-outbox.test.ts
 ```
 
 Expected: one Android sync caller; stop for HIGH or CRITICAL risk. Create both files exactly with `apply_patch`.
@@ -418,7 +418,7 @@ Expected: ledger and mirror tests pass; any unchanged known fixture failure is r
 Inspect the verified catalog:
 
 ```bash
-git -C /Users/tommy/Documents/Codex/travel-expense show origin/main:contracts/ai-provider-catalog.json
+git -C /Users/tommy_1/Documents/Projects/travel-expense show origin/main:contracts/ai-provider-catalog.json
 ```
 
 Create the same root JSON in the Android worktree. Create:
@@ -638,7 +638,7 @@ Expected: four ordered Android architecture commits are visible on the remote br
 
 - [ ] **Step 1: Update current facts without copying Android code to main**
 
-In `/Users/tommy/Documents/Codex/travel-expense/HANDOVER.md`:
+In `/Users/tommy_1/Documents/Projects/travel-expense/HANDOVER.md`:
 
 ```text
 - Set Android app version to 0.20.4 and versionCode 2004.
@@ -650,7 +650,7 @@ In `/Users/tommy/Documents/Codex/travel-expense/HANDOVER.md`:
 - [ ] **Step 2: Verify, commit, and push the docs-only reconciliation**
 
 ```bash
-cd /Users/tommy/Documents/Codex/travel-expense
+cd /Users/tommy_1/Documents/Projects/travel-expense
 git fetch origin
 git diff --check
 node scripts/security-scan.mjs

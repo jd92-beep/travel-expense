@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Start only after the Offline Change Journal commit is green on `origin/main`.
-- Work in `/Users/tommy/Documents/Codex/travel-expense` on `main`.
+- Work in `/Users/tommy_1/Documents/Projects/travel-expense` on `main`.
 - Preserve `boss-japan-tracker`, `boss-japan-tracker:state:supabase:<user_id>`, `app-state:supabase:<user_id>`, and every serialized `AppState` field.
 - Preserve local-only credentials and strip legacy provider secrets and sharing invite tokens from both adapters.
 - Call `restoreJournal` during normalization; terminal Change Journal evidence must survive hydration.

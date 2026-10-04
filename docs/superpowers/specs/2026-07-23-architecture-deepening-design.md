@@ -328,14 +328,14 @@ workflow.
 ### Android Port
 
 After all four main milestones are green, port applicable Compact files to
-`/Users/tommy/Documents/Codex/travel-expense-android-shell` on
+`/Users/tommy_1/Documents/Projects/travel-expense-android-shell` on
 `codex/admin-console-1.0-android` in separate commits. Reconcile Android-only
 Kimi K3 and version metadata rather than overwriting them.
 
 Run:
 
 ```bash
-cd /Users/tommy/Documents/Codex/travel-expense-android-shell/app-compact
+cd /Users/tommy_1/Documents/Projects/travel-expense-android-shell/app-compact
 npm run typecheck
 npm run build
 npm run security:scan

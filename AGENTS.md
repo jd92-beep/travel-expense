@@ -12,7 +12,8 @@ dependency is affected; keep all applicable cross-client checks below.
 
 ## Scope and evidence
 
-- Work only in `/Users/tommy_1/Documents/Projects/travel-expense`. Inspect Git
+- Work in this checkout's root (the directory containing this file), not a
+  sibling checkout merely because an old handover names it. Inspect Git
   status first and preserve unrelated work. Use live Git/runtime/DB evidence over
   dated handover notes.
 - Read `HANDOVER.md` before Admin, database, receipt-photo, or release work; read
