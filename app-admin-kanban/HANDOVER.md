@@ -4,7 +4,15 @@ Last updated: 2026-10-04 HKT
 
 ## Current Status
 
-- **`1.5.1` code ready (NOT deployed)** — performance pass on top of 1.5.0.
+- **Production `1.5.1` LIVE (2026-10-04 22:30 HKT)** — protected workflow `37208577875` promoted exact
+  SHA `e9c6eba06f5333a88e674c302a597f369bad160f` as `dpl_5oSj68bG7acAPANCr3EwEniVaGBF`; readiness
+  `passed` with Edge `admin-kanban` v138 (`…_138`), schema `20260712123000`. Edge v138 was verified
+  byte-identical to `e9c6eba` (14 files) with baked `EDGE_SOURCE_SHA=e9c6eba…`; the three provenance
+  secrets were aligned to the same SHA before approval. No Postgres errors after promotion.
+  Release-train lessons: (1) any push to `main` cancels a waiting dispatch (shared concurrency group) —
+  freeze `main` between dispatch and approval; (2) run the Edge deploy from a clean clone
+  (`--use-api` avoids Docker). An earlier dispatch on `2100bbc` was cancelled by Compact `e9c6eba`.
+- **`1.5.1` contents** — performance pass on top of 1.5.0.
   - **Root cause of slow pages:** `vercel.json` had no `regions`, so the BFF ran in Vercel's default
     `iad1` while Supabase is `ap-southeast-1`. Every read is BFF → auth-state Edge (session verify) →
     admin Edge (data), i.e. ~4 trans-Pacific legs from HK. Now `"regions": ["sin1"]` (unit-tested).
@@ -20,7 +28,7 @@ Last updated: 2026-10-04 HKT
   - Gates: unit 36/36, contract 25/25, security scan, build, Edge deno suite 59/59 (with npm import
     map override, esm.sh is blocked in the sandbox), smoke 53 passed (+1 new photo-cache spec).
 
-- **`1.5.0` code ready (NOT deployed; production still `1.4.1`)** — admin bug/UX/data-accuracy sweep.
+- **`1.5.0` contents (shipped in production 1.5.1)** — admin bug/UX/data-accuracy sweep.
   - **Live DB already migrated** (`20261003090000_admin_console_data_accuracy`, applied 2026-10-03 via
     Supabase MCP as `postgres`). The owner roles (`admin_auth_owner` / `admin_read_owner`) are held
     `WITH ADMIN, SET FALSE` and lack schema CREATE, so the migration adds a *postgres-granted* SET
