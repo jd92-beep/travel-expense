@@ -1,4 +1,6 @@
 import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Archive } from 'lucide-react';
+import { KitTabIcon } from '../theme/kit/KitIcons';
+import { KitMascot } from '../theme/kit/KitMascot';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useReducedMotion } from 'motion/react';
@@ -177,6 +179,7 @@ export function Shell({
   onOpenNewTripWizard?: () => void;
 }) {
   const { theme } = useTripTheme();
+  const tabIcon = (id: TabId) => (theme.kit ? <KitTabIcon kit={theme.kit.style} tab={id} /> : icons[id]);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const [installReady, setInstallReady] = useState(false);
@@ -436,6 +439,7 @@ export function Shell({
       <nav className="compact-desktop-rail" aria-label="主要分頁">
         <div className="rail-brand">
           {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
+          {theme.kit && <span className="compact-rail-mark kit-mascot-slot" aria-hidden="true"><KitMascot kit={theme.kit.style} /></span>}
           <div className="rail-brand-copy">
             <strong>Travel Ledger</strong>
             <span>旅行 · 記帳</span>
@@ -469,7 +473,7 @@ export function Shell({
               aria-current={active === tab.id ? 'page' : undefined}
               onClick={() => onTab(tab.id)}
             >
-              <span className="compact-rail-icon">{icons[tab.id]}</span>
+              <span className="compact-rail-icon">{tabIcon(tab.id)}</span>
               <span className="compact-rail-label">{tab.label}</span>
             </button>
           ))}
@@ -609,6 +613,9 @@ export function Shell({
         {theme.id === 'japan_washi' && <span className="compact-mobile-mark relative z-10" aria-hidden="true">
           <img src={compactJapanMark} alt="" />
         </span>}
+        {theme.kit && <span className="compact-mobile-mark kit-mascot-slot relative z-10" aria-hidden="true">
+          <KitMascot kit={theme.kit.style} />
+        </span>}
         <div className="compact-mobile-heading relative z-10">
           {active === 'dashboard' && state ? (
             <div className="flex items-center gap-1.5">
@@ -711,7 +718,7 @@ export function Shell({
           items={TAB_MANIFEST.map((tab) => ({
             id: tab.id,
             title: tab.label,
-            icon: icons[tab.id],
+            icon: tabIcon(tab.id),
             active: active === tab.id,
             onSelect: () => onTab(tab.id),
           }))}

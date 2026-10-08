@@ -1,9 +1,9 @@
 import { createContext, useContext, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { activeTrip, normalizeTripIntelligence } from '../domain/trip/normalize';
-import type { AppState, ThemePreference, TripThemeKey } from '../lib/types';
+import type { AppState, AppThemeKey, StyleThemeKey, ThemePreference, TripThemeKey } from '../lib/types';
 
 export type ThemeDefinition = {
-  id: TripThemeKey;
+  id: AppThemeKey;
   label: string;
   selectorLabel: string;
   scheme: 'light' | 'dark';
@@ -19,16 +19,22 @@ export type ThemeDefinition = {
   chart: readonly string[];
   art: 'washi' | 'hanji' | 'night-market' | 'rail-timetable' | 'field-atlas'
     | 'neon-grid' | 'confetti-radial' | 'union-stripe' | 'aurora-bands' | 'papel-picado'
-    | 'pigment-splash' | 'parade-float';
+    | 'pigment-splash' | 'parade-float'
+    | 'notebook-ruled' | 'cloud-puff' | 'toy-room' | 'polka-sticker' | 'hud-scan' | 'pixel-field'
+    | 'seigaiha-print' | 'hanok-lattice';
   /** Functional accents: Scan CTA, Weather sky, Timeline rail, Stats emphasis. */
   functional: { scan: string; weather: string; timeline: string; stats: string };
   motion: { ambient: boolean; duration: string };
   chrome: { themeColor: string; statusBarStyle: 'light' | 'dark' };
+  /** Style themes: `html[data-app-style]` swaps component shapes, layout and type (styles/style-themes.css). */
+  kit?: { style: StyleThemeKey; fonts: string };
 };
+
+const gf = (families: string) => `https://fonts.googleapis.com/css2?${families}&display=swap`;
 
 const sans = '"Noto Sans JP", "Avenir Next", "SF Pro Rounded", ui-sans-serif, system-ui, sans-serif';
 
-export const TRIP_THEMES: Record<TripThemeKey, ThemeDefinition> = {
+export const TRIP_THEMES: Record<AppThemeKey, ThemeDefinition> = {
   japan_washi: {
     id: 'japan_washi', label: 'Japan Washi', selectorLabel: '日本和紙', scheme: 'light',
     typography: { body: sans, display: '"Noto Serif JP", Georgia, "Times New Roman", serif' },
@@ -149,6 +155,94 @@ export const TRIP_THEMES: Record<TripThemeKey, ThemeDefinition> = {
     functional: { scan: '#FFD100', weather: '#4CC9F0', timeline: '#FFD100', stats: '#00A859' },
     motion: { ambient: true, duration: '20s' }, chrome: { themeColor: '#06281e', statusBarStyle: 'light' },
   },
+  sketch_notebook: {
+    id: 'sketch_notebook', label: 'Sketch Notebook', selectorLabel: '手繪筆記', scheme: 'light',
+    typography: { body: '"LXGW WenKai TC", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Caveat", "LXGW WenKai TC", "Noto Sans TC", cursive' },
+    colors: { canvas: '#FAF7EE', canvasMid: '#F7F3E8', canvasEnd: '#F3EEE1', surface: '#FFFDF6', card: '#FFFEFA', text: '#262523', muted: '#5E5B55', border: 'rgba(38, 37, 35, .5)', focus: '#2457A6', accent: '#C93C2C', onAccent: '#FFFFFF', red: '#C93C2C', blue: '#2457A6', gold: '#E0A800', green: '#2F7D4F', brown: '#7A5C3E' },
+    status: { info: '#2457A6', success: '#2F7D4F', warning: '#835800', danger: '#B3261E' },
+    chart: ['#2457A6', '#C93C2C', '#E0A800', '#2F7D4F'], art: 'notebook-ruled',
+    region: { label: '風格', motif: '鉛筆 · 橫線紙 · 螢光筆' },
+    functional: { scan: '#C93C2C', weather: '#2457A6', timeline: '#C93C2C', stats: '#2457A6' },
+    motion: { ambient: false, duration: '18s' }, chrome: { themeColor: '#faf7ee', statusBarStyle: 'dark' },
+    kit: { style: 'sketch_notebook', fonts: gf('family=Caveat:wght@600;700&family=LXGW+WenKai+TC:wght@400;700') },
+  },
+  marshmallow_cloud: {
+    id: 'marshmallow_cloud', label: 'Marshmallow Cloud', selectorLabel: '棉花糖雲', scheme: 'light',
+    typography: { body: '"Huninn", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Fredoka", "Huninn", "Noto Sans TC", ui-rounded, sans-serif' },
+    colors: { canvas: '#FFF4F8', canvasMid: '#F4F0FF', canvasEnd: '#EAF6FF', surface: '#FBF8FF', card: '#FFFFFF', text: '#4B3D63', muted: '#74679A', border: 'rgba(155, 134, 214, .18)', focus: '#7461E0', accent: '#C2457F', onAccent: '#FFFFFF', red: '#D24F7B', blue: '#5E7FE6', gold: '#E9A84C', green: '#3F9E7C', brown: '#A88A7A' },
+    status: { info: '#5A62C8', success: '#2F8466', warning: '#8A5B00', danger: '#C23C68' },
+    chart: ['#9B8CF2', '#F39AC0', '#7CC8F0', '#8EDDBA'], art: 'cloud-puff',
+    region: { label: '風格', motif: '棉花糖 · 粉彩 · 軟綿綿' },
+    functional: { scan: '#C2457F', weather: '#5E7FE6', timeline: '#9B8CF2', stats: '#7461E0' },
+    motion: { ambient: false, duration: '24s' }, chrome: { themeColor: '#fff4f8', statusBarStyle: 'dark' },
+    kit: { style: 'marshmallow_cloud', fonts: gf('family=Fredoka:wght@500;600&family=Huninn') },
+  },
+  kids_blocks: {
+    id: 'kids_blocks', label: 'Kids Blocks', selectorLabel: '童趣積木', scheme: 'light',
+    typography: { body: '"Chiron GoRound TC", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Baloo 2", "Chiron GoRound TC", "Noto Sans TC", ui-rounded, sans-serif' },
+    colors: { canvas: '#FFF6DB', canvasMid: '#FFF1CC', canvasEnd: '#FDEBC0', surface: '#FFFDF5', card: '#FFFFFF', text: '#1B2340', muted: '#4A5372', border: 'rgba(27, 35, 64, .3)', focus: '#1F6FEB', accent: '#D62F35', onAccent: '#FFFFFF', red: '#D62F35', blue: '#1F6FEB', gold: '#FFC233', green: '#23A050', brown: '#9A6B3F' },
+    status: { info: '#1F5FCC', success: '#1B7F3E', warning: '#855700', danger: '#C2262C' },
+    chart: ['#1F6FEB', '#E5383B', '#FFC233', '#23A050'], art: 'toy-room',
+    region: { label: '風格', motif: '積木 · 蠟筆 · 三原色' },
+    functional: { scan: '#D62F35', weather: '#1F6FEB', timeline: '#23A050', stats: '#1F6FEB' },
+    motion: { ambient: false, duration: '14s' }, chrome: { themeColor: '#fff6db', statusBarStyle: 'dark' },
+    kit: { style: 'kids_blocks', fonts: gf('family=Baloo+2:wght@700;800&family=Chiron+GoRound+TC:wght@500;700;900') },
+  },
+  kawaii_sticker: {
+    id: 'kawaii_sticker', label: 'Kawaii Sticker', selectorLabel: '可愛貼紙', scheme: 'light',
+    typography: { body: '"Iansui", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Cherry Bomb One", "Iansui", "Noto Sans TC", ui-rounded, sans-serif' },
+    colors: { canvas: '#FFEFF5', canvasMid: '#FFF3F8', canvasEnd: '#FCE8F3', surface: '#FFF8FB', card: '#FFFFFF', text: '#5A2F52', muted: '#86597D', border: 'rgba(232, 140, 182, .45)', focus: '#8A5CD6', accent: '#C93A76', onAccent: '#FFFFFF', red: '#D63F7A', blue: '#5F98DC', gold: '#F5B83D', green: '#3FA684', brown: '#A9786B' },
+    status: { info: '#5B6FC9', success: '#2E8566', warning: '#875A00', danger: '#C2335F' },
+    chart: ['#F48FB8', '#B79CF0', '#7FCFE8', '#FFD36E'], art: 'polka-sticker',
+    region: { label: '風格', motif: '貼紙 · 波點 · 縫線' },
+    functional: { scan: '#C93A76', weather: '#5F98DC', timeline: '#D63F7A', stats: '#8A5CD6' },
+    motion: { ambient: false, duration: '16s' }, chrome: { themeColor: '#ffeff5', statusBarStyle: 'dark' },
+    kit: { style: 'kawaii_sticker', fonts: gf('family=Cherry+Bomb+One&family=Iansui') },
+  },
+  cyberpunk_hud: {
+    id: 'cyberpunk_hud', label: 'Cyberpunk HUD', selectorLabel: '賽博朋克', scheme: 'dark',
+    typography: { body: '"Chakra Petch", "Chiron Hei HK", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif', display: '"Chakra Petch", "Chiron Hei HK", "Noto Sans TC", ui-sans-serif, sans-serif' },
+    colors: { canvas: '#07070C', canvasMid: '#0D0B16', canvasEnd: '#06060A', surface: '#101019', card: '#13131E', text: '#E9F4F4', muted: '#94A9AD', border: 'rgba(5, 217, 232, .32)', focus: '#05D9E8', accent: '#FCEE0A', onAccent: '#0A0A0F', red: '#FF2A6D', blue: '#05D9E8', gold: '#FCEE0A', green: '#2DF598', brown: '#C9A27A' },
+    status: { info: '#05D9E8', success: '#2DF598', warning: '#FCEE0A', danger: '#FF4D85' },
+    chart: ['#FCEE0A', '#05D9E8', '#FF2A6D', '#2DF598'], art: 'hud-scan',
+    region: { label: '風格', motif: 'HUD · 斜切角 · 故障' },
+    functional: { scan: '#FCEE0A', weather: '#05D9E8', timeline: '#FF2A6D', stats: '#05D9E8' },
+    motion: { ambient: false, duration: '20s' }, chrome: { themeColor: '#07070c', statusBarStyle: 'light' },
+    kit: { style: 'cyberpunk_hud', fonts: gf('family=Chakra+Petch:wght@500;600;700&family=Chiron+Hei+HK:wght@400;600;800&family=Share+Tech+Mono') },
+  },
+  pixel_quest: {
+    id: 'pixel_quest', label: 'Pixel Quest', selectorLabel: '像素冒險', scheme: 'dark',
+    typography: { body: '"DotGothic16", "Chiron Hei HK", "Noto Sans TC", ui-sans-serif, system-ui, sans-serif', display: '"DotGothic16", "Chiron Hei HK", "Noto Sans TC", ui-sans-serif, sans-serif' },
+    colors: { canvas: '#141432', canvasMid: '#1A1A40', canvasEnd: '#10102A', surface: '#16206B', card: '#1C2A8A', text: '#FFFFFF', muted: '#C9D1FF', border: 'rgba(255, 255, 255, .78)', focus: '#FFD23F', accent: '#FFD23F', onAccent: '#141432', red: '#FF6B6B', blue: '#5AC8FF', gold: '#FFD23F', green: '#5CDB6A', brown: '#D9A066' },
+    status: { info: '#8FD8FF', success: '#7CF08A', warning: '#FFE27A', danger: '#FF9A9A' },
+    chart: ['#FFD23F', '#5AC8FF', '#FF6B6B', '#5CDB6A'], art: 'pixel-field',
+    region: { label: '風格', motif: '8-bit · 對話框 · 快捷欄' },
+    functional: { scan: '#FFD23F', weather: '#5AC8FF', timeline: '#5CDB6A', stats: '#FF6B6B' },
+    motion: { ambient: false, duration: '20s' }, chrome: { themeColor: '#141432', statusBarStyle: 'light' },
+    kit: { style: 'pixel_quest', fonts: gf('family=DotGothic16&family=Chiron+Hei+HK:wght@500;700') },
+  },
+  japan_ukiyoe: {
+    id: 'japan_ukiyoe', label: 'Edo Ukiyo-e', selectorLabel: '江戶浮世繪', scheme: 'light',
+    typography: { body: '"Chiron Sung HK", "Noto Serif TC", Georgia, serif', display: '"Chiron Sung HK", "Noto Serif TC", Georgia, serif' },
+    colors: { canvas: '#F3EAD7', canvasMid: '#EFE4CC', canvasEnd: '#E8DBBE', surface: '#FAF4E6', card: '#FBF6EA', text: '#1C1A17', muted: '#5F5546', border: 'rgba(28, 26, 23, .32)', focus: '#1F3A5F', accent: '#B8361A', onAccent: '#FFFFFF', red: '#B8361A', blue: '#1F3A5F', gold: '#B8871F', green: '#4F6B2E', brown: '#7A5A3A' },
+    status: { info: '#1F3A5F', success: '#4F6B2E', warning: '#855A00', danger: '#A52F16' },
+    chart: ['#1F3A5F', '#B8361A', '#C99A2E', '#4F6B2E'], art: 'seigaiha-print',
+    region: { label: '風格', motif: '浮世繪 · 青海波 · 朱印' },
+    functional: { scan: '#B8361A', weather: '#1F3A5F', timeline: '#B8361A', stats: '#1F3A5F' },
+    motion: { ambient: false, duration: '22s' }, chrome: { themeColor: '#1f3a5f', statusBarStyle: 'light' },
+    kit: { style: 'japan_ukiyoe', fonts: gf('family=Chiron+Sung+HK:wght@400;600;900') },
+  },
+  korea_dancheong: {
+    id: 'korea_dancheong', label: 'Hanok Dancheong', selectorLabel: '韓屋丹青', scheme: 'light',
+    typography: { body: '"Noto Sans TC", "Gowun Dodum", ui-sans-serif, system-ui, sans-serif', display: '"Gowun Batang", "Cactus Classical Serif", "Noto Serif TC", Georgia, serif' },
+    colors: { canvas: '#F6F1E6', canvasMid: '#F2ECDE', canvasEnd: '#ECE4D2', surface: '#FCF9F2', card: '#FFFDF8', text: '#26221E', muted: '#625A50', border: 'rgba(38, 34, 30, .2)', focus: '#1E5AA8', accent: '#C8323C', onAccent: '#FFFFFF', red: '#C8323C', blue: '#1E5AA8', gold: '#E8B83A', green: '#1F7A60', brown: '#7B5B3C' },
+    status: { info: '#1E5AA8', success: '#1F7A60', warning: '#835A00', danger: '#B32A33' },
+    chart: ['#1F7A60', '#C8323C', '#E8B83A', '#1E5AA8'], art: 'hanok-lattice',
+    region: { label: '風格', motif: '丹青 · 褓子拼布 · 五方色' },
+    functional: { scan: '#C8323C', weather: '#1E5AA8', timeline: '#1F7A60', stats: '#1E5AA8' },
+    motion: { ambient: false, duration: '24s' }, chrome: { themeColor: '#f6f1e6', statusBarStyle: 'dark' },
+    kit: { style: 'korea_dancheong', fonts: gf('family=Gowun+Batang:wght@400;700&family=Cactus+Classical+Serif&family=Noto+Sans+TC:wght@400;500;700') },
+  },
 };
 
 export const THEME_OPTIONS = [
@@ -157,13 +251,25 @@ export const THEME_OPTIONS = [
 ] as const;
 
 type ThemeContextValue = { theme: ThemeDefinition; tripTheme: TripThemeKey; source: 'auto' | 'manual' };
+
+function syncStyleFonts(href: string | undefined) {
+  let link = document.querySelector<HTMLLinkElement>('link[data-style-fonts]');
+  if (!href) { link?.remove(); return; }
+  if (!link) {
+    link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.dataset.styleFonts = '';
+    document.head.appendChild(link);
+  }
+  if (link.getAttribute('href') !== href) link.href = href;
+}
 const ThemeContext = createContext<ThemeContextValue>({ theme: TRIP_THEMES.japan_washi, tripTheme: 'japan_washi', source: 'auto' });
 
 export function useTripTheme() {
   return useContext(ThemeContext);
 }
 
-function isThemeKey(value: unknown): value is TripThemeKey {
+function isThemeKey(value: unknown): value is AppThemeKey {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TRIP_THEMES, value);
 }
 
@@ -192,6 +298,9 @@ export function TripThemeProvider({ state, ready = true, children }: { state: Ap
     root.dataset.colorScheme = theme.scheme;
     root.dataset.themeRegion = theme.region.label;
     root.classList.toggle('dark', theme.scheme === 'dark');
+    if (theme.kit) root.dataset.appStyle = theme.kit.style;
+    else delete root.dataset.appStyle;
+    syncStyleFonts(theme.kit?.fonts);
     // Brief class so CSS can ease color/background/border without animating every keystroke.
     if (previousTheme && previousTheme !== theme.id) {
       root.classList.add('theme-switching');

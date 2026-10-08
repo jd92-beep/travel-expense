@@ -18,6 +18,7 @@ import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
 import { TuringBackdrop } from './components/TuringBackdrop';
+import { KitAmbient } from './theme/kit/KitAmbient';
 import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, usableSnapshot, type CurrencySnapshot } from './lib/currency';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffectsTier } from './lib/performance';
@@ -571,6 +572,7 @@ export function App() {
     <>
       <HyperframeBackground />
       <TuringBackdrop />
+      <KitAmbient />
       {showGuide && (
         <Suspense fallback={null}>
           <WelcomeGuidePopup

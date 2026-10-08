@@ -1,0 +1,1450 @@
+/*
+ * Style themes. Region themes (themes.css) only swap colour; a style theme sets
+ * html[data-app-style] and rebuilds the component grammar: card shape and depth,
+ * button press physics, field shape, chips, headings, page surface, header and dock.
+ * Colours still come from --theme-* (tripTheme.tsx); this file owns shape and behaviour.
+ *
+ * Specificity: `:root[data-app-style][data-app-theme][data-color-scheme] .x` (0,5,0) beats the
+ * (0,3,1) !important colour layer in themes.css, so every override here also needs !important.
+ */
+
+/* ------------------------------------------------------------------ shared kit */
+:root[data-app-style][data-app-theme][data-color-scheme] {
+  --st-ink: var(--theme-text);
+  --st-radius: 16px;
+  --st-btn-radius: 12px;
+  --st-chip-radius: 999px;
+  --st-field-radius: 12px;
+  --st-card-border: 1px solid var(--theme-border);
+  --st-card-shadow: none;
+  --st-card-bg: var(--theme-card);
+  --st-btn-shadow: none;
+  --st-btn-shadow-press: none;
+  --st-btn-press: scale(.97);
+  --st-ease: cubic-bezier(.2, .8, .2, 1);
+  --st-dur: 160ms;
+  --st-row-rule: 1px solid var(--theme-border);
+  --st-select: color-mix(in srgb, var(--theme-accent) 28%, transparent);
+
+  & body,
+  & .app-shell,
+  & .app-shell :is(button, input, select, textarea) {
+    font-family: var(--trip-font-body) !important;
+  }
+
+  & ::selection { background: var(--st-select); color: var(--theme-text); }
+  & body { caret-color: var(--theme-accent); scrollbar-color: color-mix(in srgb, var(--theme-text) 35%, transparent) transparent; }
+
+  /* Region art and glass decoration belong to the colour themes; the kit draws its own world. */
+  & .hyperframe-background,
+  & .turing-backdrop,
+  & .japanese-sun-decor,
+  & .japanese-sakura-decor,
+  & .compact-mobile-header > svg.absolute,
+  & .topbar > svg.absolute,
+  & .glass-card > [class~='-z-20'],
+  & .timeline-command-texture,
+  & .timeline-command-wash {
+    display: none !important;
+  }
+
+  /* The page surface lives on body so KitAmbient (fixed, z 0) can drift between it and the shell. */
+  & body {
+    background: var(--st-page) !important;
+    background-attachment: fixed !important;
+  }
+  & .app-shell {
+    position: relative;
+    z-index: 1;
+    background: transparent !important;
+  }
+  & .lock-screen {
+    background: var(--st-page) !important;
+  }
+
+  & .japanese-washi-bg { background: transparent !important; }
+  /* The desktop topbar's aurora gradient fades into dark or saturated kit headers; kits set a solid title ink. */
+  & .topbar .animate-aurora {
+    background-image: none !important;
+    -webkit-text-fill-color: var(--st-title-ink, var(--theme-text)) !important;
+    color: var(--st-title-ink, var(--theme-text)) !important;
+    animation: none !important;
+  }
+
+  & :is(.content h1, .content h2, .content h3, .accordion-title, .compact-mobile-heading h1, .topbar h1, .stats-command-title, .timeline-command-title) {
+    font-family: var(--trip-font-display) !important;
+    background-image: none;
+    -webkit-background-clip: border-box !important;
+    background-clip: border-box !important;
+    -webkit-text-fill-color: currentColor !important;
+    color: var(--st-heading-ink, var(--theme-text)) !important;
+  }
+
+  & :is(.glass-card, .card, .accordion-card, .metric-card, .scan-visa, .scan-ledger, .modal, .modal-sheet, .trip-confirm-modal, .receipt-delete-confirm, .toast, .lock-panel, .compact-login-panel, .timeline-command, .wx-station) {
+    background: var(--st-card-bg) !important;
+    border: var(--st-card-border) !important;
+    border-radius: var(--st-radius) !important;
+    box-shadow: var(--st-card-shadow) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  & :is(.glass-card, .card, .accordion-card)::before,
+  & :is(.glass-card, .card, .accordion-card)::after {
+    content: none;
+    background: none;
+  }
+
+  & :is(.primary, .secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .compact-login-primary, .compact-login-google, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    border-radius: var(--st-btn-radius) !important;
+    box-shadow: var(--st-btn-shadow) !important;
+    backdrop-filter: none !important;
+    transition: transform var(--st-dur) var(--st-ease), box-shadow var(--st-dur) var(--st-ease), background-color var(--st-dur) ease, filter var(--st-dur) ease !important;
+  }
+
+  & :is(.primary, .secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .compact-login-primary, .compact-login-google, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn):active:not(:disabled) {
+    transform: var(--st-btn-press) !important;
+    box-shadow: var(--st-btn-shadow-press) !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border-radius: var(--st-chip-radius) !important;
+    backdrop-filter: none !important;
+  }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    border-radius: var(--st-field-radius) !important;
+    box-shadow: var(--st-field-shadow, none) !important;
+  }
+
+  /* Inset panels inside cards (strips, mini charts, toggles) follow the kit instead of the washi cream. */
+  & :is(.preview-dashboard-currency, .preview-budget-currency, .preview-dashboard-budget-strip, .preview-dashboard-weather-mini, .preview-dashboard-today-chart, .preview-budget-reminder, .preview-budget-selected-day, .stats-story-card, .empty-state, .preview-timeline-date, .timeline-live-card, .timeline-preview-date-badge, .timeline-trip-days, .action-sheet, .wx-state, .top10-toggle, .stats-switch) {
+    background: var(--st-inset-bg, var(--theme-surface)) !important;
+    border: var(--st-inset-border, 1px solid var(--theme-border)) !important;
+    border-radius: var(--st-inset-radius, 12px) !important;
+    box-shadow: var(--st-inset-shadow, none) !important;
+    backdrop-filter: none !important;
+  }
+
+  & :is(.preview-dashboard-currency, .preview-budget-currency, .top10-toggle) button:not(.is-active, .active) {
+    background: transparent !important;
+    color: var(--theme-text) !important;
+    box-shadow: none !important;
+  }
+  & :is(.preview-dashboard-currency, .preview-budget-currency, .top10-toggle) :is(.is-active, .active) {
+    background: var(--st-toggle-on, var(--theme-accent)) !important;
+    color: var(--st-toggle-ink, var(--theme-on-accent)) !important;
+    border-radius: var(--st-toggle-radius, var(--st-btn-radius)) !important;
+    box-shadow: none !important;
+  }
+
+  & :is(.pill, .status-pill, .timeline-day-number, .timeline-command-seal, .preview-dashboard-ring-copy, .spending-compass-copy) {
+    font-family: var(--trip-font-body) !important;
+  }
+
+  /* On wide layouts the filter "button" is a label wrapping a visible select: keep the select as the only box. */
+  @media (min-width: 768px) {
+    & .history-filter-deck.history-filters > .history-filter-button:has(select) {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+      clip-path: none !important;
+    }
+  }
+
+  & .search-field :is(input, input:focus) {
+    background: transparent !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  & :is(.receipt-row, .history-ledger-row, .dashboard-compact-recent-row, .rank-row, .dashboard-compact-itinerary-row) {
+    border: 0 !important;
+    border-bottom: var(--st-row-rule) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  & .receipt-row::after { content: none !important; background: none !important; }
+
+  & :is(.receipt-row, .history-ledger-row, .dashboard-compact-recent-row, .rank-row, .dashboard-compact-itinerary-row):last-child {
+    border-bottom-color: transparent !important;
+  }
+
+  & .app-floating-dock-mobile,
+  & .app-floating-dock-desktop {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  & .compact-mobile-header,
+  & .topbar {
+    backdrop-filter: none !important;
+  }
+}
+
+/* Dark kits: several washi-era components hard-code dark ink; re-ink them from the theme. */
+:root[data-app-style][data-app-theme][data-color-scheme='dark'] {
+  & :is(.dashboard-trip-switcher span, .dashboard-compact-itinerary-main strong, .dashboard-compact-recent-main strong, .dashboard-compact-recent-amount strong, .preview-dashboard-today-chart-text strong, .preview-dashboard-weather-mini, .preview-timeline-date :is(span, small, em), .preview-timeline-copy :is(span, strong), .timeline-live-card b, .timeline-title, .timeline-now, .stats-story-card strong, .budget-pace-day small, .preview-budget-reminder span, .preview-budget-total button, .settings-screen .accordion-summary span) {
+    color: var(--theme-text) !important;
+  }
+
+  & :is(.dashboard-compact-itinerary-main :is(span, small), .dashboard-compact-recent-main span, .dashboard-compact-recent-amount span, .preview-dashboard-budget-strip span, .preview-dashboard-today-chart :is(span, small), .preview-timeline-copy small, .timeline-live-card :is(em, small), .preview-timeline-stats :is(span, b), .stats-story-card :is(span, small), .timeline-day-date-primary, .history-health-marker, .spending-compass-copy :is(span, small), .budget-pace small, .content p.text-slate-500, .content .text-slate-400, .content .text-slate-500) {
+    color: var(--theme-muted) !important;
+  }
+
+  & :is(.preview-dashboard-budget-strip :is(strong, small), .spending-compass-copy .ticker-money, .rank-row b) {
+    color: var(--theme-accent) !important;
+  }
+
+  & :is(.today-itinerary-card .uppercase, .preview-budget-selected-day b, .budget-pace b) { color: var(--theme-muted) !important; }
+  & .today-itinerary-card .flex > span:not(.uppercase), & .timeline-time span { color: var(--theme-accent) !important; }
+  & :is(.preview-timeline-date strong, .timeline-preview-date-badge strong) { color: var(--theme-status-danger) !important; }
+  & :is(.timeline-preview-date-badge :is(small, em), .timeline-day-number, .timeline-trip-days) { color: var(--theme-status-info) !important; }
+  & :is(.history-health-marker, .timeline-day-number) { background: var(--st-inset-bg, var(--theme-surface)) !important; }
+}
+
+/* ============================================================ 手繪筆記 · sketch */
+:root[data-app-style='sketch_notebook'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: transparent;
+  --st-inset-border: 1.5px dashed rgba(38, 37, 35, .5);
+  --st-inset-radius: 12px 5px 14px 6px / 6px 14px 5px 12px;
+  --st-toggle-on: rgba(255, 214, 64, .75);
+  --st-toggle-ink: #262523;
+  --st-ink: #262523;
+  --st-page:
+    linear-gradient(90deg, transparent 34px, rgba(201, 60, 44, .32) 34px 35.5px, transparent 35.5px),
+    repeating-linear-gradient(180deg, transparent 0 31px, rgba(36, 87, 166, .12) 31px 32px),
+    var(--theme-canvas);
+  --st-radius: 22px 7px 18px 9px / 9px 18px 7px 22px;
+  --st-btn-radius: 14px 5px 15px 6px / 6px 15px 5px 14px;
+  --st-chip-radius: 22px 16px 24px 14px / 16px 24px 14px 22px;
+  --st-field-radius: 0;
+  --st-card-border: 2px solid var(--st-ink);
+  --st-card-shadow: 4px 5px 0 -1px rgba(38, 37, 35, .18);
+  --st-btn-shadow: 2px 3px 0 var(--st-ink);
+  --st-btn-shadow-press: 0 0 0 var(--st-ink);
+  --st-btn-press: translate(2px, 3px);
+  --st-row-rule: 1.5px dashed rgba(38, 37, 35, .35);
+  --st-select: rgba(255, 214, 64, .55);
+  --st-highlight: rgba(255, 214, 64, .62);
+  --st-dur: 110ms;
+
+  & .content { padding-left: 6px; }
+
+  /* Cards: inked paper slips, each pinned by a strip of tape and laid down slightly off-square. */
+  & :is(.glass-card, .card, .accordion-card) { position: relative; }
+  & .stack > :nth-child(odd) :is(.glass-card, .card, .accordion-card),
+  & .stack > :nth-child(odd):is(.glass-card, .card, .accordion-card) { rotate: -.35deg; }
+  & .stack > :nth-child(even) :is(.glass-card, .card, .accordion-card),
+  & .stack > :nth-child(even):is(.glass-card, .card, .accordion-card) { rotate: .4deg; }
+
+  & :is(.glass-card, .card, .accordion-card, .scan-visa, .scan-ledger)::after {
+    content: '';
+    position: absolute;
+    z-index: 30;
+    top: 9px;
+    left: -18px;
+    width: 76px;
+    height: 20px;
+    background: rgba(250, 210, 80, .55);
+    border-left: 2px dotted rgba(255, 255, 255, .6);
+    border-right: 2px dotted rgba(255, 255, 255, .6);
+    rotate: -38deg;
+    pointer-events: none;
+  }
+  & .stack > :nth-child(even) :is(.glass-card, .card, .accordion-card)::after {
+    left: auto;
+    right: -18px;
+    rotate: 38deg;
+    background: rgba(132, 196, 230, .5);
+  }
+
+  /* Headings carry a highlighter swipe instead of colour. */
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title, .timeline-day-title) {
+    background-image: linear-gradient(176deg, transparent 52%, var(--st-highlight) 52% 90%, transparent 90%) !important;
+    background-repeat: no-repeat !important;
+    background-size: 100% 100% !important;
+    width: fit-content;
+    padding-inline: .12em;
+    font-weight: 700 !important;
+  }
+
+  & .content :is(h1, h2, h3) { letter-spacing: 0 !important; }
+
+  & .primary {
+    background: var(--theme-accent) !important;
+    border: 2px solid var(--st-ink) !important;
+    color: #fff !important;
+  }
+
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: #FFFEFA !important;
+    border: 2px solid var(--st-ink) !important;
+    color: var(--st-ink) !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 1.5px solid var(--st-ink) !important;
+    background: #FFFEFA !important;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true'], .is-active.pill) {
+    background: var(--st-highlight) !important;
+    color: var(--st-ink) !important;
+  }
+
+  /* Fields are fill-in-the-blank rules, like the lines on the page. */
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: rgba(255, 254, 250, .7) !important;
+    border: 0 !important;
+    border-bottom: 2px solid var(--st-ink) !important;
+  }
+  & :is(input, select, textarea):focus { border-bottom-color: var(--theme-focus) !important; background: rgba(36, 87, 166, .06) !important; }
+  & textarea { border: 2px solid var(--st-ink) !important; border-radius: 10px 4px 12px 5px / 5px 12px 4px 10px !important; }
+
+  /* Header: page title written above a pen stroke. */
+  & .compact-mobile-header,
+  & .topbar {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  & .compact-mobile-header::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    inset: auto 16px 2px 16px !important;
+    width: auto !important;
+    height: 8px !important;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 8' preserveAspectRatio='none'%3E%3Cpath d='M1 5.5C18 2.5 34 6.5 52 4S88 2 119 4.5' fill='none' stroke='%23262523' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat !important;
+    opacity: .85 !important;
+  }
+  & .compact-mobile-heading h1 { font-size: 1.45rem !important; }
+
+  /* Dock: a torn-off strip of the notebook; the active tab gets circled in pen. */
+  & .app-floating-dock-mobile {
+    background: #FFFEFA !important;
+    border: 0 !important;
+    border-top: 2px solid var(--st-ink) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -6px 0 -4px rgba(38, 37, 35, .12) !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) {
+    color: var(--theme-accent) !important;
+    background: transparent !important;
+  }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan)::before {
+    content: '';
+    position: absolute;
+    inset: 2px 3px;
+    border: 2px solid var(--theme-accent);
+    border-radius: 55% 45% 50% 48% / 52% 48% 55% 45%;
+    rotate: -4deg;
+    pointer-events: none;
+  }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 2.5px solid var(--st-ink) !important;
+    border-radius: 52% 48% 46% 54% / 50% 54% 46% 50% !important;
+    box-shadow: 3px 4px 0 var(--st-ink) !important;
+    rotate: -5deg;
+  }
+  & .app-floating-dock-mobile .dock-item-scan:active { translate: 2px 3px; box-shadow: 0 0 0 var(--st-ink) !important; }
+
+  & .compact-desktop-rail { background: #FFFEFA !important; border-right: 2px solid var(--st-ink) !important; box-shadow: none !important; }
+  & .compact-rail-button.active { box-shadow: none !important; background: var(--st-highlight) !important; border-radius: var(--st-btn-radius) !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  & .bar-track { border: 1.5px solid var(--st-ink); border-radius: 6px 2px 7px 3px; background: transparent !important; }
+  & .scan-stamp-shutter { rotate: -3deg; }
+}
+
+/* ============================================================ 棉花糖雲 · marshmallow */
+:root[data-app-style='marshmallow_cloud'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: #F8F5FF;
+  --st-inset-border: 0 solid transparent;
+  --st-inset-radius: 24px;
+  --st-inset-shadow: inset 0 2px 8px rgba(116, 97, 224, .1);
+  --st-toggle-on: linear-gradient(180deg, #FFD6E7, #FFB4D3);
+  --st-toggle-ink: #4B3D63;
+  --st-page:
+    radial-gradient(55% 32% at 8% 4%, #FFDDEA 0, transparent 72%),
+    radial-gradient(48% 30% at 100% 26%, #E4DDFF 0, transparent 72%),
+    radial-gradient(60% 34% at 20% 78%, #DCF0FF 0, transparent 72%),
+    radial-gradient(42% 26% at 92% 96%, #FFE9D6 0, transparent 72%),
+    var(--theme-canvas);
+  --st-radius: 30px;
+  --st-btn-radius: 999px;
+  --st-field-radius: 999px;
+  --st-card-border: 0 solid transparent;
+  --st-card-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, .95),
+    inset 0 -10px 18px -12px rgba(155, 134, 214, .28),
+    0 22px 40px -22px rgba(116, 97, 224, .42),
+    0 6px 14px -8px rgba(194, 69, 127, .16);
+  --st-btn-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, .85),
+    inset 0 -4px 8px -4px rgba(155, 134, 214, .35),
+    0 10px 18px -12px rgba(116, 97, 224, .55);
+  --st-btn-shadow-press:
+    inset 0 3px 8px rgba(155, 134, 214, .35),
+    0 4px 8px -6px rgba(116, 97, 224, .5);
+  --st-btn-press: scale(.93);
+  --st-ease: cubic-bezier(.34, 1.56, .64, 1);
+  --st-dur: 260ms;
+  --st-row-rule: 1px solid #F1ECFF;
+  --st-field-shadow: inset 0 3px 8px rgba(116, 97, 224, .12);
+  --st-select: #FFD3E5;
+
+  font-synthesis: none;
+
+  & .app-shell { font-synthesis: none; }
+  & .stack { gap: 20px !important; }
+  & :is(.glass-card, .card, .accordion-card) { transition: translate 320ms var(--st-ease), box-shadow 320ms ease !important; }
+  @media (hover: hover) {
+    & :is(.glass-card, .card, .accordion-card):hover { translate: 0 -3px; }
+  }
+
+  & .content :is(h1, h2, h3) { font-weight: 600 !important; letter-spacing: 0 !important; }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2) { color: #6A55C8 !important; }
+
+  & .primary {
+    background: linear-gradient(180deg, #FFD6E7, #FFB4D3) !important;
+    color: #4B3D63 !important;
+    border: 0 !important;
+  }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: linear-gradient(180deg, #FFFFFF, #F3EFFF) !important;
+    border: 0 !important;
+    color: #4B3D63 !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 0 !important;
+    background: #F2EDFF !important;
+    box-shadow: inset 0 1px 0 #fff, 0 4px 10px -6px rgba(116, 97, 224, .45) !important;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) {
+    background: linear-gradient(180deg, #FFD6E7, #FFB4D3) !important;
+    color: #4B3D63 !important;
+  }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, .search-field) {
+    background: #F6F2FF !important;
+    border: 0 !important;
+  }
+  & textarea { background: #F6F2FF !important; border: 0 !important; border-radius: 24px !important; }
+  & :is(input, select, textarea):focus { box-shadow: inset 0 3px 8px rgba(116, 97, 224, .12), 0 0 0 4px rgba(116, 97, 224, .22) !important; }
+
+  /* Header floats as a soft cloud with the title centred over the page. */
+  & .compact-mobile-header {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  & .compact-mobile-heading { text-align: center; }
+  & .compact-mobile-heading h1 { font-size: 1.5rem !important; color: #6A55C8 !important; }
+  & .topbar { background: transparent !important; border: 0 !important; box-shadow: none !important; }
+
+  /* Dock: a floating marshmallow capsule, inset from every edge. */
+  & .app-floating-dock-mobile {
+    width: auto !important;
+    margin: 0 12px 10px !important;
+    border: 0 !important;
+    border-radius: 999px !important;
+    background: rgba(255, 255, 255, .94) !important;
+    box-shadow:
+      inset 0 2px 0 #fff,
+      inset 0 -8px 16px -10px rgba(155, 134, 214, .35),
+      0 22px 40px -16px rgba(116, 97, 224, .45) !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { background: transparent !important; border: 0 !important; transition: transform 260ms var(--st-ease) !important; }
+  & .app-floating-dock-mobile button:not(.dock-item-scan):active { transform: scale(.88); }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) { color: #6A55C8 !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) svg {
+    background: #EFE9FF;
+    border-radius: 999px;
+    padding: 4px;
+    box-sizing: content-box;
+    margin: -4px;
+  }
+  & .app-floating-dock-mobile .dock-item-scan {
+    width: min(64px, calc((100vw - 52px) / 7)) !important;
+    height: min(64px, calc((100vw - 52px) / 7)) !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    border: 0 !important;
+    background: radial-gradient(70% 70% at 35% 28%, #FFE3EE 0, #FFB4D3 70%, #F58FBB 100%) !important;
+    color: #4B3D63 !important;
+    box-shadow:
+      inset 0 3px 0 rgba(255, 255, 255, .8),
+      inset 0 -6px 12px -6px rgba(194, 69, 127, .4),
+      0 16px 26px -12px rgba(194, 69, 127, .55) !important;
+    transition: transform 300ms var(--st-ease) !important;
+  }
+  & .app-floating-dock-mobile .dock-item-scan:active { transform: scale(.88); }
+
+  & .compact-desktop-rail { background: rgba(255, 255, 255, .8) !important; border-right: 0 !important; box-shadow: 18px 0 40px -28px rgba(116, 97, 224, .5) !important; }
+  & .compact-rail-button { border-radius: 999px !important; }
+  & .compact-rail-button.active { background: #F2EDFF !important; box-shadow: inset 0 1px 0 #fff, 0 8px 18px -10px rgba(116, 97, 224, .5) !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  & .bar-track { border-radius: 999px !important; background: #F1ECFF !important; box-shadow: inset 0 2px 4px rgba(116, 97, 224, .15); }
+  & .bar-track > * { border-radius: 999px !important; }
+}
+
+/* ============================================================ 童趣積木 · kids */
+:root[data-app-style='kids_blocks'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: #FFF8E1;
+  --st-inset-border: 2.5px solid #1B2340;
+  --st-inset-radius: 14px;
+  --st-toggle-on: #1F6FEB;
+  --st-toggle-ink: #FFFFFF;
+  --st-toggle-radius: 10px;
+  --st-ink: #1B2340;
+  --st-page:
+    radial-gradient(circle at 12% 18%, rgba(229, 56, 59, .16) 0 18px, transparent 19px),
+    radial-gradient(circle at 78% 8%, rgba(31, 111, 235, .14) 0 26px, transparent 27px),
+    radial-gradient(circle at 88% 58%, rgba(35, 160, 80, .14) 0 16px, transparent 17px),
+    radial-gradient(circle at 30% 70%, rgba(255, 194, 51, .3) 0 22px, transparent 23px),
+    var(--theme-canvas);
+  --st-radius: 22px;
+  --st-btn-radius: 16px;
+  --st-chip-radius: 14px;
+  --st-field-radius: 14px;
+  --st-card-border: 3px solid var(--st-ink);
+  --st-card-shadow: 0 6px 0 var(--st-ink);
+  --st-btn-shadow: 0 5px 0 var(--st-ink);
+  --st-btn-shadow-press: 0 1px 0 var(--st-ink);
+  --st-btn-press: translateY(4px);
+  --st-ease: cubic-bezier(.3, 1.6, .5, 1);
+  --st-dur: 120ms;
+  --st-row-rule: 2px dashed rgba(27, 35, 64, .22);
+  --st-select: #FFE08A;
+
+  & body { background-size: 260px 260px !important; background-repeat: repeat !important; }
+  & .stack { gap: 20px !important; }
+
+  /* Each card is a toy block with its own coloured cap, cycling red / blue / yellow / green. */
+  & .stack > :nth-child(4n + 1) { --kid-cap: #E5383B; }
+  & .stack > :nth-child(4n + 2) { --kid-cap: #1F6FEB; }
+  & .stack > :nth-child(4n + 3) { --kid-cap: #FFC233; }
+  & .stack > :nth-child(4n) { --kid-cap: #23A050; }
+  & :is(.glass-card, .card, .accordion-card, .scan-visa, .scan-ledger) {
+    border-top: 14px solid var(--kid-cap, #FFC233) !important;
+    margin-bottom: 6px;
+  }
+
+  & .content :is(h1, h2, h3) { font-weight: 800 !important; letter-spacing: 0 !important; }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3) { font-size: 1.22em !important; }
+  & :is(.ticker-money, .amount, .history-ledger-amount strong, .dashboard-compact-recent-amount) { font-family: var(--trip-font-display) !important; font-weight: 800 !important; }
+
+  & .primary { background: var(--theme-accent) !important; border: 3px solid var(--st-ink) !important; color: #fff !important; font-weight: 900 !important; }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: #fff !important;
+    border: 3px solid var(--st-ink) !important;
+    color: var(--st-ink) !important;
+    font-weight: 800 !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 2.5px solid var(--st-ink) !important;
+    background: #fff !important;
+    font-weight: 800 !important;
+  }
+  & .history-chip { box-shadow: 0 3px 0 var(--st-ink) !important; }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: #1F6FEB !important; color: #fff !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: #fff !important;
+    border: 3px solid var(--st-ink) !important;
+  }
+  & :is(input, select, textarea):focus { background: #FFF8D6 !important; }
+
+  /* Header: a sunny banner with a chunky outline. */
+  & .compact-mobile-header {
+    background: #FFC233 !important;
+    border: 0 !important;
+    border-bottom: 3px solid var(--st-ink) !important;
+    box-shadow: 0 4px 0 rgba(27, 35, 64, .16) !important;
+  }
+  & .compact-mobile-heading h1 { font-size: 1.6rem !important; font-weight: 900 !important; }
+  & .compact-mobile-heading p { color: var(--st-ink) !important; }
+  & .topbar { background: #FFC233 !important; border: 3px solid var(--st-ink) !important; box-shadow: 0 5px 0 var(--st-ink) !important; }
+
+  /* Dock: every tab is its own coloured block; the pressed-in one fills with its colour. */
+  & .app-floating-dock-mobile {
+    background: #fff !important;
+    border: 0 !important;
+    border-top: 3px solid var(--st-ink) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  & .app-floating-dock-mobile button:nth-of-type(7n + 1) { --kid-tab: #E5383B; }
+  & .app-floating-dock-mobile button:nth-of-type(7n + 2) { --kid-tab: #1F6FEB; }
+  & .app-floating-dock-mobile button:nth-of-type(7n + 3) { --kid-tab: #23A050; }
+  & .app-floating-dock-mobile button:nth-of-type(7n + 5) { --kid-tab: #8E44C9; }
+  & .app-floating-dock-mobile button:nth-of-type(7n + 6) { --kid-tab: #E07A00; }
+  & .app-floating-dock-mobile button:nth-of-type(7n) { --kid-tab: #0E8A8A; }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { border-radius: 14px !important; border: 2.5px solid transparent !important; transition: transform 120ms var(--st-ease) !important; }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) svg { color: var(--kid-tab, var(--st-ink)); stroke-width: 2.6; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) {
+    background: var(--kid-tab, #1F6FEB) !important;
+    border-color: var(--st-ink) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 0 var(--st-ink) !important;
+    translate: 0 -3px;
+  }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) svg { color: #fff; }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 3px solid var(--st-ink) !important;
+    border-radius: 20px !important;
+    box-shadow: 0 6px 0 var(--st-ink) !important;
+  }
+  & .app-floating-dock-mobile .dock-item-scan:active { translate: 0 5px; box-shadow: 0 1px 0 var(--st-ink) !important; }
+
+  & .compact-desktop-rail { background: #fff !important; border-right: 3px solid var(--st-ink) !important; box-shadow: none !important; }
+  & .compact-rail-button { border-radius: 14px !important; }
+  & .compact-rail-button.active { background: #FFC233 !important; color: var(--st-ink) !important; box-shadow: inset 0 0 0 3px var(--st-ink), 0 4px 0 var(--st-ink) !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  & .bar-track { border: 2.5px solid var(--st-ink) !important; border-radius: 999px !important; background: #fff !important; height: 16px !important; }
+  & .bar-track > * { border-radius: 999px !important; }
+}
+
+/* ============================================================ 可愛貼紙 · kawaii */
+:root[data-app-style='kawaii_sticker'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: #FFF5F9;
+  --st-inset-border: 1.5px dashed #EE9BC0;
+  --st-inset-radius: 18px;
+  --st-ink: #5A2F52;
+  --st-page:
+    radial-gradient(circle, #FFCFE2 2.6px, transparent 3.2px) 0 0 / 26px 26px,
+    radial-gradient(circle, #E6DAFF 2px, transparent 2.6px) 13px 13px / 26px 26px,
+    var(--theme-canvas);
+  --st-radius: 26px;
+  --st-btn-radius: 999px;
+  --st-field-radius: 18px;
+  --st-card-border: 0 solid transparent;
+  --st-card-shadow:
+    0 0 0 5px #FFFFFF,
+    0 0 0 7px rgba(232, 140, 182, .55),
+    0 14px 24px -10px rgba(201, 58, 118, .38);
+  --st-btn-shadow: inset 0 2px 0 rgba(255, 255, 255, .55), 0 4px 0 #A42E62, 0 10px 16px -8px rgba(201, 58, 118, .55);
+  --st-btn-shadow-press: inset 0 2px 0 rgba(255, 255, 255, .4), 0 1px 0 #A42E62;
+  --st-btn-press: translateY(3px);
+  --st-ease: cubic-bezier(.34, 1.56, .64, 1);
+  --st-dur: 200ms;
+  --st-row-rule: 2px dotted #F6B8CF;
+  --st-select: #FFD0E3;
+  --st-heading-ink: #C93A76;
+
+  font-synthesis: none;
+
+  & body { background-repeat: repeat !important; }
+  & .stack { gap: 24px !important; padding-inline: 4px; }
+
+  /* Die-cut stickers: white margin ring, dashed stitching just inside, a bow pinned at the top. */
+  & :is(.glass-card, .card, .accordion-card, .scan-visa, .scan-ledger) {
+    position: relative;
+    outline: 2px dashed rgba(232, 140, 182, .6) !important;
+    outline-offset: -8px !important;
+  }
+  & :is(.glass-card, .card, .accordion-card)::after {
+    content: '';
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    left: 50%;
+    width: 34px;
+    height: 16px;
+    translate: -50% 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 16'%3E%3Cpath d='M17 8C12 2 3 -1 2 5s6 10 15 3Zm0 0c5-6 14-9 15-3s-6 10-15 3Z' fill='%23F48FB8' stroke='%23C93A76' stroke-width='1.4' stroke-linejoin='round'/%3E%3Ccircle cx='17' cy='8' r='3.2' fill='%23C93A76'/%3E%3C/svg%3E") center / contain no-repeat;
+    pointer-events: none;
+  }
+
+  & .content :is(h1, h2, h3) { letter-spacing: 0 !important; font-weight: 400 !important; }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3) {
+    font-size: 1.15em !important;
+  }
+
+  & .primary {
+    background: linear-gradient(180deg, #F27BAE, #C93A76) !important;
+    border: 0 !important;
+    color: #fff !important;
+  }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: #fff !important;
+    border: 2px solid #F6B8CF !important;
+    color: var(--st-ink) !important;
+    box-shadow: 0 3px 0 #F6B8CF !important;
+  }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn):active { box-shadow: 0 0 0 #F6B8CF !important; }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 1.5px dashed #EE9BC0 !important;
+    background: #FFE6F0 !important;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: #C93A76 !important; border-style: solid !important; border-color: #C93A76 !important; color: #fff !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: #FFF8FB !important;
+    border: 2px solid #F6B8CF !important;
+  }
+  & :is(input, select, textarea):focus { border-color: #8A5CD6 !important; box-shadow: 0 0 0 4px rgba(138, 92, 214, .18) !important; }
+
+  /* Header: a scalloped sticker strip hanging from the top edge. */
+  & .compact-mobile-header {
+    background: #fff !important;
+    border: 0 !important;
+    border-radius: 0 0 28px 28px !important;
+    box-shadow: 0 0 0 4px #fff, 0 3px 0 5px rgba(232, 140, 182, .45), 0 14px 24px -12px rgba(201, 58, 118, .35) !important;
+    margin-bottom: 10px;
+  }
+  & .compact-mobile-heading h1 { color: #C93A76 !important; font-size: 1.45rem !important; }
+  & .topbar { background: #fff !important; border: 0 !important; border-radius: 26px !important; box-shadow: var(--st-card-shadow) !important; }
+
+  /* Dock: a stitched sticker capsule; the active tab gets a pink bubble that wiggles once. */
+  & .app-floating-dock-mobile {
+    width: auto !important;
+    margin: 0 10px 10px !important;
+    background: #fff !important;
+    border: 0 !important;
+    border-radius: 30px !important;
+    outline: 2px dashed rgba(232, 140, 182, .6);
+    outline-offset: -7px;
+    box-shadow: 0 0 0 4px #fff, 0 0 0 6px rgba(232, 140, 182, .5), 0 16px 26px -12px rgba(201, 58, 118, .45) !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { background: transparent !important; border: 0 !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) { color: #C93A76 !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) svg {
+    background: #FFE0EC;
+    border-radius: 999px;
+    padding: 5px;
+    margin: -5px;
+    box-sizing: content-box;
+  }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 0 !important;
+    background: linear-gradient(180deg, #F27BAE, #C93A76) !important;
+    box-shadow: 0 0 0 4px #fff, 0 0 0 6px rgba(232, 140, 182, .6), 0 12px 22px -8px rgba(201, 58, 118, .6) !important;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) svg { animation: st-kawaii-wiggle 520ms var(--st-ease) 1; }
+    & .app-floating-dock-mobile .dock-item-scan:hover { animation: st-kawaii-wiggle 520ms var(--st-ease) 1; }
+  }
+
+  & .compact-desktop-rail { background: #fff !important; border-right: 2px dashed #F6B8CF !important; box-shadow: none !important; }
+  & .compact-rail-button { border-radius: 999px !important; }
+  & .compact-rail-button.active { background: #FFE0EC !important; box-shadow: none !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  & .bar-track { border-radius: 999px !important; background: #FFE6F0 !important; border: 1.5px dashed #EE9BC0; }
+  & .bar-track > * { border-radius: 999px !important; }
+}
+
+@keyframes st-kawaii-wiggle {
+  0% { rotate: 0deg; scale: 1; }
+  30% { rotate: -12deg; scale: 1.12; }
+  60% { rotate: 8deg; }
+  100% { rotate: 0deg; scale: 1; }
+}
+
+/* ============================================================ 賽博朋克 · cyberpunk */
+:root[data-app-style='cyberpunk_hud'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: rgba(5, 217, 232, .05);
+  --st-inset-border: 1px solid rgba(5, 217, 232, .25);
+  --st-inset-radius: 0;
+  --st-toggle-ink: #0A0A0F;
+  --st-ink: #FCEE0A;
+  --st-cut: 14px;
+  --st-chamfer: polygon(0 0, calc(100% - var(--st-cut)) 0, 100% var(--st-cut), 100% 100%, var(--st-cut) 100%, 0 calc(100% - var(--st-cut)));
+  --st-page:
+    radial-gradient(80% 45% at 100% 0%, rgba(255, 42, 109, .14), transparent 70%),
+    radial-gradient(70% 40% at 0% 100%, rgba(5, 217, 232, .12), transparent 70%),
+    linear-gradient(180deg, #0B0A14, #07070C);
+  --st-radius: 0;
+  --st-btn-radius: 0;
+  --st-chip-radius: 0;
+  --st-field-radius: 0;
+  --st-card-border: 1px solid rgba(5, 217, 232, .38);
+  --st-card-bg: linear-gradient(180deg, rgba(5, 217, 232, .07), transparent 46%), #12121C;
+  --st-card-shadow: none;
+  --st-btn-press: translate(1px, 1px);
+  --st-ease: steps(3, end);
+  --st-dur: 90ms;
+  --st-row-rule: 1px solid rgba(5, 217, 232, .18);
+  --st-select: #FCEE0A;
+
+  & ::selection { color: #0A0A0F; }
+
+  /* Scanlines across the whole display, under the UI's own contrast budget. */
+  & body::after {
+    content: '' !important;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483000 !important;
+    pointer-events: none !important;
+    background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .028) 0 1px, transparent 1px 3px) !important;
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  /* HUD panels: chamfered corners, a yellow bracket top-left, a cut edge top-right. */
+  & :is(.glass-card, .card, .accordion-card, .scan-visa, .scan-ledger, .timeline-command, .wx-station, .modal, .modal-sheet) {
+    clip-path: var(--st-chamfer);
+    position: relative;
+  }
+  & :is(.glass-card, .card, .accordion-card)::before {
+    content: '';
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    left: 0;
+    width: 18px;
+    height: 18px;
+    border-top: 3px solid #FCEE0A;
+    border-left: 3px solid #FCEE0A;
+    pointer-events: none;
+  }
+  & :is(.glass-card, .card, .accordion-card)::after {
+    content: '';
+    position: absolute;
+    z-index: 30;
+    top: 0;
+    right: 0;
+    width: var(--st-cut);
+    height: var(--st-cut);
+    background: linear-gradient(45deg, transparent calc(50% - 1.5px), #05D9E8 calc(50% - 1.5px) calc(50% + 1.5px), transparent calc(50% + 1.5px));
+    pointer-events: none;
+  }
+
+  & .content :is(h1, h2, h3),
+  & .accordion-title {
+    text-transform: uppercase;
+    letter-spacing: .06em !important;
+    font-weight: 700 !important;
+  }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title) {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title)::before {
+    content: '';
+    flex: none;
+    width: 7px;
+    height: 7px;
+    background: #FCEE0A;
+    box-shadow: 10px 0 0 -1px #FF2A6D;
+    margin-right: 8px;
+  }
+
+  & :is(.ticker-money, .amount, .history-ledger-amount strong, .dashboard-compact-recent-amount, .scan-mrz, .timeline-time) {
+    font-family: 'Share Tech Mono', ui-monospace, monospace !important;
+    letter-spacing: .02em;
+  }
+
+  & .primary {
+    background: #FCEE0A !important;
+    color: #0A0A0F !important;
+    border: 0 !important;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    font-weight: 700 !important;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  }
+  & .primary:active:not(:disabled) { background: #05D9E8 !important; }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: rgba(5, 217, 232, .06) !important;
+    border: 1px solid rgba(5, 217, 232, .6) !important;
+    color: #E9F4F4 !important;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    & :is(.primary, .secondary, .history-chip, .app-floating-dock-mobile button):hover { animation: st-glitch 260ms steps(2, end) 1; }
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 1px solid rgba(5, 217, 232, .5) !important;
+    background: rgba(5, 217, 232, .08) !important;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: #FCEE0A !important; border-color: #FCEE0A !important; color: #0A0A0F !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: #0A0A12 !important;
+    border: 0 !important;
+    border-bottom: 2px solid #05D9E8 !important;
+    color: #E9F4F4 !important;
+  }
+  & :is(input, select, textarea):focus { border-bottom-color: #FCEE0A !important; background: rgba(252, 238, 10, .05) !important; }
+
+  /* Header: status bar with hazard tape along its bottom edge. */
+  & .compact-mobile-header,
+  & .topbar {
+    background: #0A0A12 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    position: relative;
+    padding-bottom: 14px !important;
+  }
+  & .compact-mobile-header::after,
+  & .topbar::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    height: 6px !important;
+    background: repeating-linear-gradient(-45deg, #FCEE0A 0 8px, #0A0A0F 8px 16px) !important;
+    opacity: 1 !important;
+  }
+  & .compact-mobile-heading h1 { letter-spacing: .04em !important; }
+
+  /* Dock: hard full-width control bar; the active slot is a yellow chamfered block. */
+  & .app-floating-dock-mobile {
+    background: #0A0A12 !important;
+    border: 0 !important;
+    border-top: 2px solid #FCEE0A !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -10px 30px rgba(252, 238, 10, .08) !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { border-radius: 0 !important; background: transparent !important; border: 0 !important; color: #94A9AD !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) {
+    background: #FCEE0A !important;
+    color: #0A0A0F !important;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #FCEE0A !important;
+    color: #0A0A0F !important;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    box-shadow: none !important;
+    width: min(66px, calc((100vw - 16px) / 7)) !important;
+    min-width: 0 !important;
+  }
+  & .app-floating-dock-mobile .dock-item-scan:active { background: #05D9E8 !important; }
+
+  & .compact-desktop-rail { background: #0A0A12 !important; border-right: 1px solid rgba(5, 217, 232, .38) !important; box-shadow: none !important; }
+  & .compact-rail-button { border-radius: 0 !important; }
+  & .compact-rail-button.active { background: #FCEE0A !important; color: #0A0A0F !important; box-shadow: none !important; }
+  & .compact-rail-button.active .compact-rail-icon { color: #0A0A0F !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  & .bar-track { border-radius: 0 !important; background: rgba(5, 217, 232, .1) !important; border: 1px solid rgba(5, 217, 232, .35); }
+  & .bar-track > * { border-radius: 0 !important; }
+}
+
+@keyframes st-glitch {
+  0% { text-shadow: -2px 0 #FF2A6D, 2px 0 #05D9E8; translate: -1px 0; }
+  50% { text-shadow: 2px 0 #FF2A6D, -2px 0 #05D9E8; translate: 1px 0; }
+  100% { text-shadow: none; translate: 0 0; }
+}
+
+/* ============================================================ 像素冒險 · pixel */
+:root[data-app-style='pixel_quest'][data-app-theme][data-color-scheme] {
+  --st-inset-bg: #131D66;
+  --st-inset-border: 0 solid transparent;
+  --st-inset-radius: 0;
+  --st-inset-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55), inset 3px 3px 0 2px #0B1150;
+  --st-toggle-ink: #141432;
+  --st-ink: #FFFFFF;
+  --st-page:
+    conic-gradient(#1A1A40 25%, #141432 0 50%, #1A1A40 0 75%, #141432 0) 0 0 / 8px 8px,
+    #141432;
+  --st-radius: 6px;
+  --st-btn-radius: 0;
+  --st-chip-radius: 0;
+  --st-field-radius: 0;
+  --st-card-border: 0 solid transparent;
+  --st-card-bg: linear-gradient(180deg, #2C42C8 0%, #1C2A8A 52%, #131D66 100%);
+  --st-card-shadow:
+    inset 0 0 0 3px #FFFFFF,
+    inset 0 0 0 5px #0B1150,
+    0 0 0 3px #0B0B22,
+    6px 6px 0 3px rgba(0, 0, 0, .35);
+  --st-btn-shadow: inset -3px -3px 0 rgba(0, 0, 0, .35), inset 3px 3px 0 rgba(255, 255, 255, .45), 0 0 0 3px #0B0B22;
+  --st-btn-shadow-press: inset 3px 3px 0 rgba(0, 0, 0, .35), inset -3px -3px 0 rgba(255, 255, 255, .3), 0 0 0 3px #0B0B22;
+  --st-btn-press: translate(2px, 2px);
+  --st-ease: steps(2, end);
+  --st-dur: 80ms;
+  --st-row-rule: 2px dashed rgba(255, 255, 255, .22);
+  --st-select: #FFD23F;
+
+  -webkit-font-smoothing: none;
+  font-synthesis: none;
+
+  & ::selection { color: #141432; }
+  & body { background-repeat: repeat !important; }
+  & .stack { gap: 22px !important; padding-inline: 4px; }
+
+  & .content :is(h1, h2, h3) { letter-spacing: .02em !important; font-weight: 700 !important; }
+  & :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title) {
+    color: #FFD23F !important;
+    text-shadow: 2px 2px 0 #0B1150;
+  }
+
+  & .primary {
+    background: #FFD23F !important;
+    color: #141432 !important;
+    border: 0 !important;
+    font-weight: 700 !important;
+  }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: #3349CF !important;
+    color: #FFFFFF !important;
+    border: 0 !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 0 !important;
+    background: #16206B !important;
+    box-shadow: inset 0 0 0 2px #FFFFFF, 0 0 0 2px #0B0B22 !important;
+    color: #FFFFFF !important;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: #FFD23F !important; color: #141432 !important; box-shadow: inset -3px -3px 0 #C99A10, 0 0 0 2px #0B0B22 !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: #0B1150 !important;
+    border: 0 !important;
+    color: #FFFFFF !important;
+    box-shadow: inset 3px 3px 0 #05082E, 0 0 0 2px #FFFFFF !important;
+  }
+  & :is(input, select, textarea):focus { box-shadow: inset 3px 3px 0 #05082E, 0 0 0 3px #FFD23F !important; }
+  & .search-field input, & .search-field input:focus { box-shadow: none !important; }
+
+  /* Header: the top window of an RPG menu. */
+  & .compact-mobile-header,
+  & .topbar {
+    background: linear-gradient(180deg, #2C42C8, #1C2A8A) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: inset 0 -3px 0 #FFFFFF, inset 0 -5px 0 #0B1150, 0 3px 0 #0B0B22 !important;
+  }
+  & .compact-mobile-heading h1 { color: #FFFFFF !important; text-shadow: 2px 2px 0 #0B1150; }
+
+  /* Dock: a hotbar of square item slots; a gold cursor bobs over the selected slot. */
+  & .app-floating-dock-mobile {
+    background: #0B0B22 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: inset 0 3px 0 #FFFFFF, inset 0 5px 0 #2C42C8 !important;
+    gap: 4px !important;
+    padding-inline: 6px !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) {
+    border-radius: 0 !important;
+    border: 0 !important;
+    background: #1C2A8A !important;
+    color: #C9D1FF !important;
+    box-shadow: inset -2px -2px 0 rgba(0, 0, 0, .4), inset 2px 2px 0 rgba(255, 255, 255, .25) !important;
+  }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) {
+    background: #2C42C8 !important;
+    color: #FFD23F !important;
+    box-shadow: inset 0 0 0 3px #FFD23F !important;
+    overflow: visible !important;
+  }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan)::before {
+    content: '';
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    translate: -50% 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 7px solid #FFD23F;
+    pointer-events: none;
+  }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border-radius: 0 !important;
+    border: 0 !important;
+    background: #FFD23F !important;
+    color: #141432 !important;
+    box-shadow: inset -4px -4px 0 #C99A10, inset 4px 4px 0 #FFF0A8, 0 0 0 3px #0B0B22, 0 0 0 6px #FFFFFF !important;
+  }
+  & .app-floating-dock-mobile .dock-item-scan:active { box-shadow: inset 4px 4px 0 #C99A10, inset -4px -4px 0 #FFF0A8, 0 0 0 3px #0B0B22, 0 0 0 6px #FFFFFF !important; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan)::before { animation: st-pixel-bob 700ms steps(2, end) infinite; }
+  }
+
+  & .compact-desktop-rail { background: linear-gradient(180deg, #2C42C8, #131D66) !important; border-right: 0 !important; box-shadow: inset -3px 0 0 #FFFFFF, inset -5px 0 0 #0B1150 !important; }
+  & .compact-rail-button { border-radius: 0 !important; color: #FFFFFF !important; }
+  & .compact-rail-button.active { background: transparent !important; color: #FFD23F !important; box-shadow: inset 0 0 0 3px #FFD23F !important; }
+  & .compact-rail-button.active .compact-rail-icon { color: #FFD23F !important; }
+  & .compact-rail-button.active::after { background: none !important; }
+
+  /* HP-bar progress: square track, segmented fill. */
+  & .bar-track { border-radius: 0 !important; background: #0B1150 !important; box-shadow: 0 0 0 2px #FFFFFF; height: 12px !important; }
+  & .bar-track > * {
+    border-radius: 0 !important;
+    -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+    mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+  }
+}
+
+@keyframes st-pixel-bob {
+  0%, 100% { translate: -50% 0; }
+  50% { translate: -50% 3px; }
+}
+
+/* ============================================================ 江戶浮世繪 · japan */
+:root[data-app-style='japan_ukiyoe'][data-app-theme][data-color-scheme] {
+  --st-ink: #1C1A17;
+  --jp-indigo: #1F3A5F;
+  --jp-shu: #B8361A;
+  --jp-paper: #FBF6EA;
+  --jp-line: #E6D9BC;
+  --st-title-ink: var(--jp-paper);
+  --st-page:
+    radial-gradient(circle at 100% 150%, var(--theme-canvas) 24%, var(--jp-line) 24% 28%, var(--theme-canvas) 28% 36%, var(--jp-line) 36% 40%, transparent 40%) 0 0 / 72px 36px,
+    radial-gradient(circle at 0 150%, var(--theme-canvas) 24%, var(--jp-line) 24% 28%, var(--theme-canvas) 28% 36%, var(--jp-line) 36% 40%, transparent 40%) 0 0 / 72px 36px,
+    radial-gradient(circle at 50% 100%, var(--jp-line) 10%, var(--theme-canvas) 10% 23%, var(--jp-line) 23% 30%, var(--theme-canvas) 30% 43%, var(--jp-line) 43% 50%, var(--theme-canvas) 50% 63%, var(--jp-line) 63% 71%, transparent 71%) 0 0 / 72px 36px,
+    radial-gradient(circle at 100% 50%, var(--jp-line) 5%, var(--theme-canvas) 5% 15%, var(--jp-line) 15% 20%, var(--theme-canvas) 20% 29%, var(--jp-line) 29% 34%, var(--theme-canvas) 34% 44%, var(--jp-line) 44% 49%, transparent 49%) 0 0 / 72px 36px,
+    radial-gradient(circle at 0 50%, var(--jp-line) 5%, var(--theme-canvas) 5% 15%, var(--jp-line) 15% 20%, var(--theme-canvas) 20% 29%, var(--jp-line) 29% 34%, var(--theme-canvas) 34% 44%, var(--jp-line) 44% 49%, transparent 49%) 0 0 / 72px 36px,
+    var(--theme-canvas);
+  --st-radius: 3px;
+  --st-btn-radius: 4px;
+  --st-chip-radius: 2px;
+  --st-field-radius: 0;
+  --st-card-border: 2px solid var(--st-ink);
+  --st-card-bg: linear-gradient(180deg, #FDF9EF, var(--jp-paper));
+  --st-card-shadow: 0 0 0 4px var(--jp-paper), 0 0 0 5.5px var(--st-ink), 0 18px 26px -18px rgba(28, 26, 23, .5);
+  --st-btn-shadow: inset 0 0 0 2px var(--jp-shu), inset 0 0 0 3.5px rgba(251, 246, 234, .85), 0 2px 0 #7E2410;
+  --st-btn-shadow-press: inset 0 0 0 2px var(--jp-shu), inset 0 0 0 3.5px rgba(251, 246, 234, .85), 0 0 0 #7E2410;
+  --st-btn-press: translateY(2px) rotate(-1deg);
+  --st-ease: cubic-bezier(.2, .7, .1, 1);
+  --st-dur: 140ms;
+  --st-row-rule: 1px solid rgba(28, 26, 23, .22);
+  --st-select: rgba(184, 54, 26, .22);
+  --st-inset-bg: rgba(243, 234, 215, .6);
+  --st-inset-border: 1px solid rgba(28, 26, 23, .35);
+  --st-inset-radius: 2px;
+  --st-toggle-on: var(--jp-indigo);
+  --st-toggle-ink: var(--jp-paper);
+  --st-toggle-radius: 2px;
+
+  & .stack { gap: 26px !important; padding-inline: 6px; }
+
+  /* Headings sit on a title cartouche, the label plate of a woodblock print. */
+  & .app-shell :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title, .timeline-day-title) {
+    width: fit-content;
+    padding: 3px 12px 4px !important;
+    background: var(--jp-indigo) !important;
+    color: var(--jp-paper) !important;
+    border: 1.5px solid var(--st-ink);
+    box-shadow: 3px 3px 0 var(--jp-shu);
+    font-weight: 900 !important;
+    letter-spacing: .08em !important;
+  }
+
+  & .primary { background: var(--jp-shu) !important; color: #fff !important; border: 0 !important; letter-spacing: .1em; font-weight: 900 !important; }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: var(--jp-paper) !important;
+    border: 1.5px solid var(--st-ink) !important;
+    color: var(--st-ink) !important;
+    box-shadow: 2px 2px 0 rgba(28, 26, 23, .25) !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 1px solid var(--st-ink) !important;
+    background: var(--jp-paper) !important;
+    letter-spacing: .06em;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: var(--jp-indigo) !important; color: var(--jp-paper) !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: rgba(251, 246, 234, .9) !important;
+    border: 0 !important;
+    border-bottom: 1.5px solid var(--st-ink) !important;
+  }
+  & textarea { border: 1.5px solid var(--st-ink) !important; }
+  & :is(input, select, textarea):focus { border-bottom-color: var(--jp-shu) !important; }
+
+  /* Header: a shop noren in Prussian blue, split into flaps along its hem. */
+  & .compact-mobile-header,
+  & .topbar {
+    background: var(--jp-indigo) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: 0 6px 0 -3px var(--jp-shu) !important;
+    padding-bottom: 16px !important;
+  }
+  & .compact-mobile-header::after,
+  & .topbar::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    height: 12px !important;
+    background: repeating-linear-gradient(90deg, transparent 0 calc(25% - 2px), var(--theme-canvas) calc(25% - 2px) 25%) !important;
+    opacity: 1 !important;
+  }
+  & :is(.compact-mobile-heading h1, .compact-mobile-heading p, .compact-mobile-title-art, .compact-mobile-trip-trigger, .topbar h1, .topbar-trip-trigger-title, .topbar p) { color: var(--jp-paper) !important; -webkit-text-fill-color: var(--jp-paper) !important; }
+  & :is(.compact-mobile-trip-trigger, .topbar-trip-trigger) svg { color: var(--jp-paper); }
+  & .compact-mobile-heading h1 { letter-spacing: .1em !important; font-weight: 900 !important; }
+
+  /* Dock: an indigo band of family crests; the active crest turns vermilion. */
+  & .app-floating-dock-mobile {
+    background: var(--jp-indigo) !important;
+    border: 0 !important;
+    border-top: 3px solid var(--jp-shu) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -8px 20px -12px rgba(28, 26, 23, .6) !important;
+    --kit-ico-paper: var(--jp-indigo);
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { background: transparent !important; border: 0 !important; color: var(--jp-paper) !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) { color: #FFB49F !important; --kit-ico-paper: var(--jp-paper); }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) .kit-ico { color: var(--jp-shu); }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 0 !important;
+    border-radius: 8px !important;
+    background: var(--jp-shu) !important;
+    color: #fff !important;
+    box-shadow: inset 0 0 0 3px var(--jp-shu), inset 0 0 0 5px var(--jp-paper), 0 6px 14px -6px rgba(28, 26, 23, .6) !important;
+    rotate: -4deg;
+    --kit-ico-paper: var(--jp-shu);
+  }
+  & .app-floating-dock-mobile .dock-item-scan .kit-ico { color: var(--jp-paper); }
+
+  & .compact-desktop-rail { background: var(--jp-paper) !important; border-right: 2px solid var(--st-ink) !important; box-shadow: 6px 0 0 -3px var(--jp-indigo) !important; --kit-ico-paper: var(--jp-paper); }
+  & .compact-rail-button { border-radius: 2px !important; color: var(--jp-indigo) !important; }
+  & .compact-rail-button.active { background: rgba(31, 58, 95, .1) !important; box-shadow: inset 0 0 0 1.5px var(--st-ink) !important; color: var(--st-ink) !important; }
+  & .compact-rail-button.active .kit-ico { color: var(--jp-shu); }
+  & .compact-rail-button.active::after { background: none !important; }
+}
+
+/* ============================================================ 韓屋丹青 · korea */
+:root[data-app-style='korea_dancheong'][data-app-theme][data-color-scheme] {
+  --st-ink: #26221E;
+  --ko-blue: #1E5AA8;
+  --ko-red: #C8323C;
+  --ko-yellow: #E8B83A;
+  --ko-green: #1F7A60;
+  --ko-roof: #2B2724;
+  --ko-band: linear-gradient(90deg, var(--ko-green) 0 20%, var(--ko-yellow) 20% 27%, var(--ko-red) 27% 47%, #FFFDF8 47% 51%, var(--ko-blue) 51% 73%, var(--ko-yellow) 73% 80%, var(--ko-green) 80% 100%);
+  --st-page:
+    linear-gradient(90deg, rgba(123, 91, 60, .08) 1.5px, transparent 1.5px) 0 0 / 30px 30px,
+    linear-gradient(rgba(123, 91, 60, .08) 1.5px, transparent 1.5px) 0 0 / 30px 30px,
+    radial-gradient(120% 55% at 50% -12%, #FFFDF8, transparent 62%),
+    var(--theme-canvas);
+  --st-radius: 14px;
+  --st-btn-radius: 10px;
+  --st-field-radius: 10px;
+  --st-card-border: 1px solid rgba(38, 34, 30, .14);
+  /* Bojagi: a dancheong band along the top, two faint patchwork seams across the cloth. */
+  --st-card-bg:
+    var(--ko-band) top / 100% 7px no-repeat,
+    linear-gradient(90deg, transparent 63%, rgba(38, 34, 30, .05) 63% calc(63% + 1px), transparent calc(63% + 1px)),
+    linear-gradient(180deg, transparent 58%, rgba(38, 34, 30, .045) 58% calc(58% + 1px), transparent calc(58% + 1px)),
+    var(--theme-card);
+  --st-card-shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 16px 28px -22px rgba(38, 34, 30, .55);
+  --st-btn-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -3px 0 rgba(0, 0, 0, .2);
+  --st-btn-shadow-press: inset 0 2px 4px rgba(0, 0, 0, .2);
+  --st-btn-press: translateY(1px);
+  --st-ease: cubic-bezier(.25, .8, .25, 1);
+  --st-dur: 180ms;
+  --st-row-rule: 1px solid rgba(38, 34, 30, .1);
+  --st-select: rgba(232, 184, 58, .4);
+  --st-inset-bg: #FCF9F2;
+  --st-inset-border: 1px solid rgba(38, 34, 30, .12);
+  --st-inset-radius: 10px;
+  --st-toggle-on: var(--ko-green);
+  --st-toggle-ink: #FFFFFF;
+
+  & .stack { gap: 18px !important; }
+  & :is(.glass-card, .card, .accordion-card, .scan-visa, .scan-ledger) { padding-top: max(18px, 1.1em); }
+
+  /* Headings carry a short five-colour obangsaek rule. */
+  & .app-shell :is(.accordion-title, .preview-dashboard-budget-head h2, .preview-dashboard-today-head h3, .history-date-title h2, .section-head h2, .section-head h3, .scan-ledger h3, .stats-command-title, .timeline-day-title) {
+    background: var(--ko-band) left bottom / 44px 3px no-repeat !important;
+    padding-bottom: 7px !important;
+    font-weight: 700 !important;
+  }
+
+  & .primary { background: var(--ko-red) !important; color: #fff !important; border: 0 !important; }
+  & :is(.secondary, .mini, .icon-btn, .history-filter-button, .history-trip-button, .history-refresh-button, .scan-rate, .wx-refresh, .wx-locate, .settings-preview-controls button, .content .compact-touch-action, .preview-budget-total button, .content button.danger, .dashboard-compact-itinerary-actions button, .washi-add-expense-btn) {
+    background: #FFFDF8 !important;
+    border: 1px solid rgba(38, 34, 30, .22) !important;
+    color: var(--st-ink) !important;
+    box-shadow: inset 0 -2px 0 rgba(38, 34, 30, .1) !important;
+  }
+
+  & :is(.pill, .status-pill, .history-chip, .pwa-chip, .sync-status-indicator, .compact-mobile-status, .stats-record-pill) {
+    border: 1px solid rgba(38, 34, 30, .18) !important;
+    background: #FFFDF8 !important;
+  }
+  & :is(.history-chip.active, .history-chip[aria-pressed='true']) { background: var(--ko-green) !important; border-color: var(--ko-green) !important; color: #fff !important; }
+
+  & :is(input:not([type='radio'], [type='checkbox'], [type='range'], [type='file'], .visually-hidden-file), select, textarea, .search-field) {
+    background: #FFFDF8 !important;
+    border: 1px solid rgba(38, 34, 30, .22) !important;
+  }
+  & :is(input, select, textarea):focus { border-color: var(--ko-blue) !important; box-shadow: 0 0 0 3px rgba(30, 90, 168, .16) !important; }
+
+  /* Header: hanji paper with a painted dancheong eave along its edge. */
+  & .compact-mobile-header,
+  & .topbar {
+    background: linear-gradient(180deg, #FFFDF8, #F8F2E4) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: 0 10px 20px -18px rgba(38, 34, 30, .6) !important;
+    padding-bottom: 14px !important;
+  }
+  & .compact-mobile-header::after,
+  & .topbar::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute !important;
+    inset: auto 0 0 0 !important;
+    width: auto !important;
+    height: 7px !important;
+    background:
+      radial-gradient(circle at 50% 0, var(--ko-yellow) 0 2.5px, transparent 3px) 0 0 / 22px 7px,
+      var(--ko-band) !important;
+    opacity: 1 !important;
+  }
+
+  /* Dock: a giwa roof — charcoal tiles with a scalloped eave line on top. */
+  & .app-floating-dock-mobile {
+    background: var(--ko-roof) !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: 0 -10px 0 -6px var(--ko-roof), 0 -16px 24px -16px rgba(0, 0, 0, .5) !important;
+    overflow: visible !important;
+    background-image: radial-gradient(circle at 50% 0, #3A3430 0 9px, transparent 9.5px) !important;
+    background-size: 20px 12px !important;
+    background-repeat: repeat-x !important;
+  }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) { background: transparent !important; border: 0 !important; color: #F2EBDD !important; --kit-ico-tile: #5A524A; }
+  & .app-floating-dock-mobile button:not(.dock-item-scan) .kit-ico { color: var(--kit-ico-tile); }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) { color: #FFE39A !important; }
+  & .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan) .kit-ico { color: var(--ko-green); }
+  & .app-floating-dock-mobile .dock-item-scan {
+    border: 0 !important;
+    background:
+      radial-gradient(circle, var(--ko-red) 0 60%, transparent 61%),
+      conic-gradient(var(--ko-green) 0 25%, var(--ko-yellow) 0 50%, var(--ko-blue) 0 75%, #FFFDF8 0) !important;
+    color: #fff !important;
+    box-shadow: 0 8px 18px -8px rgba(0, 0, 0, .6) !important;
+  }
+
+  & .compact-desktop-rail { background: #FFFDF8 !important; border-right: 1px solid rgba(38, 34, 30, .14) !important; box-shadow: inset -6px 0 0 -2px var(--ko-red), inset -8px 0 0 -2px var(--ko-yellow) !important; }
+  & .compact-rail-button { border-radius: 10px !important; color: var(--ko-blue) !important; }
+  & .compact-rail-button.active { background: #F2ECDE !important; box-shadow: none !important; color: var(--st-ink) !important; }
+  & .compact-rail-button.active .kit-ico { color: var(--ko-green); }
+  & .compact-rail-button.active::after { background: none !important; }
+}
+
+/* ------------------------------------------------------------------ settings previews */
+.theme-selector-group { display: grid; gap: 8px; margin-top: 12px; }
+.theme-selector-group h4 { margin: 0; color: var(--theme-muted); font-size: .78rem; font-weight: 700; }
+
+.theme-option--style { align-items: start; }
+.theme-style-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--pv-card);
+  color: var(--pv-text);
+  border: 1px solid color-mix(in srgb, var(--pv-text) 20%, transparent);
+  border-radius: 10px;
+  line-height: 1;
+}
+.theme-style-preview b { font-size: 1.05rem; }
+.theme-style-preview i {
+  font-style: normal;
+  font-size: .78rem;
+  padding: 3px 7px;
+  background: var(--pv-accent);
+  color: var(--pv-on-accent);
+}
+.theme-style-preview[data-preview-style='sketch_notebook'] {
+  font-family: 'Caveat', cursive;
+  border: 2px solid var(--pv-text);
+  border-radius: 14px 5px 12px 6px / 6px 12px 5px 14px;
+  box-shadow: 2px 3px 0 color-mix(in srgb, var(--pv-text) 25%, transparent);
+  background: repeating-linear-gradient(180deg, var(--pv-card) 0 9px, #dfe7f3 9px 10px);
+}
+.theme-style-preview[data-preview-style='sketch_notebook'] i { border: 1.5px solid var(--pv-text); border-radius: 10px 4px 9px 5px; }
+.theme-style-preview[data-preview-style='marshmallow_cloud'] {
+  font-family: 'Fredoka', sans-serif;
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 -4px 8px -4px rgba(155, 134, 214, .35), 0 8px 14px -10px rgba(116, 97, 224, .6);
+}
+.theme-style-preview[data-preview-style='marshmallow_cloud'] i { border-radius: 999px; background: #FFC6DD; color: var(--pv-text); }
+.theme-style-preview[data-preview-style='kids_blocks'] {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  border: 2.5px solid var(--pv-text);
+  border-top: 7px solid #1F6FEB;
+  border-radius: 10px;
+  box-shadow: 0 3px 0 var(--pv-text);
+}
+.theme-style-preview[data-preview-style='kids_blocks'] i { border: 2px solid var(--pv-text); border-radius: 6px; font-weight: 800; }
+.theme-style-preview[data-preview-style='kawaii_sticker'] {
+  font-family: 'Cherry Bomb One', sans-serif;
+  border: 0;
+  border-radius: 14px;
+  outline: 1.5px dashed #EE9BC0;
+  outline-offset: -4px;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4.5px rgba(232, 140, 182, .6);
+  background: radial-gradient(circle, #FFE0EC 1.5px, transparent 2px) 0 0 / 9px 9px, var(--pv-card);
+}
+.theme-style-preview[data-preview-style='kawaii_sticker'] i { border-radius: 999px; }
+.theme-style-preview[data-preview-style='cyberpunk_hud'] {
+  font-family: 'Chakra Petch', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 0;
+  border: 1px solid rgba(5, 217, 232, .6);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  background: linear-gradient(90deg, #FCEE0A 0 3px, transparent 3px), var(--pv-card);
+}
+.theme-style-preview[data-preview-style='cyberpunk_hud'] i { clip-path: polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px)); }
+.theme-style-preview[data-preview-style='pixel_quest'] {
+  font-family: 'DotGothic16', monospace;
+  font-weight: 700;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #2C42C8, #131D66);
+  box-shadow: inset 0 0 0 2px #fff, 0 0 0 2px #0B0B22;
+  -webkit-font-smoothing: none;
+}
+.theme-style-preview[data-preview-style='pixel_quest'] i { box-shadow: inset -2px -2px 0 #C99A10, inset 2px 2px 0 #FFF0A8; }
+
+.theme-style-preview[data-preview-style='japan_ukiyoe'] {
+  font-family: 'Chiron Sung HK', serif;
+  font-weight: 900;
+  border: 1.5px solid var(--pv-text);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px var(--pv-card), 0 0 0 3px var(--pv-text);
+  background: linear-gradient(180deg, var(--pv-card) 62%, #1F3A5F 62%);
+}
+.theme-style-preview[data-preview-style='japan_ukiyoe'] i { border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--pv-accent), inset 0 0 0 2.5px #fff; }
+.theme-style-preview[data-preview-style='korea_dancheong'] {
+  font-family: 'Gowun Batang', serif;
+  font-weight: 700;
+  border-radius: 8px;
+  border: 1px solid rgba(38, 34, 30, .18);
+  background: linear-gradient(90deg, #1F7A60 0 20%, #E8B83A 20% 27%, #C8323C 27% 47%, #fff 47% 51%, #1E5AA8 51% 73%, #E8B83A 73% 80%, #1F7A60 80%) top / 100% 4px no-repeat, var(--pv-card);
+}
+.theme-style-preview[data-preview-style='korea_dancheong'] i { border-radius: 6px; box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .2); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-app-style] * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

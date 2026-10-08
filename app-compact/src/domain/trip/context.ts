@@ -1,4 +1,4 @@
-import type { TripIntelligence, TripThemeKey } from '../../lib/types';
+import type { StyleThemeKey, TripIntelligence, TripThemeKey } from '../../lib/types';
 
 export const TRIP_INTELLIGENCE_SCHEMA_VERSION = 1;
 
@@ -15,6 +15,17 @@ export const TRIP_THEME_KEYS: TripThemeKey[] = [
   'mexico_fiesta',
   'india_holi',
   'brazil_carnival',
+];
+
+export const STYLE_THEME_KEYS: StyleThemeKey[] = [
+  'sketch_notebook',
+  'marshmallow_cloud',
+  'kids_blocks',
+  'kawaii_sticker',
+  'cyberpunk_hud',
+  'pixel_quest',
+  'japan_ukiyoe',
+  'korea_dancheong',
 ];
 
 type DestinationContext = Pick<TripIntelligence, 'countryCode' | 'countryName' | 'primaryCurrency' | 'themeKey' | 'locale'> & {

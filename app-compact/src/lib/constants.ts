@@ -1,12 +1,12 @@
-import { TRIP_THEME_KEYS } from '../domain/trip/context';
-import type { AppState, ItineraryDay, ThemePreference, TripThemeKey } from './types';
+import { STYLE_THEME_KEYS, TRIP_THEME_KEYS } from '../domain/trip/context';
+import type { AppState, ItineraryDay, StyleThemeKey, ThemePreference, TripThemeKey } from './types';
 // @ts-expect-error TS5097: Node's strip-types runner needs the extension.
 import { COMPACT_AI_MODELS, resolveCatalogAiModelId } from './providerCatalog.ts';
 
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.25.5';
+export const APP_VERSION = '0.28.0';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -23,7 +23,9 @@ const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'ge
 export const AI_MODELS = COMPACT_AI_MODELS;
 
 export function parseThemePreference(value: unknown): ThemePreference | undefined {
-  return value === 'auto' || TRIP_THEME_KEYS.includes(value as TripThemeKey) ? value as ThemePreference : undefined;
+  return value === 'auto'
+    || TRIP_THEME_KEYS.includes(value as TripThemeKey)
+    || STYLE_THEME_KEYS.includes(value as StyleThemeKey) ? value as ThemePreference : undefined;
 }
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

@@ -436,8 +436,9 @@ html[data-app-theme='brazil_carnival'] body::after {
 
 html:not([data-app-theme='japan_washi']) .japanese-sun-decor,
 html:not([data-app-theme='japan_washi']) .japanese-sakura-decor,
-html:not([data-app-theme='japan_washi']) .washi-nippon-stamp,
 html:not([data-app-theme='japan_washi']) .stats-command-copy::before { display: none !important; content: none; }
+/* The ledger icon carries .washi-nippon-stamp for its Japan seal look; other themes keep the icon, just not the seal styling. */
+html:not([data-app-theme='japan_washi']) .washi-nippon-stamp { transform: none !important; box-shadow: none !important; }
 
 html:not([data-app-theme='japan_washi']) .japanese-washi-bg::before,
 html:not([data-app-theme='japan_washi']) .japanese-washi-bg::after {
@@ -924,6 +925,16 @@ html[data-color-scheme='dark'] .stats-switch {
     margin-top: clamp(-42px, calc(3em - 90px), 0px) !important;
   }
 
+  /* Fold cover screens (~344px): the raised scan key must not spill into its neighbours' tap areas. */
+  @media (max-width: 380px) {
+    html[data-app-theme] .app-floating-dock-mobile .dock-item-scan {
+      width: calc((100vw - 16px) / 7) !important;
+      height: calc((100vw - 16px) / 7) !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+    }
+  }
+
   html[data-app-theme] .app-shell {
     padding-bottom: max(calc(76px + env(safe-area-inset-bottom)), calc(6em + env(safe-area-inset-bottom))) !important;
   }
@@ -1026,5 +1037,38 @@ html[data-color-scheme='dark'] .stats-switch {
 @media (max-width: 767px) {
   .compact-mobile-header:not(:has(> .compact-mobile-mark)) {
     grid-template-columns: minmax(0, 1fr) auto auto !important;
+  }
+}
+
+/* History chips had phone (≤767px) and desktop (≥1100px) styles but none in between, so fold/tablet
+   widths showed raw browser buttons. Mirror the phone chip row there. */
+@media (min-width: 768px) and (max-width: 1099px) {
+  html[data-app-theme] .history-chip-rail {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-block: 2px 6px;
+    scrollbar-width: none;
+  }
+  html[data-app-theme] .history-chip {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 38px;
+    padding: 0 13px;
+    border: 1px solid var(--theme-border);
+    border-radius: 11px;
+    background: var(--theme-card);
+    color: var(--theme-text);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  html[data-app-theme] .history-chip.active {
+    border-color: var(--theme-accent);
+    color: var(--theme-accent);
   }
 }

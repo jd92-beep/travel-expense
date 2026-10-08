@@ -16,6 +16,8 @@ try {
   assert.equal(trip.migrateAppState({}).themePreference, 'auto');
   assert.equal(trip.migrateAppState({ themePreference: 'not-a-theme' }).themePreference, 'auto');
   assert.equal(constants.parseThemePreference('not-a-theme'), undefined);
+  assert.equal(constants.parseThemePreference('cyberpunk_hud'), 'cyberpunk_hud');
+  assert.equal(trip.migrateAppState({ themePreference: 'sketch_notebook' }).themePreference, 'sketch_notebook');
 
   const remoteInvalid = supabase.rowToSettings({ app_settings: { themePreference: 'not-a-theme' } });
   assert.equal(remoteInvalid?.themePreference, undefined);

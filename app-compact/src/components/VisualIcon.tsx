@@ -24,6 +24,8 @@ import {
 import type { ComponentType, CSSProperties } from 'react';
 import { VISUAL_ICON_META, type VisualIconId } from '../lib/iconManifest';
 import { cn } from '../lib/cn';
+import { useTripTheme } from '../theme/tripTheme';
+import { KitCategoryIcon } from '../theme/kit/KitIcons';
 
 const icons: Record<VisualIconId, ComponentType<{ size?: number; strokeWidth?: number }>> = {
   flight: Plane,
@@ -64,6 +66,8 @@ export function VisualIcon({
 }) {
   const meta = VISUAL_ICON_META[id] || VISUAL_ICON_META.other;
   const Icon = icons[id] || CircleHelp;
+  const { theme } = useTripTheme();
+  const glyphSize = size === 'lg' ? 25 : size === 'sm' ? 16 : 21;
   return (
     <span
       className={cn('visual-icon', `visual-icon-${size}`, className)}
@@ -71,7 +75,9 @@ export function VisualIcon({
       aria-label={label || meta.label}
       title={label || meta.label}
     >
-      <Icon size={size === 'lg' ? 25 : size === 'sm' ? 16 : 21} strokeWidth={2.4} />
+      {theme.kit
+        ? <KitCategoryIcon kit={theme.kit.style} id={id} size={glyphSize} />
+        : <Icon size={glyphSize} strokeWidth={2.4} />}
     </span>
   );
 }

@@ -4,6 +4,8 @@ import { App } from './App';
 import './styles.css';
 import './styles/themes.css';
 import './styles/desktop.css';
+import './styles/style-themes.css';
+import './styles/style-kit-fx.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 

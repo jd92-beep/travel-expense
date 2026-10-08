@@ -331,3 +331,62 @@ stay stable:
   匯率 Exchange Rate, 解析, 解析文字, 重開上次草稿, 批次確認.
 - File inputs: `#scan-camera-input`, `#scan-gallery-input`,
   `#scan-email-image-input`.
+
+## Style Themes
+
+Recorded 2026-10-08 from `src/theme/tripTheme.tsx` and `src/styles/style-themes.css`.
+
+Region themes swap colour only. A style theme (`ThemeDefinition.kit`) also sets
+`html[data-app-style]`, lazy-loads its own Google Fonts, and rebuilds the component
+grammar: card shape and depth, button press physics, field shape, chips, headings,
+page surface, header and dock. Style themes are manual picks; `auto` stays regional.
+Colours still come from `--theme-*`; the kit owns shape and behaviour through
+`--st-*` tokens (radius, card border/shadow, button shadow and press transform,
+inset panels, toggle fill, row rule).
+
+| Theme | Type | Signature |
+|---|---|---|
+| 手繪筆記 `sketch_notebook` | LXGW WenKai TC + Caveat | Ruled paper with red margin, wobbly inked cards tilted ±0.4deg with tape corners, highlighter headings, fill-in-the-blank fields, pen-circled active tab. |
+| 棉花糖雲 `marshmallow_cloud` | Huninn + Fredoka, no faux bold | Borderless puffy cards, pastel sky blobs, centred header, floating capsule dock, spring press (scale .93). |
+| 童趣積木 `kids_blocks` | Chiron GoRound TC + Baloo 2 | 3px ink outlines with a 6px ledge, colour-cycling block caps, yellow banner header, per-tab colour blocks, key-press buttons. |
+| 可愛貼紙 `kawaii_sticker` | Iansui + Cherry Bomb One | Polka-dot ground, die-cut sticker cards with dashed stitching and a bow, candy buttons, stitched capsule dock, one-shot wiggle on the active tab. |
+| 賽博朋克 `cyberpunk_hud` | Chakra Petch + Chiron Hei HK, Share Tech Mono for money | Chamfered HUD panels with yellow brackets, scanlines, hazard-tape header, full-width hard dock, hexagon scan key, hover glitch. |
+| 像素冒險 `pixel_quest` | DotGothic16 + Chiron Hei HK | Dithered ground, RPG menu-window cards, bevelled pixel buttons, hotbar dock with a bobbing gold cursor, segmented HP bars. |
+| 江戶浮世繪 `japan_ukiyoe` | Chiron Sung HK | Seigaiha ground, woodblock double-frame cards, headings on an indigo title cartouche, Prussian-blue noren header split into flaps, vermilion hanko buttons, family-crest tab icons, bokashi bars. |
+| 韓屋丹青 `korea_dancheong` | Noto Sans TC + Gowun Batang | Changsal lattice ground, bojagi cards with a five-colour dancheong band and patchwork seams, obangsaek heading rule, giwa-roof dock with scalloped eave, dancheong tile icons, rising lotus lanterns. |
+
+Each kit also ships its own assets (`src/theme/kit/`, `src/styles/style-kit-fx.css`):
+
+- **Tab icons** (`KitTabIcon`): one 24px geometry per tab drawn in the kit's hand —
+  double pencil line, puffy blob, crayon fill, sticker face, HUD brackets, 12×12
+  sprites, family crest, dancheong tile. Used in the phone dock and desktop rail.
+- **Category icons** (`KitCategoryIcon`, used by `VisualIcon`): 17 drawn glyphs cover all
+  23 category/payment/state ids, rendered in the same hand as the tab icons without the
+  kit container (the badge supplies it); the pixel kit has a hand-placed 12×12 sprite
+  for each. Badge tokens (`--kit-vi-*`) are declared on `.visual-icon`, not `:root`, so
+  they can read each badge's `--icon-color`.
+- **Mascot** (`KitMascot`): an animated mark in the header/rail slot — paper plane on
+  a dashed loop, squishing marshmallow, pinwheel, winking star, radar sweep, a pixel
+  slime GIF (`assets/kit/pixel-slime.gif`, static PNG under reduced motion), crest of
+  sun and waves, spinning taegeuk.
+- **Ambient** (`KitAmbient`): a fixed layer between the page surface (on `body`) and
+  the transparent shell — doodles drawing themselves, drifting clouds, rising bubbles,
+  floating hearts, scan sweep and ticker, twinkling pixel stars, moving waves, lotus
+  lanterns. Not rendered on the `lite` effects tier.
+- **Card entrance** per kit (`--kit-enter`): pencil wipe, squish, block drop, sticker
+  peel, boot flicker, stepped pop, ink bleed, unfold; staggered 70ms down `.stack`.
+- **Charts and tables** through `--kit-*` tokens: ring colour/cap/segment mask, compass
+  hole and frame, pace-bar fill/over/track (hatching, pastel pills, outlined blocks,
+  candy stripes, neon segments, HP segments, bokashi, dancheong bands), ranking badges,
+  zebra and hover rows, category badge shape.
+
+Responsive checks cover phone (390), fold cover (344), Flip (412), fold open (673),
+Pixel Fold open (841), tablet (768) and web (1280/1920), plus resizing between fold
+postures without reload. On screens ≤380px the raised scan key shrinks to its dock
+column so it never overlaps its neighbours' tap areas.
+
+Rules: every override is `!important` at `:root[data-app-style][data-app-theme][data-color-scheme]`
+specificity so it beats the colour layer in `themes.css`; dark kits re-ink the
+washi-era components that hard-code dark text; all loops and wiggles sit behind
+`prefers-reduced-motion: no-preference`. Settings shows each kit as a live
+miniature (font, shape, accent) instead of colour swatches.

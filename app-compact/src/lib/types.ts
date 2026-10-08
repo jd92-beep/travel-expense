@@ -33,7 +33,18 @@ export type TripThemeKey =
   | 'mexico_fiesta'
   | 'india_holi'
   | 'brazil_carnival';
-export type ThemePreference = 'auto' | TripThemeKey;
+/** Style themes restyle layout and components, not just colour. Manual pick only; auto stays regional. */
+export type StyleThemeKey =
+  | 'sketch_notebook'
+  | 'marshmallow_cloud'
+  | 'kids_blocks'
+  | 'kawaii_sticker'
+  | 'cyberpunk_hud'
+  | 'pixel_quest'
+  | 'japan_ukiyoe'
+  | 'korea_dancheong';
+export type AppThemeKey = TripThemeKey | StyleThemeKey;
+export type ThemePreference = 'auto' | AppThemeKey;
 
 export interface TripIntelligence {
   countryCode: string;

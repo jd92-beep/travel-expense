@@ -7,7 +7,12 @@
     'tokyo_neon', 'tropical_candy', 'uk_london', 'nordic_aurora', 'mexico_fiesta',
     'india_holi', 'brazil_carnival',
   ];
-  const darkThemes = new Set(['taiwan_nightmarket', 'tokyo_neon', 'nordic_aurora', 'brazil_carnival']);
+  // Style themes also switch component shapes via data-app-style (styles/style-themes.css).
+  const styleThemes = [
+    'sketch_notebook', 'marshmallow_cloud', 'kids_blocks', 'kawaii_sticker', 'cyberpunk_hud', 'pixel_quest',
+    'japan_ukiyoe', 'korea_dancheong',
+  ];
+  const darkThemes = new Set(['taiwan_nightmarket', 'tokyo_neon', 'nordic_aurora', 'brazil_carnival', 'cyberpunk_hud', 'pixel_quest']);
   const colors = {
     japan_washi: '#f7f2ea',
     korea_editorial: '#f7f4f0',
@@ -21,15 +26,24 @@
     mexico_fiesta: '#ffe8d6',
     india_holi: '#fff3e6',
     brazil_carnival: '#06281e',
+    sketch_notebook: '#faf7ee',
+    marshmallow_cloud: '#fff4f8',
+    kids_blocks: '#fff6db',
+    kawaii_sticker: '#ffeff5',
+    cyberpunk_hud: '#07070c',
+    pixel_quest: '#141432',
+    japan_ukiyoe: '#1f3a5f',
+    korea_dancheong: '#f6f1e6',
   };
   let theme = 'japan_washi';
   try {
     const hint = localStorage.getItem(key);
-    if (themes.includes(hint)) theme = hint;
+    if (themes.includes(hint) || styleThemes.includes(hint)) theme = hint;
   } catch { /* storage can be unavailable during private browsing */ }
   const root = document.documentElement;
   const isDark = darkThemes.has(theme);
   root.dataset.appTheme = theme;
+  if (styleThemes.includes(theme)) root.dataset.appStyle = theme;
   root.dataset.themeSource = 'auto';
   root.dataset.colorScheme = isDark ? 'dark' : 'light';
   root.classList.toggle('dark', isDark);
