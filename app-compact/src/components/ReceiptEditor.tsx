@@ -325,6 +325,7 @@ export function ReceiptEditor({
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
+          if (!draft.date) { alert('收據冇日期，請確認記帳日期先儲存。'); return; }
           const total = validAmount(commitTotalDraft());
           if (total == null) {
             alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
@@ -464,6 +465,7 @@ export function ReceiptEditor({
           </label>
           <label>支付
             <select value={draft.payment} onChange={(e) => set('payment', e.target.value as PaymentId)} disabled={readOnly}>
+              <option value="">未提供付款方式</option>
               {PAYMENTS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>

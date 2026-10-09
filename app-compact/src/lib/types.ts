@@ -9,7 +9,7 @@ export type CategoryId =
   | 'medicine'
   | 'other';
 
-export type PaymentId = 'cash' | 'credit' | 'paypay' | 'suica';
+export type PaymentId = '' | 'cash' | 'credit' | 'paypay' | 'suica';
 export type SplitMode = 'shared' | 'private';
 export type SplitType = 'equal' | 'shares' | 'exact' | 'percent' | 'adjustment' | 'itemized';
 export type ReceiptVisibility = 'trip' | 'private';
@@ -369,6 +369,7 @@ export interface AppState {
   credentialBrokerUrl?: string;
   credentialSession?: string;
   credentialSessionExpiresAt?: number;
+  aiTranslationLanguage?: 'yue-HK' | 'zh-TW' | 'zh-CN' | 'en' | 'ja' | 'ko';
   scanModel: string;
   voiceModel: string;
   emailModel: string;

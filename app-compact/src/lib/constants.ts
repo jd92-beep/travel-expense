@@ -6,7 +6,7 @@ import { COMPACT_AI_MODELS, resolveCatalogAiModelId } from './providerCatalog.ts
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.28.0';
+export const APP_VERSION = '0.29.0';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -15,8 +15,10 @@ export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
 export const APP_SCHEMA_VERSION = 4;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
-export const DEFAULT_SCAN_VOICE_MODEL_ID = 'mimo/mimo-v2.5';
-export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'mimo/mimo-v2.5-pro';
+export const DEFAULT_SCAN_VOICE_MODEL_ID = 'openrouter/meta/muse-spark-1.3-contributor';
+export const DEFAULT_VOICE_MODEL_ID = 'openrouter/nvidia/nemotron-3-super-120b-a12b:free';
+export const AUTOMATIC_AI_MODEL = 'auto';
+export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'openrouter/nvidia/nemotron-3-super-120b-a12b:free';
 
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
 
@@ -37,19 +39,10 @@ export function normalizeAiModelSettings<T extends Partial<Pick<AppState, 'scanM
   if (!next.googleBackupModel || STALE_GOOGLE_BACKUP_MODELS.has(String(next.googleBackupModel))) {
     next.googleBackupModel = DEFAULT_GOOGLE_BACKUP_MODEL;
   }
-  // D3: ids outside the contract catalog (retired/renamed models in stale settings)
-  // must never reach routing — clamp them to the task defaults.
-  if (!resolveCatalogAiModelId(String(next.scanModel || ''))) {
-    next.scanModel = DEFAULT_SCAN_VOICE_MODEL_ID;
-  }
-  if (!resolveCatalogAiModelId(String(next.voiceModel || ''))) {
-    next.voiceModel = DEFAULT_SCAN_VOICE_MODEL_ID;
-  }
-  if (!resolveCatalogAiModelId(String(next.emailModel || ''))) {
-    next.emailModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
-  }
-  if (!resolveCatalogAiModelId(String(next.tripUpdateModel || ''))) {
-    next.tripUpdateModel = DEFAULT_TRIP_UPDATE_MODEL_ID;
+  for (const key of ['scanModel', 'voiceModel', 'emailModel', 'tripUpdateModel'] as const) {
+    const chosen = String(next[key] || '');
+    // Retired or hidden direct providers migrate to the automatic policy once.
+    if (chosen !== AUTOMATIC_AI_MODEL && !AI_MODELS.some(model => model.id === resolveCatalogAiModelId(chosen))) next[key] = AUTOMATIC_AI_MODEL;
   }
   return next;
 }
@@ -127,10 +120,11 @@ export const DEFAULT_STATE: AppState = {
   credentialBrokerUrl: DEFAULT_CREDENTIAL_BROKER_URL,
   credentialSession: '',
   credentialSessionExpiresAt: 0,
-  scanModel: DEFAULT_SCAN_VOICE_MODEL_ID,
-  voiceModel: DEFAULT_SCAN_VOICE_MODEL_ID,
-  emailModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
-  tripUpdateModel: DEFAULT_TRIP_UPDATE_MODEL_ID,
+  aiTranslationLanguage: 'yue-HK',
+  scanModel: AUTOMATIC_AI_MODEL,
+  voiceModel: AUTOMATIC_AI_MODEL,
+  emailModel: AUTOMATIC_AI_MODEL,
+  tripUpdateModel: AUTOMATIC_AI_MODEL,
   googleBackupModel: DEFAULT_GOOGLE_BACKUP_MODEL,
   hiddenAiModels: [],
   themePreference: 'auto',

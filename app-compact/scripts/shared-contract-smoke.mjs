@@ -73,7 +73,7 @@ const fixture = {
       date: '2026-07-12',
       category: 'shopping',
       recordKind: 'expense',
-      payment: 'cash',
+      payment: '',
       personId: 'p_trip_3',
       beneficiaryId: 'p_trip_3',
       splitMode: 'private',
@@ -317,6 +317,7 @@ const fixture = {
   syncError: '',
   settingsPulledAt: 1_780_000_000_000,
   displayCurrency: 'HKD',
+  aiTranslationLanguage: 'ja',
 };
 
 function safeEnv(extra = {}) {
@@ -613,6 +614,7 @@ function summarizeState(state) {
     settingsUpdatedAtAdvanced: Number(state.settingsUpdatedAt) > Number(fixture.settingsUpdatedAt),
     settingsPulledAt: state.settingsPulledAt,
     displayCurrency: state.displayCurrency,
+    aiTranslationLanguage: state.aiTranslationLanguage,
   });
 }
 

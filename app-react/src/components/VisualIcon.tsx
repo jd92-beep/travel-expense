@@ -35,6 +35,7 @@ const icons: Record<VisualIconId, ComponentType<{ size?: number; strokeWidth?: n
   localtour: MapPinned,
   medicine: Pill,
   other: Package,
+  '': CircleHelp,
   cash: Wallet,
   credit: CreditCard,
   paypay: Wallet,

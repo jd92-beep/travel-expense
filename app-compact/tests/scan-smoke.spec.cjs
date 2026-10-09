@@ -48,6 +48,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await page.route('**/google/json', brokerJsonRoute);
   await page.route('**/kimi/json', brokerJsonRoute);
   await page.route('**/mimo/json', brokerJsonRoute);
+  await page.route('**/openrouter/json', brokerJsonRoute);
+  await page.route('**/opencode/json', brokerJsonRoute);
 
   await page.addInitScript(() => {
     window.__disable_supabase_configured = true;

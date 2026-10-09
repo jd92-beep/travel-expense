@@ -1,5 +1,15 @@
 # Agent Handover
 
+## 2026-10-10 — AI models and extraction (Git delivery approved)
+
+- Compact **0.29.0**, React **0.2.11**, broker **2026.10.10.1**. Sixteen validated OpenRouter/OpenCode chat choices added, with collapsed provider pickers, image capability filtering, persisted translation language and exact selected-model execution.
+- Automatic photo policy: Muse Contributor → MiMo-V2.6-Flash. Text: Nemotron Super → North Mini Code → Apodex Mini → Qwen3.7 Flash. Quota stops immediately. Nemotron Email/voice uses low reasoning after the measured booking/translation check; itinerary uses the validated non-reasoning mode.
+- Revised prompts include source text and valid JSON examples, preserve unknown dates/payment, currency cents, line totals, booking evidence, cancelled/forwarded deduplication and original names with translations. React only carries compatible payment/language data; its model UI is unchanged.
+- Native additions made to Pi, HERO/Hermes Desktop primary connection, Tommy and Oreo using native config/auth surfaces. Agent defaults/fallbacks preserved. Pi, HERO and Oreo have real free inference results. Tommy's 16 additions are available in the live catalog, but native inference is blocked by workspace-plugin runtime publication timeout; Gateway is ready. Desktop GUI and messaging/tool loops were not exercised.
+- Local typecheck/build/security, broker self-test, catalog/ledger/shared-state contracts, eight mobile AI routing tests and the scan check passed. Settings suite: 10 passed / 1 existing skip. Six real paid photo calls cost **US$0.0035277708**; free task checks cost zero. Failed photo recovery stays blank instead of inferring money/date from the filename. Extraction/translation still needs review.
+- Boss authorized commit, merge and push on 2026-10-10; `main` triggers public-client deployments. Separate manual broker deployment/key provisioning awaits approval, and the live AI path is not yet verified. Broker credentials must remain server-side. No live migration or production user-data write was made.
+- Full evidence: [model rollout report](docs/ai-model-rollout-2026-10-10.md). Preserve the pre-existing untracked `app-compact/.impeccable/` folder.
+
 ## Last Worked On
 - **Date**: 2026-09-26 HKT
 - **Focus**: Session 94 — Compact shared-ledger end-to-end review + fixes (foreign-receipt
@@ -29,6 +39,9 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 "Pending Tasks" / "Bugs Pending Fix" sections further down, are historical snapshots — re-verify
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
+
+- 🟠 **2026-10-10 AI model rollout awaits broker release approval** — Compact 0.29.0, React 0.2.11 and broker 2026.10.10.1 are implemented and locally checked. Boss authorized commit/merge/push; public-client deployment will be verified from that SHA. Private broker credential provisioning, manual Worker deployment and live selected-model verification remain pending; see the [rollout report](docs/ai-model-rollout-2026-10-10.md).
+- 🟠 **2026-10-10 Tommy native inference remains unverified** — config validation, all 16 live catalog entries and readiness passed, but native inference timed out during workspace-plugin runtime publication. Do not treat catalog availability as a completed inference test or retry upstream calls without checking the runtime failure.
 
 0. 🟢 **Session 90 closed the shared-trip account-deletion blocker** — live
    `delete_own_user_account()` now transfers ownership (GUC-gated), demotes the old owner

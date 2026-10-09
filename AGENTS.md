@@ -43,8 +43,11 @@ dependency is affected; keep all applicable cross-client checks below.
   opportunities. Health tests use the exact selected provider/model with
   `kind=test`, no fallback, and at most eight output tokens; normal tasks retain
   strict JSON parsing.
-- Defaults are `mimo-v2.5` for scan/voice and `mimo-v2.5-pro` for email/trip
-  updates. The approved Volcano LLM catalog is `doubao-seed-2.0-lite`,
+- Compact automatic image routing is Muse Spark Contributor then MiMo-V2.6-Flash.
+  Automatic text routing is free Nemotron 3 Super, North Mini Code, Apodex Mini,
+  then paid Qwen3.7 Flash. Explicit category selections make one model attempt;
+  errors stay visible. Hide direct Kimi/MiMo/Volcano from the Compact picker;
+  preserve their other catalog surfaces. The approved Volcano LLM catalog is `doubao-seed-2.0-lite`,
   `doubao-seed-2.0-pro`, `minimax-m3`, `minimax-m2.7`,
   `doubao-seed-2.0-mini`, and `kimi-k3`; do not place Seedance in an LLM
   selector or probe.

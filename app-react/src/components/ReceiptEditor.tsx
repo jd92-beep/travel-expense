@@ -168,6 +168,7 @@ export function ReceiptEditor({
           </label>
           <label>支付
             <select value={draft.payment} onChange={(e) => set('payment', e.target.value as PaymentId)}>
+              <option value="">未提供付款方式</option>
               {PAYMENTS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </label>

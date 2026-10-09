@@ -12,3 +12,7 @@ const forSurface = (surface) => Object.fromEntries(
 );
 
 export const PROVIDER_MODELS = Object.freeze(forSurface('broker'));
+
+export function aiModelRecord(provider, model) {
+  return catalog.providers.find(item => item.id === provider)?.models.find(item => item.id === `${provider}/${model}`);
+}

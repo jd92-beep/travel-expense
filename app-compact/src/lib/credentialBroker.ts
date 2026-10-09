@@ -3,7 +3,7 @@ import { loadCredentialSession, saveCredentialSession } from './storage';
 import { currentSupabaseAccessToken } from './supabase';
 import type { AppState } from './types';
 
-export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'mimo' | 'volcano';
+export type CredentialProvider = 'notion' | 'kimi' | 'google' | 'weatherapi' | 'mimo' | 'volcano' | 'openrouter' | 'opencode';
 
 export interface BrokerSession {
   credentialSession: string;
@@ -145,7 +145,7 @@ async function brokerFetch<T>(
 
 async function brokerAiFetch<T>(
   state: Pick<AppState, 'credentialBrokerUrl' | 'credentialSession' | 'credentialSessionExpiresAt'>,
-  provider: 'kimi' | 'google' | 'mimo' | 'volcano',
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano' | 'openrouter' | 'opencode',
   body: unknown,
 ): Promise<T> {
   const session = currentBrokerSession(state);
@@ -333,7 +333,7 @@ export async function disconnectPersonalNotionIntegration(state: AppState): Prom
 
 export async function brokerAiJson(
   state: AppState,
-  provider: 'kimi' | 'google' | 'mimo' | 'volcano',
+  provider: 'kimi' | 'google' | 'mimo' | 'volcano' | 'openrouter' | 'opencode',
   prompt: string,
   kind: 'scan' | 'voice' | 'email' | 'trip' | 'test',
   image?: { base64: string; mime: string },
@@ -342,6 +342,7 @@ export async function brokerAiJson(
   const data = await brokerAiFetch<{ ok: boolean; data: unknown }>(state, provider, {
     prompt,
     kind,
+    outputLanguage: state.aiTranslationLanguage || 'yue-HK',
     image,
     model: model || (provider === 'kimi' ? 'kimi-code' : provider === 'mimo' ? 'mimo-v2.5' : provider === 'volcano' ? 'doubao-seed-2.0-lite' : state.googleBackupModel),
   });
@@ -351,7 +352,9 @@ export async function brokerAiJson(
 export async function testAiModel(state: AppState, modelId: string): Promise<string> {
   const selected = AI_MODELS.find((model) => model.id === modelId);
   if (!selected) throw new Error('AI model 不在 app allowlist');
-  const [provider, model] = selected.id.split('/') as ['kimi' | 'google' | 'mimo' | 'volcano', string];
+  const separator = selected.id.indexOf('/');
+  const provider = selected.id.slice(0, separator) as Exclude<CredentialProvider, 'notion' | 'weatherapi'>;
+  const model = selected.id.slice(separator + 1);
   const result = await brokerAiJson(state, provider, 'Return only JSON: {"ok":true}', 'test', undefined, model);
   if (!result || typeof result !== 'object' || (result as { ok?: unknown }).ok !== true) {
     throw new Error('Model 未有返回有效測試結果');

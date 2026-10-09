@@ -24,7 +24,7 @@ async function expectSettingsReady(page) {
 
 test('Settings expandable cards, safe broker actions, backup, restore, and trust clear work', async ({ page }) => {
   const modelProbeCalls = [];
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/openrouter/json', async (route) => {
     const body = route.request().postDataJSON();
     const prompt = String(body.prompt || '');
     const organizedItinerary = [
@@ -388,41 +388,12 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   expect(storageAfterRotate).not.toContain('admin-placeholder');
 
   await setAccordion(page, 'AI 模型選擇');
-  const modelOptions = await page.locator('#settings-ai-models-panel option').allTextContents();
-  expect(modelOptions.join(' ')).toContain('Kimi K3');
-  expect(modelOptions.join(' ')).toContain('Kimi K2.7');
-  expect(modelOptions.join(' ')).toContain('Kimi K2.8 Preview');
-  expect(modelOptions.join(' ')).toContain('Kimi for Coding');
-  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-code)');
-  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-8k)');
-  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-32k)');
-  expect(modelOptions.join(' ')).not.toContain('Kimi (kimi-k2.6)');
-  expect(modelOptions.join(' ')).toContain('Google Gemini 2.5 Flash');
-  expect(modelOptions.join(' ')).toContain('Mimo v2.5 Pro');
-  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-lite)');
-  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-pro)');
-  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m3)');
-  expect(modelOptions.join(' ')).toContain('Volcano (minimax-m2.7)');
-  expect(modelOptions.join(' ')).toContain('Volcano (doubao-seed-2.0-mini)');
-  expect(modelOptions.join(' ')).not.toMatch(/OpenRouter|GLM|ZAI/);
-  const volcanoModels = [
-    'volcano/doubao-seed-2.0-lite',
-    'volcano/doubao-seed-2.0-pro',
-    'volcano/minimax-m3',
-    'volcano/minimax-m2.7',
-    'volcano/doubao-seed-2.0-mini',
-  ];
-  await setAccordion(page, 'AI 模型選擇');
-  const scanModel = page.getByRole('combobox', { name: '掃描 receipt 模型', exact: true });
-  for (const model of volcanoModels) {
-    await scanModel.selectOption(model);
-    await page.getByRole('button', { name: '測試 掃描 receipt 模型' }).click();
-    await expect.poll(() => modelProbeCalls.length).toBe(volcanoModels.indexOf(model) + 1);
-  }
-  expect(modelProbeCalls.map((call) => ({ kind: call.kind, model: `volcano/${call.model}`, prompt: call.prompt }))).toEqual(
-    volcanoModels.map((model) => ({ kind: 'test', model, prompt: 'Return only JSON: {"ok":true}' })),
-  );
-
+  const picker = page.locator('#settings-ai-models-panel .ai-model-field').first();
+  for (const provider of ['Google', 'OpenRouter', 'OpenCode Zen']) await expect(picker.getByRole('button', { name: new RegExp(provider) })).toHaveAttribute('aria-expanded', 'false');
+  await picker.getByRole('button', {name:/OpenRouter/}).click();
+  await expect(picker.getByRole('radio', {name:/Muse Spark/})).toBeVisible();
+  await expect(picker.getByRole('radio', {name:/Kimi|Volcano/})).toHaveCount(0);
+  await picker.getByRole('radio', {name:/Muse Spark/}).check();
   await setAccordion(page, '資料管理');
   const backupSafety = page.getByLabel('Backup safety scope');
   await expect(backupSafety).toContainText('CSV / Backup JSON 只包含目前旅程');
@@ -1287,7 +1258,7 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
     };
   });
 
-  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/kimi/json', async (route) => {
+  await page.route('https://travel-expense-credential-broker.ftjdfr.workers.dev/openrouter/json', async (route) => {
     const body = route.request().postDataJSON();
     const prompt = String(body.prompt || '');
     const organizedItinerary = [
@@ -1446,7 +1417,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano', 'openrouter', 'opencode']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -1468,7 +1439,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
     }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
-      tripUpdateModel: 'mimo/mimo-v2.5',
+      tripUpdateModel: 'auto',
       activeTripId: 'trip_current_local_parser',
       tripName: 'Current Trip',
       tripDateRange: { start: '2026-06-13', end: '2026-06-20' },
@@ -1524,7 +1495,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
-  await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：Mimo v2.5');
+  await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：NVIDIA: Nemotron 3 Super');
   await page.getByPlaceholder(/下次/).fill(longJeju);
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
 
@@ -1551,7 +1522,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     contentType: 'application/json',
     body: JSON.stringify({ ok: false, error: 'trip intelligence unavailable' }),
   }));
-  for (const provider of ['mimo', 'kimi', 'google', 'volcano']) {
+  for (const provider of ['mimo', 'kimi', 'google', 'volcano', 'openrouter', 'opencode']) {
     await page.route(`https://travel-expense-credential-broker.ftjdfr.workers.dev/${provider}/json`, async (route) => route.fulfill({
       status: 500,
       contentType: 'application/json',
@@ -1573,7 +1544,7 @@ test('Trip update AI extracts markdown table itinerary when providers fail', asy
     }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
       lastTab: 'settings',
-      tripUpdateModel: 'mimo/mimo-v2.5-pro',
+      tripUpdateModel: 'auto',
       activeTripId: 'trip_current_markdown_parser',
       tripName: 'Current Trip',
       tripDateRange: { start: '2026-06-13', end: '2026-06-20' },

@@ -449,7 +449,7 @@ async function run() {
 
     const initialStatus = await jsonFetch(env, '/credentials/status', { session });
     assert.equal(initialStatus.response.status, 200);
-    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), ['missing', 'missing', 'missing', 'missing', 'missing', 'missing']);
+    assert.deepEqual(initialStatus.data.providers.map((item) => item.status), Array(8).fill('missing'));
     assert.deepEqual(
       initialStatus.data.providers.find((item) => item.provider === 'volcano')?.models,
       [
@@ -903,6 +903,52 @@ async function run() {
       body: '{}',
     }), env, {});
     assert.equal(tooLarge.status, 413);
+
+    // Compatible providers keep nested IDs, image capability, zero-price routing and health limits.
+    const priorFetch = globalThis.fetch;
+    const compatibleCalls = [];
+    env.OPENROUTER_API_KEY = 'openrouter-fixture-secret';
+    env.OPENCODE_API_KEY = 'opencode-fixture-secret';
+    let compatibleStatus = 200;
+    globalThis.fetch = async (url, init) => {
+      if (!String(url).includes('/chat/completions')) return priorFetch(url, init);
+      compatibleCalls.push({ url: String(url), body: JSON.parse(init.body) });
+      if (compatibleStatus !== 200) return Response.json({ error: { message: 'Rate limit exceeded' } }, { status: compatibleStatus });
+      const body = JSON.parse(init.body);
+      return Response.json({ choices: [{ message: { content: body.max_tokens === 8 ? '' : '{"store":"Fixture","total":1}' } }], usage: { prompt_tokens: 10, completion_tokens: 8 } });
+    };
+    try {
+      for (const [provider, model] of [['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free']]) {
+        const result = await jsonFetch(env, `/${provider}/json`, { method: 'POST', session, body: { prompt: 'Reply OK.', kind: 'test', model } });
+        assert.equal(result.response.status, 200);
+        assert.equal(result.data.data.ok, true);
+        assert.equal(compatibleCalls.at(-1).body.model, model);
+        assert.equal(compatibleCalls.at(-1).body.max_tokens, 8);
+      }
+      assert.deepEqual(compatibleCalls[0].body.provider.max_price, { prompt: 0, completion: 0 });
+      const beforeRejected = compatibleCalls.length;
+      const rejected = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Read image', kind:'scan', model:'cohere/north-mini-code:free', image:{mime:'image/png',base64:'AA=='} } });
+      assert.equal(rejected.response.status, 400);
+      assert.equal(compatibleCalls.length, beforeRejected);
+      const image = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Read image', kind:'scan', outputLanguage:'ko', model:'meta/muse-spark-1.3-contributor', image:{mime:'image/png',base64:'AA=='} } });
+      assert.equal(image.response.status, 200);
+      assert.deepEqual(compatibleCalls.at(-1).body.provider, { allow_fallbacks: false, only: ['meta'] });
+      assert.equal(compatibleCalls.at(-1).body.messages[1].content[1].image_url.url, 'data:image/png;base64,AA==');
+      assert.deepEqual(compatibleCalls.at(-1).body.reasoning, { effort:'low', exclude:true });
+      assert.ok(compatibleCalls.at(-1).body.messages[0].content.includes('한국어'));
+      const beforeLanguage = compatibleCalls.length;
+      const invalidLanguage = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Test', kind:'test', outputLanguage:'invalid', model:'openrouter/free' } });
+      assert.equal(invalidLanguage.response.status, 400);
+      assert.equal(compatibleCalls.length, beforeLanguage);
+      const text = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Read booking', kind:'email', model:'nvidia/nemotron-3-super-120b-a12b:free' } });
+      assert.equal(text.response.status, 200);
+      assert.deepEqual(compatibleCalls.at(-1).body.reasoning, { effort:'low', exclude:true });
+      compatibleStatus = 429;
+      const beforeQuota = compatibleCalls.length;
+      const quota = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Test', kind:'email', model:'qwen/qwen3.7-flash' } });
+      assert.equal(quota.response.status, 429);
+      assert.equal(compatibleCalls.length, beforeQuota + 1);
+    } finally { globalThis.fetch = priorFetch; }
 
     // Token accounting: both provider usage shapes are parsed and logged as
     // counts only. Without this, nothing measures what an AI call costs.

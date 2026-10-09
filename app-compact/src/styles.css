@@ -14457,3 +14457,10 @@ html.fx-balanced .preview-weather-hourly-chip:active {
   justify-self: end;
   z-index: 2;
 }
+
+.ai-model-field { align-items: start; }
+.ai-model-picker { min-width: 0; border: 0; padding: 0; margin: 0; }
+.ai-model-picker legend { font-weight: 600; }
+.ai-provider-toggle { display: flex; gap: 10px; align-items: center; width: 100%; min-height: 44px; margin-top: 6px; text-align: start; }
+.ai-model-option { display: flex; align-items: center; gap: 8px; min-height: 44px; overflow-wrap: anywhere; }
+.ai-model-option input { width: 18px; min-width: 18px; margin: 0; }

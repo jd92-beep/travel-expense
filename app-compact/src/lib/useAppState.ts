@@ -33,6 +33,7 @@ const CLOUD_SETTINGS_KEYS = new Set<keyof AppState>([
   'voiceModel',
   'emailModel',
   'tripUpdateModel',
+  'aiTranslationLanguage',
   'googleBackupModel',
   'hiddenAiModels',
   'themePreference',

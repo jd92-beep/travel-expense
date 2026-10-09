@@ -7,8 +7,10 @@ import {
   rotateProviderCredential,
   type CredentialProvider,
 } from '../../lib/credentialBroker';
+import type { AppState } from '../../lib/types';
+import { AI_TRANSLATION_LANGUAGES } from '../../lib/aiPrompts';
 import { type SettingsContext } from './shared';
-import { AiModelField, scanModelWithRetries } from './aiModels';
+import { AiModelField, scanModel } from './aiModels';
 
 export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; brokerReady: boolean }) {
   const { state, updateState, setStatus, cloudSyncAvailable, showStressPanel } = ctx;
@@ -38,9 +40,7 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
       ? '全部可用'
       : `${aiScanSummary.total - aiScanSummary.ok} 個未能連接`;
 
-  // Full-catalog model scan: tests every visible model plus every hidden one (so revived
-  // models reappear), retrying failures at +5s/+10s/+15s, hiding models that never connect,
-  // and leaving quota-limited models in place per the provider contract.
+  // One request per model; quota stops the scan and leaves untested models unchanged.
   async function runModelScan() {
     if (modelScanProgress) return;
     if (!brokerReady && !cloudSyncAvailable) {
@@ -48,25 +48,30 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
       return;
     }
     const visibleIds = AI_MODELS.map((model) => model.id);
-    const candidates = Array.from(new Set([...visibleIds, ...(state.hiddenAiModels || [])]));
+    const candidates = visibleIds;
     setModelScanProgress({ done: 0, total: candidates.length });
     const results: Record<string, 'ok' | 'quota' | 'failed'> = {};
     try {
       for (const modelId of candidates) {
-        results[modelId] = await scanModelWithRetries(state, modelId);
+        results[modelId] = await scanModel(state, modelId);
         setModelScanProgress((progress) => (progress ? { done: progress.done + 1, total: progress.total } : progress));
+        if (results[modelId] === 'quota') break;
+        await new Promise(resolve => window.setTimeout(resolve, 3100));
       }
     } finally {
       setModelScanProgress(null);
     }
-    const nextHidden = candidates.filter((id) => results[id] === 'failed');
+    const nextHidden = candidates.filter(id => results[id] === 'failed' || (!results[id] && state.hiddenAiModels?.includes(id)));
     const quotaIds = candidates.filter((id) => results[id] === 'quota');
     const restored = (state.hiddenAiModels || []).filter((id) => results[id] === 'ok');
     updateState({
       hiddenAiModels: nextHidden,
       aiModelScan: { at: Date.now(), results },
     });
-    setStatus(`模型掃描完成:${candidates.length - nextHidden.length - quotaIds.length}/${candidates.length} 個可用`
+    const checked = Object.keys(results).length;
+    const available = Object.values(results).filter(result => result === 'ok').length;
+    setStatus(`模型掃描完成:${available}/${checked} 個已測模型可用`
+      + (checked < candidates.length ? `;${candidates.length - checked} 個未測試` : '')
       + (quotaIds.length ? `;${quotaIds.length} 個額度用緊(保留喺清單)` : '')
       + (restored.length ? `;恢復咗 ${restored.length} 個` : '')
       + (nextHidden.length ? `;隱藏咗 ${nextHidden.length} 個` : '') + '。');
@@ -101,18 +106,23 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
         </span>
       )}
     >
-      <p className="muted">平時唔使改。額度用盡時會停止，唔會自動換模型。撳右邊「掃描」會自動測試所有模型:唔到嘅會自動收起,恢復後會自動出返。</p>
+      <p className="muted">手動選擇會只用所選模型，失敗時會報錯。自動模式依預設及後備次序處理；額度或限流會立即停止。語音先由瀏覽器轉成文字，再交所選模型處理。掃描只測每款一次。</p>
       {aiScanSummary && (
         <p className="muted">
           上次掃描:{aiScanSummary.atLabel} · {aiScanSummary.ok}/{aiScanSummary.total} 個連接到
           {aiScanSummary.hiddenCount ? ` · ${aiScanSummary.hiddenCount} 個暫時隱藏(再掃描會自動測試同恢復)` : ''}
         </p>
       )}
+      <label>AI 翻譯語言
+        <select value={state.aiTranslationLanguage || 'yue-HK'} onChange={e => updateState({ aiTranslationLanguage: e.target.value as AppState['aiTranslationLanguage'] })}>
+          {AI_TRANSLATION_LANGUAGES.map(language => <option key={language.id} value={language.id}>{language.name}</option>)}
+        </select>
+      </label>
       <div className="form-grid ai-model-grid">
-        <AiModelField label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
-        <AiModelField label="語音模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
-        <AiModelField label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />
-        <AiModelField label="行程更新模型" value={state.tripUpdateModel || DEFAULT_TRIP_UPDATE_MODEL_ID} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
+        <AiModelField task="scan" label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
+        <AiModelField task="voice" label="語音文字記帳模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
+        <AiModelField task="email" label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />
+        <AiModelField task="trip-update" label="行程更新模型" value={state.tripUpdateModel || 'auto'} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(tripUpdateModel) => updateState({ tripUpdateModel })} />
       </div>
       {showStressPanel && (
         <>
@@ -159,6 +169,8 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
           <div className="form-grid" style={{ gap: '0.75rem' }}>
             <label>Provider
               <select value={apiKeyProvider} onChange={(e) => { setApiKeyProvider(e.target.value as CredentialProvider); setApiKeyStatus('idle'); setApiKeyMessage(''); }}>
+                <option value="openrouter">OpenRouter</option>
+                <option value="opencode">OpenCode Zen</option>
                 <option value="kimi">Kimi (kimi-code, kimi-8k, kimi-32k, kimi-k2.6, kimi-for-coding)</option>
                 <option value="google">Google (Gemini, Gemma — all Google models)</option>
                 <option value="mimo">Mimo (Mimo v2.5, Mimo v2.5 Pro)</option>

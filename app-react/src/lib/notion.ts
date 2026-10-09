@@ -778,7 +778,7 @@ function paymentIdFromName(name: string): PaymentId {
   };
   return PAYMENTS.find((p) => normalizeSelectName(p.name) === normalized || p.id === name)?.id
     || aliases[normalized]
-    || 'cash';
+    || '';
 }
 
 function personIdFromText(personText: string, persons: ReturnType<typeof getPersons>): string | undefined {
@@ -1395,6 +1395,7 @@ export async function pushSettingsMeta(state: AppState): Promise<void> {
     voiceModel: state.voiceModel,
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
+    aiTranslationLanguage: state.aiTranslationLanguage,
     googleBackupModel: state.googleBackupModel,
     themePreference: state.themePreference,
   };
@@ -1451,6 +1452,7 @@ export async function pullSettingsMeta(state: AppState): Promise<Partial<AppStat
         voiceModel: payload.voiceModel,
         emailModel: payload.emailModel,
         tripUpdateModel: payload.tripUpdateModel,
+        aiTranslationLanguage: payload.aiTranslationLanguage,
         googleBackupModel: payload.googleBackupModel,
         themePreference: parseThemePreference(payload.themePreference),
       });

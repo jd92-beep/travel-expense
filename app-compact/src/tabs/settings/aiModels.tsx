@@ -1,6 +1,6 @@
 import { FlaskConical, LoaderCircle } from 'lucide-react';
-import { useState } from 'react';
-import { AI_MODELS, DEFAULT_TRIP_UPDATE_MODEL_ID } from '../../lib/constants';
+import { useId, useState } from 'react';
+import { AI_MODELS, DEFAULT_TRIP_UPDATE_MODEL_ID, DEFAULT_SCAN_VOICE_MODEL_ID } from '../../lib/constants';
 import {
   redactedError,
   testAiModel,
@@ -8,14 +8,9 @@ import {
 import type { AppState } from '../../lib/types';
 
 export function aiModelLabel(modelId: string | undefined): string {
-  const id = modelId || DEFAULT_TRIP_UPDATE_MODEL_ID;
+  const id = modelId && modelId !== 'auto' ? modelId : DEFAULT_TRIP_UPDATE_MODEL_ID;
   return AI_MODELS.find((model) => model.id === id)?.name || id;
 }
-
-// Model-scan schedule: initial attempt, then automatic retries 5s / 10s / 15s after each
-// failure (4 attempts total). Models that still fail are hidden from the pickers; models that
-// later pass a scan are restored automatically.
-export const MODEL_SCAN_RETRY_DELAYS_MS = [5000, 10000, 15000];
 
 export function classifyModelScanError(error: unknown): 'quota' | 'unsupported' | 'retryable' {
   const message = redactedError(error);
@@ -26,26 +21,18 @@ export function classifyModelScanError(error: unknown): 'quota' | 'unsupported' 
   return 'retryable';
 }
 
-export async function scanModelWithRetries(state: AppState, modelId: string): Promise<'ok' | 'quota' | 'failed'> {
-  for (let attempt = 0; attempt <= MODEL_SCAN_RETRY_DELAYS_MS.length; attempt += 1) {
-    if (attempt > 0) {
-      await new Promise((resolve) => window.setTimeout(resolve, MODEL_SCAN_RETRY_DELAYS_MS[attempt - 1]));
-    }
-    try {
-      await testAiModel(state, modelId);
-      return 'ok';
-    } catch (error) {
-      const kind = classifyModelScanError(error);
-      if (kind === 'quota') return 'quota';
-      if (kind === 'unsupported') return 'failed';
-      // retryable → fall through to the next scheduled retry
-    }
+export async function scanModel(state: AppState, modelId: string): Promise<'ok' | 'quota' | 'failed'> {
+  try {
+    await testAiModel(state, modelId);
+    return 'ok';
+  } catch (error) {
+    return classifyModelScanError(error) === 'quota' ? 'quota' : 'failed';
   }
-  return 'failed';
 }
 
 export function AiModelField({
   label,
+  task,
   value,
   state,
   hiddenModels,
@@ -53,19 +40,24 @@ export function AiModelField({
   onChange,
 }: {
   label: string;
+  task: 'scan' | 'voice' | 'email' | 'trip-update';
   value: string;
   state: AppState;
   hiddenModels: string[];
   scanResults?: Record<string, 'ok' | 'quota' | 'failed'>;
   onChange: (value: string) => void;
 }) {
+  const groupId = useId();
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const defaultId = task === 'scan' ? DEFAULT_SCAN_VOICE_MODEL_ID : DEFAULT_TRIP_UPDATE_MODEL_ID;
+  const selectedId = value && value !== 'auto' ? value : defaultId;
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const runTest = async () => {
     setStatus('testing');
     setMessage('測試中');
     try {
-      const modelName = await testAiModel(state, value);
+      const modelName = await testAiModel(state, selectedId);
       setStatus('success');
       setMessage(`${modelName} 可用`);
     } catch (error) {
@@ -73,31 +65,31 @@ export function AiModelField({
       setMessage(`未能使用：${redactedError(error)}`);
     }
   };
-  const visibleModels = AI_MODELS.filter((model) => !hiddenModels.includes(model.id));
-  const valueMissing = !visibleModels.some((model) => model.id === value);
+  const visibleModels = AI_MODELS.filter(model => model.tasks.includes(task) && (!hiddenModels.includes(model.id) || model.id === selectedId));
+  const providers = [...new Set(visibleModels.map(model => model.providerId))];
+  const choose = (id: string) => { setStatus('idle'); setMessage(''); onChange(id); };
   return (
     <div className="ai-model-field">
-      <label>{label}
-        <select
-          value={value}
-          onChange={(event) => {
-            setStatus('idle');
-            setMessage('');
-            onChange(event.target.value);
-          }}
-        >
-          {valueMissing && (
-            <option value={value}>
-              {AI_MODELS.find((model) => model.id === value)?.name || value}（暫停或舊型號）
-            </option>
-          )}
-          {visibleModels.map((model) => (
-            <option key={model.id} value={model.id}>
-              {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
+      <fieldset className="ai-model-picker">
+        <legend>{label}</legend>
+        <p className="muted">使用：{aiModelLabel(selectedId)}</p>
+        <label className="ai-model-option"><input type="radio" name={groupId} value="auto" checked={!value || value === 'auto'} onChange={() => choose('auto')} />自動（預設及後備）</label>
+        {providers.map(provider => {
+          const models = visibleModels.filter(model => model.providerId === provider);
+          const open = expanded.includes(provider);
+          return <div key={provider}>
+            <button type="button" className="secondary ai-provider-toggle" aria-expanded={open} aria-controls={`${groupId}-${provider}`} onClick={() => setExpanded(prev => open ? prev.filter(id => id !== provider) : [...prev, provider])}>
+              <span aria-hidden="true">{open ? '−' : '+'}</span> {models[0].providerName}
+            </button>
+            <div id={`${groupId}-${provider}`} hidden={!open}>
+              {models.map(model => <label key={model.id} className="ai-model-option">
+                <input type="radio" name={groupId} value={model.id} checked={value === model.id} onChange={() => choose(model.id)} />
+                {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
+              </label>)}
+            </div>
+          </div>;
+        })}
+      </fieldset>
       <button
         type="button"
         className="secondary compact ai-model-test-button"

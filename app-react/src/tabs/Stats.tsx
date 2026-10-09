@@ -490,7 +490,7 @@ function categoryTotals(receipts: Receipt[], getHkd: (r: Receipt) => number, get
 }
 
 function paymentTotals(receipts: Receipt[], getHkd: (r: Receipt) => number, getTrip: (r: Receipt) => number): StatBucket[] {
-  const known = new Set(PAYMENTS.map((p) => p.id));
+  const known = new Set<string>(PAYMENTS.map((p) => p.id));
   const totals = PAYMENTS.map((p) => {
     const filtered = receipts.filter((r) => r.payment === p.id);
     return {

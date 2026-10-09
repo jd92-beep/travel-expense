@@ -764,7 +764,7 @@ function categoryTotals(receipts: Receipt[], state: AppState, currency: string):
 }
 
 function paymentTotals(receipts: Receipt[], state: AppState, currency: string): StatBucket[] {
-  const known = new Set(PAYMENTS.map((p) => p.id));
+  const known = new Set<string>(PAYMENTS.map((p) => p.id));
   const totals = PAYMENTS.map((p) => ({
     ...p,
     total: receipts.filter((r) => r.payment === p.id).reduce((s, r) => s + getReceiptTripAmount(r, state, currency), 0)

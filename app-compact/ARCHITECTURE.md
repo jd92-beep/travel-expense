@@ -19,7 +19,7 @@ Mobile Chrome URL
   -> domain selectors / migration
   -> localStorage compatibility + IndexedDB snapshot
   -> optional Notion sync through Credential Broker
-  -> Kimi primary / Google backup through Credential Broker
+  -> capability-filtered selected AI model / automatic policy through Credential Broker
 ```
 
 ## Data Ownership
@@ -28,7 +28,7 @@ Mobile Chrome URL
 - `activeTripId` drives Dashboard, Timeline, Weather, Stats, History, receipt stamping, currency snapshot, and Notion trip notes.
 - Receipts keep trip snapshots: `tripId`, `tripVersion`, `tripDayId`, `regionSnapshot`, `currency`, `originalAmount`, `originalCurrency`, `hkdAmount`.
 - `customItinerary` is kept as a legacy compatibility mirror.
-- Settings meta sync is non-secret only: budget, currency, active trip, persons, share ratios, and timestamps.
+- Settings meta sync is non-secret only: budget, currency, active trip, persons, share ratios, model selections, translation language, and timestamps.
 
 ## Timeline Orientation
 
@@ -39,10 +39,12 @@ Mobile Chrome URL
 
 ## AI Flow
 
-- The user's valid selected model is primary for scan, voice, email and trip analysis; stale model settings migrate to the reviewed catalog defaults.
-- Broker-routed fallback models are tested server-side before use.
-- MiniMax, GLM/ZAI, and OpenRouter are not shown in the Compact model picker.
+- Provider groups start collapsed and use +/− toggles with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.
+- An explicit category selection runs only that provider/model and reports its failure. Stale/hidden settings migrate to `auto`; automatic photo routing is Muse Contributor → MiMo-V2.6-Flash, and automatic text routing is Nemotron Super → North Mini Code → Apodex Mini → Qwen3.7 Flash. Quota failures stop the chain.
+- Voice uses browser speech transcription followed by text extraction. Translation language persists; original names accompany translations. Unknown dates/payment stay blank, and currency cents/line totals are retained.
+- Broker keys remain private. Health checks make one exact-model request with at most eight output tokens. Native response JSON and capability validation apply to normal tasks.
 - Trip update always creates a preview first. Apply updates local trip state; Notion sync creates/updates the trip page when the broker session is active.
+- [2026-10-10 model rollout, measured results and limitations](../docs/ai-model-rollout-2026-10-10.md).
 
 ## Notion Flow
 

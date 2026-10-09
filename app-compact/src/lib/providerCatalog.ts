@@ -4,12 +4,13 @@ type CatalogModel = {
   id: string;
   label: string;
   surfaces: string[];
+  tasks: string[];
 };
 
 export const COMPACT_AI_MODELS = catalog.providers
-  .flatMap((provider) => provider.models as CatalogModel[])
+  .flatMap((provider) => (provider.models as CatalogModel[]).map(model => ({ ...model, providerId: provider.id, providerName: provider.label })))
   .filter((model) => model.surfaces.includes('compact'))
-  .map((model) => ({ id: model.id, name: model.label }));
+  .map((model) => ({ id: model.id, name: model.label, providerId: model.providerId, providerName: model.providerName, tasks: model.tasks }));
 
 // Every contract-catalog model id (any surface). The Settings picker only offers
 // COMPACT_AI_MODELS, but routing must also accept broker-surface ids that stale or

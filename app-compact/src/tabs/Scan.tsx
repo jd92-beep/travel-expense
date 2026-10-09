@@ -256,8 +256,10 @@ export function Scan({
       if (mountedRef.current) setStatus('OCR 完成，請確認欄位。');
     } catch (error) {
       const draft = {
-        ...heuristicReceiptFromText(file.name, stateRef.current),
-        store: safeFileStem(file),
+        ...heuristicReceiptFromText('', stateRef.current),
+        store: '',
+        date: '',
+        payment: '' as const,
         note: `OCR 未完成：${redactedError(error)}`,
         source: 'react-ocr-manual',
         photoThumb: localThumb,

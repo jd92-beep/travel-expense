@@ -388,6 +388,7 @@ const CAT_SPRITES: Record<keyof typeof CAT_GLYPHS, string[]> = {
 type CatKey = keyof typeof CAT_GLYPHS;
 /* Every VisualIconId maps to a drawn glyph; shared shapes (wallet, pin, box) cover the aliases. */
 const CATEGORY_GLYPH: Record<VisualIconId, CatKey | TabId> = {
+  '': 'pending',
   flight: 'flight', transport: 'transport', food: 'food', shopping: 'shopping', lodging: 'lodging', ticket: 'ticket',
   localtour: 'pin', map: 'pin', medicine: 'medicine', other: 'box', post: 'box', cash: 'wallet', paypay: 'wallet',
   credit: 'credit', suica: 'suica', pending: 'pending', private: 'private', gift: 'gift', photo: 'photo', prep: 'prep',

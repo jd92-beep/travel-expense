@@ -15,8 +15,8 @@ function safeCategoryId(value: unknown): CategoryId {
 }
 
 function safePaymentId(value: unknown): PaymentId {
-  const v = String(value || 'cash').toLowerCase();
-  return VALID_PAYMENTS.has(v) ? v as PaymentId : 'cash';
+  const v = String(value || '').toLowerCase();
+  return VALID_PAYMENTS.has(v) ? v as PaymentId : '';
 }
 
 function safeSplitType(value: unknown): SplitType | undefined {
@@ -333,6 +333,7 @@ export function buildAppSettings(state: AppState) {
     voiceModel: state.voiceModel,
     emailModel: state.emailModel,
     tripUpdateModel: state.tripUpdateModel,
+    aiTranslationLanguage: state.aiTranslationLanguage,
     googleBackupModel: state.googleBackupModel,
     themePreference: state.themePreference,
     credentialBrokerUrl: state.credentialBrokerUrl,
@@ -361,6 +362,7 @@ export function rowToSettings(row?: SupabaseProfileRow | null): Partial<AppState
     voiceModel: typeof payload.voiceModel === 'string' ? payload.voiceModel : undefined,
     emailModel: typeof payload.emailModel === 'string' ? payload.emailModel : undefined,
     tripUpdateModel: typeof payload.tripUpdateModel === 'string' ? payload.tripUpdateModel : undefined,
+    aiTranslationLanguage: ['yue-HK', 'zh-TW', 'zh-CN', 'en', 'ja', 'ko'].includes(String(payload.aiTranslationLanguage)) ? payload.aiTranslationLanguage as AppState['aiTranslationLanguage'] : undefined,
     googleBackupModel: typeof payload.googleBackupModel === 'string' ? payload.googleBackupModel : undefined,
     themePreference: parseThemePreference(payload.themePreference),
     credentialBrokerUrl: typeof payload.credentialBrokerUrl === 'string' ? payload.credentialBrokerUrl : undefined,
@@ -1112,7 +1114,7 @@ export async function upsertSupabaseReceipt(session: Session, state: AppState, r
     record_time: cleanTime(receipt.time),
     category: recordKind === 'settlement' ? null : receipt.category || 'other',
     record_kind: recordKind,
-    payment_method: receipt.payment || 'cash',
+    payment_method: receipt.payment || null,
     amount: Number(receipt.total || 0),
     currency: receipt.currency || receipt.originalCurrency || state.tripCurrency || 'JPY',
     home_amount: Number(receipt.hkdAmount || 0) || null,

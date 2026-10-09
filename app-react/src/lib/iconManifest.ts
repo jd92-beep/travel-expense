@@ -24,6 +24,7 @@ export const VISUAL_ICON_META: Record<VisualIconId, { label: string; color: stri
   localtour: { label: '當地旅遊', color: '#3b7d6b', accent: '#bfe2d5' },
   medicine: { label: '藥品', color: '#c6547e', accent: '#f3c2d3' },
   other: { label: '其他', color: '#6b7280', accent: '#e5e7eb' },
+  '': { label: '未提供付款方式', color: '#6b7280', accent: '#e5e7eb' },
   cash: { label: '現金', color: '#2e8f62', accent: '#c8ead8' },
   credit: { label: '信用卡', color: '#315e8e', accent: '#cddff4' },
   paypay: { label: 'PayPay', color: '#d8503d', accent: '#f9c1b8' },

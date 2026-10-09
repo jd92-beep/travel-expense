@@ -417,6 +417,7 @@ export function useSyncEngine(
                 voiceModel: settings.voiceModel ?? finalState.voiceModel,
                 emailModel: settings.emailModel ?? finalState.emailModel,
                 tripUpdateModel: settings.tripUpdateModel ?? finalState.tripUpdateModel,
+                aiTranslationLanguage: settings.aiTranslationLanguage ?? finalState.aiTranslationLanguage,
                 googleBackupModel: settings.googleBackupModel ?? finalState.googleBackupModel,
                 themePreference: settings.themePreference ?? finalState.themePreference,
                 credentialBrokerUrl: settings.credentialBrokerUrl ?? finalState.credentialBrokerUrl,
