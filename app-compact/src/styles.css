@@ -3385,6 +3385,22 @@ body {
 .settings-trip-panel--compact {
   gap: 10px;
 }
+.settings-exchange-form,
+.settings-exchange-form fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.settings-exchange-form fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.settings-exchange-form p { margin: 0; }
+.settings-exchange-form label { display: grid; gap: 6px; }
+.settings-exchange-preview { line-height: 1.6; }
+.settings-exchange-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.settings-exchange-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
 .settings-trip-panel--collapsible {
   padding: 0;
   overflow: hidden;

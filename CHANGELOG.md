@@ -2,6 +2,8 @@
 
 ## 2026-10-10
 
+- **fix(compact): confirm exchange-rate changes before applying them.** Compact `0.29.2` gives exchange rates their own collapsed Settings section. Users confirm fixed/live mode explicitly; invalid/offline attempts preserve the confirmed setting. New records use the selected rate and stored records keep their existing conversion snapshots.
+
 - **fix(ai): restore Settings tests for new providers and Muse.** Deploy the OpenRouter/OpenCode broker handlers to fix the stale-worker 404. Boss approved Muse Contributor's required 16-token health minimum; other models retain eight-token probes, exact routing and no fallback. Normal task budgets/JSON parsing are unchanged. Broker `2026.10.10.2`, Compact documentation/version patch `0.29.1`; measured evidence and the authenticated UI gap are in [the rollout report](docs/ai-model-rollout-2026-10-10.md).
 
 ## 2026-09-26

@@ -37,6 +37,12 @@ Mobile Chrome URL
 - If the current date is outside the itinerary date window, rails use `.is-outside-trip`: the same red/gold/green palette is dimmed, live marker is hidden, and the bright sweep is paused.
 - Mobile layout keeps the rail in its own gutter and uses compact card columns so the beam does not cover event text.
 
+## Exchange Rate Settings
+
+- A standalone `settings-exchange-rates` accordion starts collapsed. Trip Manager retains separate statistics controls.
+- `ExchangeRateSection` stages fixed/live selection and the active-currency rate locally; `TripRateInput` does not write on blur. Confirmation commits the existing `rateMode`, `rate` and `rateTable` keys through `updateState`, preserving sync compatibility.
+- Live confirmation requires a valid current-currency API rate before switching. Failed or stale-trip requests preserve the confirmed setting; fixed rates survive boot without a live refresh. New records use the confirmed rate, while stored receipts retain their own rate/HKD snapshots.
+
 ## AI Flow
 
 - Provider groups start collapsed and use +/− toggles with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.

@@ -788,7 +788,7 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
 
   await doctor.getByRole('button', { name: /Review records/ }).click();
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByRole('button', { name: /設定/ }).click();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expectSettingsReady(page);
 
   await page.getByLabel('Compact Trip Doctor').getByRole('button', { name: /Data safety/ }).click();
@@ -971,7 +971,7 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
   await dryRun.getByRole('button', { name: /Review records/ }).click();
   await expect(page).toHaveURL(/#history/);
   await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByRole('button', { name: /設定/ }).click();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expectSettingsReady(page);
   await setAccordion(page, 'Notion Sync');
   await page.getByLabel('Sync readiness dry run').getByRole('button', { name: /Backup first/ }).click();
@@ -1109,7 +1109,7 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('Scope Early Train');
   await page.getByRole('button', { name: '×' }).click();
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeHidden();
-  await page.getByRole('button', { name: /設定/ }).click();
+  await page.getByRole('button', { name: '設定', exact: true }).click();
   await expectSettingsReady(page);
   await page.getByLabel('Trip scope audit').getByRole('button', { name: /Data safety/ }).click();
   await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
@@ -1681,90 +1681,143 @@ test('Settings can connect a broker session without leaking the password into ap
   expect(await page.getByLabel('Broker password').count()).toBe(0);
 });
 
-test('Fixed exchange rate mode locks the rate against live auto-refresh', async ({ page }) => {
-  // Stub the live-rate endpoint so the test is deterministic (real network otherwise) and so a
-  // switch back to live mode has a known value to assert against.
-  await page.route('**/open.er-api.com/**', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ result: 'success', provider: 'test-stub', rates: { JPY: 25, HKD: 1 } }) });
+async function setupExchangeRates(page, settings = {}, respond) {
+  await page.route('**/secrets.local.js', route => route.fulfill({ contentType: 'application/javascript', body: 'window.DEV_SECRETS = {};' }));
+  await page.route('**/open.er-api.com/**', async route => {
+    if (respond) return respond(route);
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: 'success', rates: { JPY: 25, CNY: 0.9, HKD: 1 } }) });
   });
-  await page.route('**/corsproxy.io/**', (route) => route.abort());
-
-  await page.addInitScript(() => {
+  await page.route('**/corsproxy.io/**', route => route.abort());
+  await page.addInitScript(settings => {
     window.__disable_supabase_configured = true;
-    // Seed once per tab. addInitScript re-runs on page.reload(); without this guard the reload
-    // would wipe the fixed rate the test just persisted and re-seed the live stub value.
-    if (sessionStorage.getItem('fixed-rate-seeded') === '1') return;
-    sessionStorage.setItem('fixed-rate-seeded', '1');
+    if (sessionStorage.getItem('exchange-confirm-seeded')) return;
+    sessionStorage.setItem('exchange-confirm-seeded', '1');
     localStorage.clear();
     try { indexedDB.deleteDatabase('travel-expense-react'); } catch { /* best effort */ }
     localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
     localStorage.setItem('boss-japan-tracker', JSON.stringify({
-      lastTab: 'settings',
-      budget: 101800,
-      rate: 20.36,
-      rateMode: 'live',
-      rateTable: { JPY: { currency: 'JPY', perHkd: 20.36, source: 'test-seed', fetchedAt: Date.now() } },
-      tripCurrency: 'JPY',
-      autoSync: false,
-      persons: [{ id: 'p_boss', name: 'Boss' }],
-      shareRatios: { p_boss: 1 },
-      receipts: [],
-      schemaVersion: 3,
-      settingsUpdatedAt: Date.now(),
+      lastTab: 'settings', budget: 101800, rate: 20.36, rateMode: 'live',
+      rateTable: { JPY: { currency: 'JPY', perHkd: 20.36, source: 'fixture', fetchedAt: Date.now() } },
+      tripCurrency: 'JPY', autoSync: false,
+      persons: [{ id: 'p_boss', name: 'Boss' }], shareRatios: { p_boss: 1 },
+      receipts: [{ id: 'historical-fx', store: 'Historical rate fixture', total: 2036, currency: 'JPY', exchangeRate: 20.36, hkdAmount: 100, date: '2026-10-10', category: 'food', payment: 'cash', personId: 'p_boss' }],
+      schemaVersion: 3, settingsUpdatedAt: Date.now(), ...settings,
     }));
-  });
-
+  }, settings);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
-  await expectSettingsReady(page);
-  await setAccordion(page, '旅程管理器');
+  await expect(page.locator('[aria-controls="settings-exchange-rates-panel"]')).toBeVisible();
+  const panel = page.locator('.accordion-card').filter({ has: page.locator('[aria-controls="settings-exchange-rates-panel"]') });
+  await expect(panel.getByRole('button', { name: /匯率設定/ })).toHaveAttribute('aria-expanded', 'false');
+  await setAccordion(page, '匯率設定');
+  return panel;
+}
+async function storedExchangeState(page) {
+  return page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
+}
+async function saveExchangeReceipt(page, store, total, currency = 'JPY') {
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#scan`);
+  await page.getByRole('button', { name: '手動', exact: true }).click();
+  const editor = page.getByRole('dialog');
+  await editor.getByLabel('店名 / 項目', { exact: true }).fill(store);
+  await editor.getByLabel('日期', { exact: true }).fill('2026-10-10');
+  await editor.getByLabel('貨幣', { exact: true }).selectOption(currency);
+  await editor.getByLabel('金額', { exact: true }).fill(String(total));
+  await editor.getByRole('button', { name: '儲存', exact: true }).click();
+  await expect(editor).toBeHidden();
+}
 
-  const rateLabel = page.locator('label', { hasText: '匯率（1 HKD' });
-  const fxDetails = page.locator('details.settings-fx-panel');
-  if (await fxDetails.count()) {
-    const summary = fxDetails.locator('summary').first();
-    if (!(await fxDetails.evaluate((el) => el.open))) await summary.click();
-  }
-  const rateInput = rateLabel.locator('input[type="number"]');
-  const refreshButton = page.getByRole('button', { name: /更新 live rate/ });
+test('Exchange settings are independently collapsed and apply fixed/live rates only after confirmation', async ({ page }) => {
+  let requests = 0;
+  const panel = await setupExchangeRates(page, {}, async route => {
+    requests += 1;
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ result: 'success', rates: { JPY: 25, HKD: 1 } }) });
+  });
+  await expect(page.locator('[aria-controls="settings-trip-panel"]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel.getByLabel('即時匯率（1 HKD = JPY）')).toHaveValue('25');
+  const requestsBeforeDraft = requests;
+  await panel.getByRole('tab', { name: '固定匯率', exact: true }).click();
+  const input = panel.getByLabel('固定匯率（1 HKD = JPY）');
+  await input.fill('19.5');
+  await input.blur();
+  expect((await storedExchangeState(page)).rateMode).toBe('live');
+  expect((await storedExchangeState(page)).rateTable.JPY.perHkd).toBe(25);
+  expect(requests).toBe(requestsBeforeDraft);
+  await expect(panel.getByText(/確認後，新增記錄會採用/)).toContainText('固定匯率');
+  await panel.getByRole('button', { name: '取消修改', exact: true }).click();
+  await expect(panel.getByRole('tab', { name: '即時匯率', exact: true })).toHaveAttribute('aria-selected', 'true');
+  expect((await storedExchangeState(page)).rateMode).toBe('live');
 
-  // Default is live mode: refresh button present, label says 即時.
-  await expect(rateLabel).toContainText('即時匯率');
-  await expect(refreshButton).toBeVisible();
+  await panel.getByRole('tab', { name: '固定匯率', exact: true }).click();
+  await input.fill('0');
+  await panel.getByRole('button', { name: '確認採用固定匯率', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('0.01');
+  expect((await storedExchangeState(page)).rateMode).toBe('live');
+  await input.fill('19.5');
+  await panel.getByRole('button', { name: '確認採用固定匯率', exact: true }).click();
+  await expect(panel.getByRole('status')).toContainText('新記錄採用固定匯率');
+  await expect.poll(async () => (await storedExchangeState(page)).rateMode).toBe('fixed');
+  expect((await storedExchangeState(page)).rateTable.JPY).toMatchObject({ perHkd: 19.5, source: 'manual' });
+  expect((await storedExchangeState(page)).receipts.find(r => r.id === 'historical-fx')).toMatchObject({ exchangeRate: 20.36, hkdAmount: 100 });
+  await page.screenshot({ path: 'test-results/exchange-rate-mobile.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
-  // Switch to fixed mode and enter a manually pre-exchanged rate.
-  await page.getByRole('tab', { name: '固定匯率' }).click();
-  await expect(rateLabel).toContainText('固定匯率');
-  await expect(refreshButton).toHaveCount(0);
-  await expect(page.getByText(/已鎖定手動匯率/)).toBeVisible();
-
-  await rateInput.fill('19.5');
-  await rateInput.blur();
-
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
-  expect(stored.rate).toBe(19.5);
-  expect(stored.rateTable.JPY.perHkd).toBe(19.5); // must also patch rateTable so perHkdForCurrency isn't overridden by the stale seeded entry
-  expect(stored.rateMode).toBe('fixed');
-
-  // Reload — simulating an app relaunch that would normally trigger the boot live-rate fetch. The
-  // behavioral contract that matters: the persisted rate must survive a boot untouched while fixed
-  // (whether or not a background fetch fires underneath is an implementation detail).
   await page.reload();
   await expectSettingsReady(page);
-  await setAccordion(page, '旅程管理器');
-  const fxDetailsAfterReload = page.locator('details.settings-fx-panel');
-  if (await fxDetailsAfterReload.count()) {
-    if (!(await fxDetailsAfterReload.evaluate((el) => el.open))) await fxDetailsAfterReload.locator('summary').first().click();
-  }
-  await page.waitForTimeout(500); // let the boot currency effect have a chance to fire
-  await expect(rateInput).toHaveValue('19.5');
-  const afterReload = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
-  expect(afterReload.rate).toBe(19.5); // still not overwritten
-  expect(afterReload.rateTable.JPY.perHkd).toBe(19.5);
+  await setAccordion(page, '匯率設定');
+  await expect(input).toHaveValue('19.5');
+  expect((await storedExchangeState(page)).rateMode).toBe('fixed');
+  expect(requests).toBe(requestsBeforeDraft); // fixed mode survives boot without live requests
+  await saveExchangeReceipt(page, 'Confirmed fixed receipt', 1950);
+  await expect.poll(async () => (await storedExchangeState(page)).receipts.find(r => r.store === 'Confirmed fixed receipt')).toMatchObject({ exchangeRate: 19.5, hkdAmount: 100 });
 
-  // Switching back to live mode triggers an immediate refresh and re-enables the button.
-  await page.getByRole('tab', { name: '即時 (ER-API)' }).click();
-  await expect(refreshButton).toBeVisible();
-  await expect(rateInput).toHaveValue('25');
-  const afterLive = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
-  expect(afterLive.rateMode).toBe('live');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await setAccordion(page, '匯率設定');
+  await panel.getByRole('tab', { name: '即時匯率', exact: true }).click();
+  expect((await storedExchangeState(page)).rateMode).toBe('fixed');
+  expect(requests).toBe(requestsBeforeDraft);
+  await panel.getByRole('button', { name: '確認採用即時匯率', exact: true }).click();
+  await expect.poll(async () => (await storedExchangeState(page)).rateMode).toBe('live');
+  await expect(panel.getByLabel('即時匯率（1 HKD = JPY）')).toHaveValue('25');
+  expect((await storedExchangeState(page)).receipts.find(r => r.store === 'Confirmed fixed receipt')).toMatchObject({ exchangeRate: 19.5, hkdAmount: 100 });
+  await saveExchangeReceipt(page, 'Confirmed live receipt', 2500);
+  await expect.poll(async () => (await storedExchangeState(page)).receipts.find(r => r.store === 'Confirmed live receipt')).toMatchObject({ exchangeRate: 25, hkdAmount: 100 });
+});
+
+test('Exchange live confirmation failure preserves the confirmed fixed rate and records', async ({ page }) => {
+  let requests = 0;
+  const panel = await setupExchangeRates(page, { rateMode: 'fixed', rate: 19.5, rateTable: { JPY: { currency: 'JPY', perHkd: 19.5, source: 'manual', fetchedAt: Date.now() } } }, async route => {
+    requests += 1;
+    await route.fulfill({ status: 503, body: 'fixture unavailable' });
+  });
+  await panel.getByRole('tab', { name: '即時匯率', exact: true }).click();
+  expect(requests).toBe(0);
+  await panel.getByRole('button', { name: '確認採用即時匯率', exact: true }).click();
+  await expect(panel.getByRole('alert')).toContainText('原設定已保留');
+  const stored = await storedExchangeState(page);
+  expect(stored.rateMode).toBe('fixed');
+  expect(stored.rateTable.JPY.perHkd).toBe(19.5);
+  expect(stored.receipts[0]).toMatchObject({ exchangeRate: 20.36, hkdAmount: 100 });
+  expect(requests).toBe(1);
+  await panel.getByRole('button', { name: '取消修改', exact: true }).click();
+  await expect(panel.getByRole('tab', { name: '固定匯率', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+});
+
+test('Desktop exchange confirmation supports fractional fixed rates and keyboard expansion', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const panel = await setupExchangeRates(page, { tripCurrency: 'CNY', rateMode: 'fixed', rate: 20.36, rateTable: { CNY: { currency: 'CNY', perHkd: 0.9, source: 'manual', fetchedAt: Date.now() }, JPY: { currency: 'JPY', perHkd: 20.36, source: 'manual', fetchedAt: Date.now() } } });
+  await setAccordion(page, '匯率設定', false);
+  const summary = panel.getByRole('button', { name: /匯率設定/ });
+  await summary.focus();
+  await summary.press('Enter');
+  await expect(summary).toHaveAttribute('aria-expanded', 'true');
+  const input = panel.getByLabel('固定匯率（1 HKD = CNY）');
+  await input.fill('0.128');
+  await input.press('Tab');
+  expect((await storedExchangeState(page)).rateTable.CNY.perHkd).toBe(0.9);
+  await panel.getByRole('button', { name: '確認採用固定匯率', exact: true }).click();
+  await expect.poll(async () => (await storedExchangeState(page)).rateTable.CNY.perHkd).toBe(0.128);
+  expect((await storedExchangeState(page)).rateTable.JPY.perHkd).toBe(20.36);
+  await page.screenshot({ path: 'test-results/exchange-rate-desktop.png', fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

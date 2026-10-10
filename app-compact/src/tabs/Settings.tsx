@@ -22,6 +22,7 @@ import { syncQueueSummary } from './settings/reports';
 import { PeopleSection } from './settings/PeopleSection';
 import { AiModelsSection } from './settings/AiModelsSection';
 import { TripManagerSection } from './settings/TripManagerSection';
+import { ExchangeRateSection } from './settings/ExchangeRateSection';
 import { TripSharingSection } from './settings/TripSharingSection';
 import { TripUpdateSection } from './settings/TripUpdateSection';
 import { TripReviewModal } from './settings/TripReviewModal';
@@ -407,6 +408,7 @@ export function Settings({
       <PeopleSection ctx={ctx} />
       <AiModelsSection ctx={ctx} brokerReady={brokerReady} />
       <TripManagerSection ctx={ctx} openTripDraft={(draft) => { setTripDraft(draft); setTripDraftModalOpen(true); }} />
+      <ExchangeRateSection ctx={ctx} />
       <TripSharingSection ctx={ctx} sharingSession={sharingSession} />
       <TripUpdateSection
         ctx={ctx}

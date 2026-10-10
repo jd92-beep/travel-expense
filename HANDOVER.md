@@ -1,5 +1,13 @@
 # Agent Handover
 
+## 2026-10-10 — Confirmed exchange-rate settings (Compact 0.29.2)
+
+- Exchange rates now have a standalone Settings accordion, **匯率設定**, initially collapsed and independent of Trip Manager. Statistics toggles stay under Trip Manager's **統計口徑**.
+- Fixed/live tabs and numeric input are drafts. Only **確認採用固定匯率 / 確認採用即時匯率** commits the mode/rate; **取消修改** restores the confirmed choice. The summary and confirmation copy identify which mode new records use. Stored receipt rates/HKD amounts remain intact.
+- Fixed confirmation validates 0.01–1,000,000 and updates the active currency's `rateTable` entry together with `rateMode`/`rate`; fractional values remain editable. Live confirmation obtains a valid current-currency rate before switching, preserving the previous setting on network/provider failure or a trip/currency change.
+- Existing storage/sync keys and the native fixed-mode boot guard are preserved. No database/schema or production user-record write is required. Scope is Compact; React and agent/broker configuration are unchanged.
+- Targeted mobile/desktop confirmation tests passed (3/3), including actual saved fixed/live receipt conversions, historical receipt retention, cancel/invalid input, reload persistence, offline failure and keyboard expansion. Typecheck/build/security passed. Full Settings suite: **12 passed / 1 existing skip**; shared-contract smoke passed. Mobile and desktop screenshots were inspected. Git delivery and exact-SHA release receipts are retained with this task's verification artifacts.
+
 ## 2026-10-10 — Settings model-test 404 repair
 
 - The public client was already on Compact 0.29.0, but the live broker still served 2026.10.04.1. Authenticated requests to the new provider routes reached the old broker's `Not found` handler. The selected-model URL and nested model ID in the client are correct.

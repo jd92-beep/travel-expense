@@ -1,20 +1,18 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, MapPin, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, MapPin, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AccordionCard } from '../../components/AccordionCard';
 import { activeTrip, createTripProfile, migrateAppState, normalizeTripIntelligence, switchTrip } from '../../domain/trip/normalize';
-import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES } from '../../lib/currency';
-import { getItinerary, getResolvedTripCurrency } from '../../lib/domain';
+import { perHkdForCurrency, SUPPORTED_CURRENCIES } from '../../lib/currency';
+import { getItinerary } from '../../lib/domain';
 import { receiptSourceTombstoneKey } from '../../lib/syncMerge';
 import { enqueueChange } from '../../lib/changeJournal';
 import type { AppState, Person, TripDraft, TripProfile } from '../../lib/types';
-import { SegmentedControl } from '../../components/ui';
 import { useTripTheme } from '../../theme/tripTheme';
 import { nonHomeCurrency, type SettingsContext } from './shared';
 import { clampFinite } from './backup';
-import { TripRateInput } from './TripRateInput';
 
 export function TripManagerSection({ ctx, openTripDraft }: { ctx: SettingsContext; openTripDraft: (draft: TripDraft) => void }) {
-  const { state, setState, updateState, busy, setStatus, run, currentTrip, trips } = ctx;
+  const { state, setState, updateState, setStatus, currentTrip, trips } = ctx;
   const nonHomeCurrencyForTrip = (trip: Partial<TripProfile> | undefined, fallback = 'JPY') => nonHomeCurrency(state, trip, fallback);
   const { theme } = useTripTheme();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -114,21 +112,6 @@ export function TripManagerSection({ ctx, openTripDraft }: { ctx: SettingsContex
       shareRatiosByTripId,
       trips: updatedTrips.map((t) => ({ ...t, active: t.id === nextActive.id })),
     };
-  }
-
-  async function refreshRate() {
-    await run('更新匯率', async () => {
-      const snapshot = await fetchLiveCurrencySnapshot();
-      // Re-check rateMode at apply time via the functional updater, not the closed-over `state` from
-      // when this async function started — the user could have switched to Fixed (and typed a manual
-      // rate) while this fetch was in flight; a stale live response must not silently overwrite that.
-      setState((current) => current.rateMode === 'fixed' ? current : { ...current, ...appRatePatchFromSnapshot(snapshot) });
-      const code = getResolvedTripCurrency(state, activeTrip(state));
-      const rate = Number(snapshot.rates[code]);
-      return Number.isFinite(rate) && rate > 0
-        ? `已更新：1 HKD = ${rate.toFixed(2)} ${code}（${snapshot.source}）`
-        : `已更新匯率（${snapshot.source}）`;
-    });
   }
 
   function selectTrip(tripId: string) {
@@ -632,41 +615,9 @@ export function TripManagerSection({ ctx, openTripDraft }: { ctx: SettingsContex
       </div>}
       </div>
 
-      <details className="settings-fx-panel" style={{ marginTop: '0.75rem' }}>
-        <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>匯率與統計口徑</summary>
+      <details className="settings-stats-panel" style={{ marginTop: '0.75rem' }}>
+        <summary style={{ cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem' }}>統計口徑</summary>
         <div className="settings-trip-panel settings-trip-panel--compact" style={{ marginTop: '0.5rem' }}>
-        <SegmentedControl
-          ariaLabel="匯率模式"
-          value={state.rateMode === 'fixed' ? 'fixed' : 'live'}
-          options={[
-            { value: 'live', label: '即時 (ER-API)' },
-            { value: 'fixed', label: '固定匯率' },
-          ]}
-          onChange={(mode) => {
-            updateState({ rateMode: mode });
-            if (mode === 'live') void refreshRate();
-          }}
-        />
-        <div className="form-grid">
-          <label>{state.rateMode === 'fixed' ? '固定' : '即時'}匯率（1 HKD = {String(state.tripCurrency || 'JPY').toUpperCase()}）
-            <TripRateInput state={state} updateState={updateState} />
-          </label>
-          {state.rateMode !== 'fixed' && (
-            <label>
-              <span>更新 live rate</span>
-              <button className="secondary" type="button" disabled={!!busy} onClick={refreshRate}>
-                {busy === '更新匯率' ? <RotateCcw size={18} className="spin" /> : <RotateCcw size={18} />} 更新匯率
-              </button>
-            </label>
-          )}
-        </div>
-        {state.rateMode === 'fixed' && (
-          <p className="muted">已鎖定手動匯率。想返自動，撳「即時 (ER-API)」。</p>
-        )}
-        {state.rateMode === 'fixed' && !state.rateTable?.[String(state.tripCurrency || 'JPY').toUpperCase()] && (
-          <p className="muted">⚠️ 未為 {String(state.tripCurrency || 'JPY').toUpperCase()} 設定固定匯率 — 而家用緊內置近似值，請喺上面輸入你實際兌換到嘅匯率。</p>
-        )}
-
         <label className="check-row">
           <input type="checkbox" checked={state.statsIncludeTransportLodging} onChange={(e) => updateState({ statsIncludeTransportLodging: e.target.checked })} />
           反轉首頁統計：總消費排除機票/住宿，今日/日均包括全部
