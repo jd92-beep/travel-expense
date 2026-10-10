@@ -241,11 +241,14 @@ App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放
 
 在 Settings：
 
-- Export CSV 會匯出目前旅程的開支表。
-- Export Backup JSON 只會匯出目前旅程和這個旅程的收據。
+- Compact 的「資料管理 → 下載旅程資料」會下載目前旅程 ZIP，內有離線可讀／列印的 `summary.html`、開支／品項／付款分帳／旅伴／行程／圖片清單 CSV，以及 JSON 備份。
+- 「連同收據圖片下載」預設不勾選；勾選後會加入 `receipts/` 圖片資料夾。原圖未能取得時可保留本地縮圖，清單會標示縮圖、遺失或下載失敗，文字資料仍可下載。
+- 解壓整個 ZIP 後開啟 `summary.html`，報告內的圖片連結可以離線使用；CSV 可用 Excel／Numbers 開啟。
+- Export CSV 會單獨匯出目前旅程的開支表，包含原幣金額、HKD、收據匯率、付款人、備註及紀錄 ID。
+- Export Backup JSON 只會匯出目前旅程和這個旅程的文字資料；圖片不嵌入 JSON。
 - Import Backup JSON 可以還原安全的本機資料，但會移除秘密資料和雲端 ID。
 
-不要把真正 API key 或 token 放進 backup 檔。
+下載包含本機可見的私人紀錄，適合個人保存。JSON 還原不會自動附回 ZIP 圖片；格式和欄位說明見 [下載格式文件](docs/compact-export-format.md)。不要把真正 API key 或 token 放進 backup 檔。
 
 ## 安全規則
 

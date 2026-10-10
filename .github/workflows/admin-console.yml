@@ -138,6 +138,7 @@ jobs:
           npm run security:scan
           npm run test:receipt-tombstone
           npm run test:itinerary-merge
+          npm run test:trip-export
 
       - name: Install Chromium
         working-directory: app-compact
@@ -148,6 +149,7 @@ jobs:
         run: |
           npm run smoke:itinerary
           npm run smoke:privacy
+          npm run smoke:exports
           npm run smoke:offline
           npm run smoke:mobile-layout
           npm run smoke:security

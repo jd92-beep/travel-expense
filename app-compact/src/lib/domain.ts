@@ -126,7 +126,7 @@ export function downloadJson(filename: string, value: unknown): void {
   downloadBlob(filename, new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' }));
 }
 
-function downloadBlob(filename: string, blob: Blob): void {
+export function downloadBlob(filename: string, blob: Blob): void {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = filename;
@@ -628,19 +628,20 @@ export function computeSettlements(state: AppState): SettlementSnapshot {
   return { transfers, balances: roundedBalances, sharedTotal, sharedByPayer, privateByOwner, crossPrivate };
 }
 
-export function exportCsv(state: AppState): void {
-  const rows = [['日期', '時間', '旅程', '店名', '類別', '支付', '原金額', '貨幣', '金額(legacy)', 'HKD', '付款人', '地區', '地址', 'Booking Ref', '備註', '品項']];
+/** Spreadsheet-friendly, lossless multiline cells; amounts use the same resolver as the UI. */
+export function receiptCsv(state: AppState, photos: Record<string, { file: string; status: string }> = {}): string {
+  const rows: unknown[][] = [['日期', '時間', '旅程', '店名', '類別', '支付', '原金額', '貨幣', '金額(legacy)', 'HKD', '付款人', '地區', '地址', 'Booking Ref', '備註', '品項', '紀錄 ID', '紀錄種類', '紀錄金額', '紀錄貨幣', '匯率(每 HKD)', '匯率已鎖定', '匯率來源', '分帳模式', '分帳方法', '受益人', '可見範圍', '階段', '辨識狀態', '來源', '收據圖片檔案', '圖片狀態']];
   const persons = getPersons(state);
   const firstId = persons[0].id;
   const trips = state.trips || [];
   const currentTrip = activeTrip(state);
-  for (const r of scopedReceiptsForTrip(state, currentTrip)) {
+  for (const r of scopedReceiptsForTrip(state, currentTrip).slice().sort((a, b) => `${a.date} ${a.time || ''}`.localeCompare(`${b.date} ${b.time || ''}`) || a.id.localeCompare(b.id))) {
     const person = persons.find((p) => p.id === (r.personId || firstId));
     const trip = trips.find((item) => item.id === r.tripId);
     rows.push([
       r.date,
       r.time || '',
-      trip?.name || r.tripId || '',
+      trip?.name || currentTrip.name || r.tripId || '',
       displayStore(r),
       categoryById(r.category).name,
       paymentById(r.payment).name,
@@ -649,18 +650,38 @@ export function exportCsv(state: AppState): void {
       String(r.total || 0),
       // Same resolver as every on-screen total (pinned rate + stale-snapshot repair).
       String(getReceiptHkdAmount(r, state)),
-      person ? `${person.emoji} ${person.name}` : '',
+      r.payers?.length ? r.payers.map((payer) => `${persons.find((p) => p.id === payer.personId)?.name || payer.personId} (${payer.amount} ${r.currency || state.tripCurrency})`).join('; ') : person ? `${person.emoji} ${person.name}` : r.personId || '',
       receiptRegion(state, r),
       r.address || '',
       r.bookingRef || '',
       r.note || '',
-      (r.itemsText || '').replace(/\n/g, '; '),
+      r.itemsText || '',
+      r.id,
+      r.recordKind === 'settlement' || r.isSettlement ? '還款' : '開支',
+      r.total,
+      r.currency || state.tripCurrency,
+      r.exchangeRate ?? '',
+      r.exchangeRatePinned ? '是' : '否',
+      r.rateSource || '',
+      r.splitMode || 'shared',
+      r.splitType || 'shares',
+      persons.find((p) => p.id === r.beneficiaryId)?.name || r.beneficiaryId || '',
+      r.visibility || 'trip',
+      r.phase || '',
+      isPendingReceipt(r) ? '待辨識' : '已記錄',
+      r.source || '',
+      photos[r.id]?.file || '',
+      photos[r.id]?.status || '未包含圖片',
     ]);
   }
-  const csv = '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  return '\uFEFF' + rows.map((row) => row.map(csvCell).join(',')).join('\r\n') + '\r\n';
+}
+
+export function exportCsv(state: AppState): void {
+  const currentTrip = activeTrip(state);
   downloadBlob(
     `${(currentTrip.name || 'travel-expense').replace(/[^\w\u4e00-\u9fff-]+/g, '-')}-receipts-${todayYmd()}.csv`,
-    new Blob([csv], { type: 'text/csv;charset=utf-8' }),
+    new Blob([receiptCsv(state)], { type: 'text/csv;charset=utf-8' }),
   );
 }
 

@@ -1,6 +1,7 @@
 import { AlertTriangle, Cloud, Copy, Download, KeyRound, RotateCcw, Server, ShieldCheck, Trash2, Upload } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { AccordionCard } from '../../components/AccordionCard';
+import type { Session } from '@supabase/supabase-js';
 import { migrateAppState, scopedReceiptsForTrip } from '../../domain/trip/normalize';
 import {
   redactedError,
@@ -11,14 +12,16 @@ import {
 } from '../../lib/notion';
 import { notionMirrorGuardMessage } from '../../lib/notionAccess';
 import type { AppState, SyncEngineState } from '../../lib/types';
-import { clearCredentialSession, stripPortableBackupState } from '../../lib/storage';
+import { clearCredentialSession } from '../../lib/storage';
+import { exportFilename, portableTripBackup } from '../../lib/tripExport';
 import { clearDeviceTrust } from '../../security/deviceTrust';
 import { clearTrustedDevice } from '../../security/trustedDevice';
 import { type SettingsContext } from './shared';
 import { validateBackupSchema, buildBackupImportPreview, type BackupImportPreview } from './backup';
 import { buildTripSharePreview, buildDiagnosticsPreview, formatMoney, type TripSharePreview, type DiagnosticsPreview } from './reports';
+import { ExportDownloads } from './ExportDownloads';
 
-export function DataSection({ ctx, syncState, storageScope, brokerReady, notionMirrorReady, onReset }: { ctx: SettingsContext; syncState?: SyncEngineState; storageScope: string; brokerReady: boolean; notionMirrorReady: boolean; onReset: () => void }) {
+export function DataSection({ ctx, session, syncState, storageScope, brokerReady, notionMirrorReady, onReset }: { ctx: SettingsContext; session: Session | null; syncState?: SyncEngineState; storageScope: string; brokerReady: boolean; notionMirrorReady: boolean; onReset: () => void }) {
   const { state, setState, updateState, busy, setBusy, setStatus, copyText, persons, currentTrip, cloudSyncAvailable, userEmail, showStressPanel } = ctx;
   const [showClearLocalPreview, setShowClearLocalPreview] = useState(false);
   const [backupPreview, setBackupPreview] = useState<BackupImportPreview | null>(null);
@@ -41,12 +44,7 @@ export function DataSection({ ctx, syncState, storageScope, brokerReady, notionM
   };
 
   function safeBackupState() {
-    return stripPortableBackupState({
-      ...state,
-      activeTripId: currentTrip.id,
-      trips: [currentTrip],
-      receipts: scopedReceiptsForTrip(state, currentTrip),
-    });
+    return portableTripBackup(state, currentTrip);
   }
 
   async function backupToNotion() {
@@ -62,7 +60,7 @@ export function DataSection({ ctx, syncState, storageScope, brokerReady, notionM
       const omitted = result.photosOmitted
         ? `，略過 ${result.photosOmitted} 張相片縮圖（相片行自己嘅 mirror）`
         : '';
-      setStatus(`已備份到 Notion：${result.receipts} 筆記錄${omitted}。想要完整檔案請用「匯出 Backup」。`);
+      setStatus(`已備份到 Notion：${result.receipts} 筆記錄${omitted}。資料連圖片請下載旅程 ZIP。`);
     } catch (error) {
       setStatus(`備份到 Notion 失敗：${redactedError(error)}`);
     } finally {
@@ -149,9 +147,11 @@ export function DataSection({ ctx, syncState, storageScope, brokerReady, notionM
     <>
     <AccordionCard id="settings-data" title="資料管理" icon={<ShieldCheck />} defaultOpen={false}>
       <input ref={backupInput} hidden type="file" accept="application/json,.json" onChange={(e) => importBackup(e.target.files?.[0])} />
+      <ExportDownloads ctx={ctx} session={session} />
+      <p className="muted">單獨下載文字資料：CSV 適合試算表；Backup JSON 可匯入 App。</p>
       <div className="action-row wrap">
         <button className="secondary" type="button" onClick={() => exportCsv(state)}><Download size={18} /> 匯出 CSV</button>
-        <button className="secondary" type="button" onClick={() => downloadJson(`${currentTrip.name || 'travel-expense'}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
+        <button className="secondary" type="button" onClick={() => downloadJson(`${exportFilename(currentTrip.name)}-backup.json`, safeBackupState())}><Download size={18} /> 匯出 Backup</button>
         <button className="secondary" type="button" disabled={!!busy} onClick={backupToNotion}><Upload size={18} /> 備份到 Notion</button>
         <button className="secondary" type="button" onClick={() => backupInput.current?.click()}><Upload size={18} /> 匯入 Backup</button>
       </div>
@@ -293,6 +293,7 @@ export function DataSection({ ctx, syncState, storageScope, brokerReady, notionM
       </details>)}
       <div className="settings-backup-safety" aria-label="Backup safety scope">
         <span><ShieldCheck size={15} /> CSV / Backup JSON 只包含目前旅程，不會匯出其他旅程紀錄。</span>
+        <span><Download size={15} /> ZIP 亦只包含目前旅程；圖片以獨立檔案匯出，JSON 不嵌入圖片。</span>
         <span><KeyRound size={15} /> Backup 不包含 API key、Notion token、broker session 或解鎖 secret。</span>
         <span><AlertTriangle size={15} /> 匯入 Backup 時會丟棄外部 cloud IDs、sync queue、舊 Trip links 同 credential 欄位。</span>
       </div>

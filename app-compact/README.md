@@ -24,6 +24,20 @@ dock. The Pages root is a stateless CSP-protected redirect to this maintained ap
 should not be mirrored into `app-react/`
 unless Boss explicitly asks for parity work.
 
+## Local export downloads
+
+Settings → 資料管理 → 下載旅程資料 exports a current-trip ZIP. The default is data only;
+check **連同收據圖片下載** to add receipt images. Extract the entire archive, then open
+`summary.html` to read/print an offline report, or open the organized CSV files in Excel/Numbers.
+`backup.json` restores text data through the existing import preview; it does not restore photos.
+Cloud originals use the initiating account's private Storage access. Locally available thumbnails
+and unavailable images are explicitly reported. Cancellation creates no download.
+
+See [the format contract](../docs/compact-export-format.md) for the file inventory and limits.
+Run `npm run test:trip-export` for mocked photo-access contracts, `npm run smoke:exports` for
+actual ZIP/download/restore/offline-link checks, and `npm run smoke:settings` for both Settings
+and export browser suites. All use disposable fixtures; no production receipt writes are needed.
+
 ## Shared Trip Contract Notes
 
 Compact and React must keep the same trip/itinerary data contract. In particular,

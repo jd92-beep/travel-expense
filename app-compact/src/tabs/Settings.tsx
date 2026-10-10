@@ -427,7 +427,7 @@ export function Settings({
         setPersonalNotionDb={setPersonalNotionDb}
         applyPersonalNotionConnection={applyPersonalNotionConnection}
       />
-      <DataSection ctx={ctx} syncState={syncState} storageScope={storageScope} brokerReady={brokerReady} notionMirrorReady={notionMirrorReady} onReset={onReset} />
+      <DataSection ctx={ctx} session={sharingSession} syncState={syncState} storageScope={storageScope} brokerReady={brokerReady} notionMirrorReady={notionMirrorReady} onReset={onReset} />
       <AccountSection
         ctx={ctx}
         updatePassword={updatePassword}

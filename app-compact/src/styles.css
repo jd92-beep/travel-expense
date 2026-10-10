@@ -3781,6 +3781,33 @@ body {
 .settings-screen .credential-status-grid .pill {
   background: rgba(255,255,255,.7);
 }
+.settings-screen .settings-export-downloads {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid rgba(139,115,85,.22);
+  border-radius: 18px;
+  min-width: 0;
+}
+.settings-screen .settings-export-downloads p { margin: 0; line-height: 1.6; }
+.settings-screen .settings-export-photo-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+.settings-screen .settings-export-photo-choice input {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  accent-color: #3F7E55;
+}
+.settings-screen .settings-export-photo-choice small { display: block; margin-top: 4px; font-weight: 400; }
+.settings-screen .settings-export-status { overflow-wrap: anywhere; }
+.settings-screen .settings-export-status:empty { display: none; }
 .settings-screen .settings-backup-safety {
   display: grid;
   gap: 8px;

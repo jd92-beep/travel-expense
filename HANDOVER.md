@@ -1,5 +1,13 @@
 # Agent Handover
 
+## 2026-10-10 — Organized exports and optional receipt images (Compact 0.30.0)
+
+- Settings **資料管理 → 下載旅程資料** now downloads a current-trip ZIP. Its image checkbox defaults off. The archive organizes a readable/printable offline report, six CSV tables, itinerary JSON, portable text backup, photo status and file manifest. Standalone CSV/Backup downloads remain available. See [the export format contract](docs/compact-export-format.md).
+- CSV preserves original/record currencies and amounts, HKD resolver results, stored rates, multiline notes, multiple payers and formula protection. Backup export scopes itinerary/translation caches and strips thumbnails; safe JSON restore continues to strip credentials, cloud IDs and image references without changing persisted schema 4.
+- Private Storage URLs renew using the initiating account. Original downloads, labelled local-thumbnail substitution, missing/invalid images, cancellation and bounded memory/network handling are explicit. No policy/migration, provider call, credential change or production receipt write was made.
+- Local checks: typecheck/build/security scan passed; photo-access contracts passed with a disposable account/service fixture; Settings + actual-download browser suite **16 passed / 1 existing skip**; shared-contract smoke passed. Actual ZIPs were extracted and verified, JSON restored, report image links opened offline, and mobile/desktop screenshots inspected. Production-account photo export was not exercised.
+- Installing the ZIP dependency reported a pre-existing `source-map-js <1.2.2` audit advisory from the existing lockfile; the new `fflate` package has no reported finding. No unrelated dependency upgrades were made. Git/release receipts are tracked with this task's private proof artifacts.
+
 ## 2026-10-10 — Confirmed exchange-rate settings (Compact 0.29.2)
 
 - Exchange rates now have a standalone Settings accordion, **匯率設定**, initially collapsed and independent of Trip Manager. Statistics toggles stay under Trip Manager's **統計口徑**.
@@ -46,7 +54,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.24.3`; the Android branch is `0.24.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.30.0`; the Android branch is `0.24.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)

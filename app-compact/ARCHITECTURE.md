@@ -123,3 +123,19 @@ references fail closed; deletes retain their original trip UUID.
 Portable backups omit credentials, cloud identities, deletion state and sharing
 metadata; per-trip maps stay within the exported trip set. Storage keys and the
 cross-client persisted schema remain compatible.
+
+### Current-trip downloadable exports (Compact 0.30.0)
+
+`tripExport.ts` assembles a version-1 ZIP manifest, offline escaped HTML report, UTF-8 BOM CSVs
+and a text-only portable backup. `portableTripBackup()` scopes trip maps, translation caches and
+itinerary overrides to the exported trip; it uses the existing credential/cloud-ID sanitizer.
+Receipt IDs map CSV rows to separate image files; cloud SourceIDs and signed URLs are never
+written into the archive. Restore rules and the shared schema remain unchanged.
+
+`ExportDownloads` owns the explicit image checkbox, progress and cancellation. Image loading
+is skipped entirely for data-only downloads. `receiptExportPhotos.ts` renews private Storage
+URLs through the initiating session-bound client, validates image bytes, limits each image to
+6 MB and bounds cloud work to 20 seconds per receipt. The ZIP has a 100 MB photo ceiling;
+failed/oversized images stay visible in the manifest and `photos.csv`, while data remains intact.
+Trip/account changes and unmount cancel an in-flight export. Only cached thumbnails may substitute
+for unavailable originals; they are labelled. No bucket policy or database changes are involved.
