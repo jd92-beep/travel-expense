@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-10
+
+- **fix(ai): restore Settings tests for new providers and Muse.** Deploy the OpenRouter/OpenCode broker handlers to fix the stale-worker 404. Boss approved Muse Contributor's required 16-token health minimum; other models retain eight-token probes, exact routing and no fallback. Normal task budgets/JSON parsing are unchanged. Broker `2026.10.10.2`, Compact documentation/version patch `0.29.1`; measured evidence and the authenticated UI gap are in [the rollout report](docs/ai-model-rollout-2026-10-10.md).
+
 ## 2026-09-26
 
 - **fix(compact): shared-trip receipt ownership guard, member attribution and removal notice.** Compact ships `0.24.1`–`0.24.3`: trip-mates' receipts are read-only in the editor (closing the permanent local-divergence bug where a 42501-rejected edit/tombstone never reverted), History rows show a 👤 creator badge with real member display names, the Stats payer panel gains a 共享成員記帳 attribution block, and an authoritative pull that purges revoked/deleted trips now surfaces a one-cycle banner instead of dropping shared records silently.

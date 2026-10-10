@@ -915,15 +915,16 @@ async function run() {
       compatibleCalls.push({ url: String(url), body: JSON.parse(init.body) });
       if (compatibleStatus !== 200) return Response.json({ error: { message: 'Rate limit exceeded' } }, { status: compatibleStatus });
       const body = JSON.parse(init.body);
+      if (body.model === 'meta/muse-spark-1.3-contributor' && body.max_tokens < 16) return Response.json({ error: { message: 'max_output_tokens must be >= 16' } }, { status: 400 });
       return Response.json({ choices: [{ message: { content: body.max_tokens === 8 ? '' : '{"store":"Fixture","total":1}' } }], usage: { prompt_tokens: 10, completion_tokens: 8 } });
     };
     try {
-      for (const [provider, model] of [['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free']]) {
+      for (const [provider, model] of [['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free'], ['openrouter','meta/muse-spark-1.3-contributor'], ['openrouter','xiaomi/mimo-v2.6-flash'], ['openrouter','qwen/qwen3.7-flash'], ['openrouter','z-ai/glm-5.3-flash']]) {
         const result = await jsonFetch(env, `/${provider}/json`, { method: 'POST', session, body: { prompt: 'Reply OK.', kind: 'test', model } });
         assert.equal(result.response.status, 200);
         assert.equal(result.data.data.ok, true);
         assert.equal(compatibleCalls.at(-1).body.model, model);
-        assert.equal(compatibleCalls.at(-1).body.max_tokens, 8);
+        assert.equal(compatibleCalls.at(-1).body.max_tokens, model === 'meta/muse-spark-1.3-contributor' ? 16 : 8);
       }
       assert.deepEqual(compatibleCalls[0].body.provider.max_price, { prompt: 0, completion: 0 });
       const beforeRejected = compatibleCalls.length;
@@ -932,6 +933,7 @@ async function run() {
       assert.equal(compatibleCalls.length, beforeRejected);
       const image = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Read image', kind:'scan', outputLanguage:'ko', model:'meta/muse-spark-1.3-contributor', image:{mime:'image/png',base64:'AA=='} } });
       assert.equal(image.response.status, 200);
+      assert.equal(compatibleCalls.at(-1).body.max_tokens, 4000, 'Muse normal tasks retain their full budget');
       assert.deepEqual(compatibleCalls.at(-1).body.provider, { allow_fallbacks: false, only: ['meta'] });
       assert.equal(compatibleCalls.at(-1).body.messages[1].content[1].image_url.url, 'data:image/png;base64,AA==');
       assert.deepEqual(compatibleCalls.at(-1).body.reasoning, { effort:'low', exclude:true });

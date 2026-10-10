@@ -1,5 +1,13 @@
 # Agent Handover
 
+## 2026-10-10 — Settings model-test 404 repair
+
+- The public client was already on Compact 0.29.0, but the live broker still served 2026.10.04.1. Authenticated requests to the new provider routes reached the old broker's `Not found` handler. The selected-model URL and nested model ID in the client are correct.
+- Boss requested investigation and repair of the live 404. The existing source from `88b3eea` was deployed as broker **2026.10.10.1**, Cloudflare version **`ee681d5e-df9a-470e-a223-a5744fc68822`**, with the provided OpenRouter/OpenCode keys configured through Wrangler stdin. Existing vars and other secrets were preserved. Live `/health` confirms the version; both new routes retain their unauthenticated 401 guard.
+- Exact `kind=test` requests through the broker source and real upstream APIs passed for MiMo, Qwen, GLM, Nemotron Super and OpenCode Space Bunny, with 8 output-token limits. MiMo's first attempt timed out at 45 seconds (usage unknown); a separate recheck passed in 4.57 seconds. Known successful paid-probe cost totals US$0.00001501. These real-provider checks used disposable local broker auth/KV; they do not claim a logged-in production browser test.
+- Boss explicitly approved Muse's 16-token exception on 2026-10-10 after the API rejected an 8-token request. Broker **2026.10.10.2** is deployed as Cloudflare version **`66685180-730d-4922-bc34-d292638f1ec2`**. Live health confirms the version and both routes retain their 401 guard. A real Muse request through the broker source passed in **1.577 seconds**, with **37 input / 16 output tokens** and reported cost **US$0.0000069**. Other health tests stay at eight; normal extraction budgets and strict JSON parsing are unchanged. Syntax/self-test/dry-run passed; the regression fixture rejects Muse below its API minimum.
+- The mobile model-picker/test-button smoke passed. The local saved broker session is expired; an asynchronous request asks Boss to retry the original model from the authenticated Settings page and report the result. No database or user records changed. The client documentation/version follow-up is Compact **0.29.1**; its typecheck/build/security and mobile picker smoke passed. The Settings test request already used the correct route and requires no routing change. GitHub Pages is the verified public target; the earlier two Netlify runs were blocked by account credits.
+
 ## 2026-10-10 — AI models and extraction (Git delivery approved)
 
 - Compact **0.29.0**, React **0.2.11**, broker **2026.10.10.1**. Sixteen validated OpenRouter/OpenCode chat choices added, with collapsed provider pickers, image capability filtering, persisted translation language and exact selected-model execution.
@@ -7,7 +15,7 @@
 - Revised prompts include source text and valid JSON examples, preserve unknown dates/payment, currency cents, line totals, booking evidence, cancelled/forwarded deduplication and original names with translations. React only carries compatible payment/language data; its model UI is unchanged.
 - Native additions made to Pi, HERO/Hermes Desktop primary connection, Tommy and Oreo using native config/auth surfaces. Agent defaults/fallbacks preserved. Pi, HERO and Oreo have real free inference results. Tommy's 16 additions are available in the live catalog, but native inference is blocked by workspace-plugin runtime publication timeout; Gateway is ready. Desktop GUI and messaging/tool loops were not exercised.
 - Local typecheck/build/security, broker self-test, catalog/ledger/shared-state contracts, eight mobile AI routing tests and the scan check passed. Settings suite: 10 passed / 1 existing skip. Six real paid photo calls cost **US$0.0035277708**; free task checks cost zero. Failed photo recovery stays blank instead of inferring money/date from the filename. Extraction/translation still needs review.
-- Boss authorized commit, merge and push on 2026-10-10; `main` triggers public-client deployments. Separate manual broker deployment/key provisioning awaits approval, and the live AI path is not yet verified. Broker credentials must remain server-side. No live migration or production user-data write was made.
+- Boss authorized commit, merge and push on 2026-10-10; GitHub Pages serves the updated public clients. The later live-404 repair deployed the broker and configured both provider keys. Boss approved the Muse health-budget exception, now deployed in broker 2026.10.10.2. Authenticated production Settings confirmation remains pending. Broker credentials remain server-side. No live migration or production user-data write was made.
 - Full evidence: [model rollout report](docs/ai-model-rollout-2026-10-10.md). Preserve the pre-existing untracked `app-compact/.impeccable/` folder.
 
 ## Last Worked On
@@ -40,7 +48,7 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
-- 🟠 **2026-10-10 AI model rollout awaits broker release approval** — Compact 0.29.0, React 0.2.11 and broker 2026.10.10.1 are implemented and locally checked. Boss authorized commit/merge/push; public-client deployment will be verified from that SHA. Private broker credential provisioning, manual Worker deployment and live selected-model verification remain pending; see the [rollout report](docs/ai-model-rollout-2026-10-10.md).
+- 🟡 **2026-10-10 Settings authenticated UI confirmation remains pending** — the stale-broker 404 is repaired and broker 2026.10.10.2 is live. Boss approved Muse's required 16-token health budget; its real API request passed. Five other exact-model requests passed at eight tokens. The local saved session is expired, so a retry from the logged-in Settings page remains requested; see the [rollout report](docs/ai-model-rollout-2026-10-10.md).
 - 🟠 **2026-10-10 Tommy native inference remains unverified** — config validation, all 16 live catalog entries and readiness passed, but native inference timed out during workspace-plugin runtime publication. Do not treat catalog availability as a completed inference test or retry upstream calls without checking the runtime failure.
 
 0. 🟢 **Session 90 closed the shared-trip account-deletion blocker** — live

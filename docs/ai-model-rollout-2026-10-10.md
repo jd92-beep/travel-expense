@@ -1,6 +1,6 @@
 # AI model rollout and verification — 2026-10-10
 
-Implementation: Compact **0.29.0**, React **0.2.11**, broker **2026.10.10.1**. Boss authorized commit, merge and push on 2026-10-10; the resulting `main` push triggers public-client deployment. Separate manual broker deployment and private provider-key provisioning await explicit approval. No production data was changed.
+Implementation: Compact **0.29.0**, React **0.2.11**, broker **2026.10.10.1**. Boss authorized commit, merge and push on 2026-10-10; GitHub Pages deployed `88b3eea` and both public versions were verified. Boss's subsequent request to fix the Settings 404 supplied authorization for the necessary broker deployment and private provider-key configuration. No production user data was changed. Boss subsequently approved the Muse 16-token health-budget exception; broker **2026.10.10.2** is live. Compact **0.29.1** is the documentation/version follow-up; the existing client test route is unchanged.
 
 ## Model catalog
 
@@ -154,4 +154,37 @@ Muse Spark **Contributor** permits use of prompts and completions to train futur
 - [Meta Contributor pricing and data use](https://dev.meta.ai/docs/pricing-rate-limits)
 - [OpenCode Zen](https://opencode.ai/docs/zen/)
 
-Git delivery is authorized under the repository AGENTS instruction. Required release verification: confirm the intended source SHA and public-client deployment, then confirm the separately approved broker deployment/key provisioning and live selected-model path before declaring the entire AI rollout live. A Pages build alone does not deploy the Worker or provision provider keys. The Worker deploy dry-run passed before the broker approval question was issued.
+## Settings model-test 404 repair
+
+The Settings button sends the correct `/<provider>/json` URL and native model ID. The public client was updated, but the live Worker remained 2026.10.04.1 and lacked the new provider route handlers. Its global authentication guard runs before the final 404, so an unauthenticated 401 alone had not proved the new handlers were deployed.
+
+Following Boss's request to investigate and fix the live error, the existing broker source was deployed as **2026.10.10.1**, Cloudflare version **`ee681d5e-df9a-470e-a223-a5744fc68822`**. The two supplied provider keys were added using official Wrangler stdin; other secrets and vars were preserved. Live health confirms the new version, and both routes keep the unauthenticated 401 guard. The mobile picker/test-button smoke passed. No frontend code or user records needed changing for this deployment repair.
+
+Real upstream probes through the broker source used disposable local authentication/KV, not a production account. Each used `kind=test`, the exact model, no fallback and an 8-token output cap:
+
+| Model | Broker/upstream result | Seconds | Input/output tokens | Reported USD cost |
+| --- | --- | --- | --- | --- |
+| Qwen3.7 Flash | 200 / 200 | 1.001 | 29 / 5 | 0.00000152 |
+| GLM5.3 Flash | 200 / 200 | 1.295 | 25 / 8 | 0.00000775 |
+| Nemotron Super free | 200 / 200 | 0.527 | 28 / 6 | 0 |
+| OpenCode Space Bunny free | 200 / 200 | 1.285 | 162 / 8 | Free endpoint; cost field absent |
+| MiMo-V2.6-Flash recheck | 200 / 200 | 4.572 | 25 / 8 | 0.00000574 |
+| Muse Contributor | 400 / 400 | 0.938 | Not generated | No usage returned |
+
+MiMo's first probe timed out at 45 seconds after HTTP headers arrived; its completion/usage is unknown. A separate same-budget recheck passed. Known successful paid probes total **US$0.00001501**; that total excludes the unknown timeout. An initial invalid local Supabase fixture failed before any provider calls; the fixture was corrected and its separate failure record retained.
+
+Muse's provider returned a parameter error: `max_output_tokens` must be `>= 16`. Boss explicitly approved that exception on 2026-10-10. Broker **2026.10.10.2**, Worker version **`66685180-730d-4922-bc34-d292638f1ec2`**, is deployed; live health confirms it and both unauthenticated provider routes retain 401. The regression fixture rejects Muse below 16, while all other health tests stay at eight. Normal extraction budgets and strict JSON parsing are unchanged. Syntax checks, self-test and deploy dry-run passed.
+
+The one approved Muse recheck returned **broker/upstream 200 / 200** in **1.577 seconds**, with **37 input / 16 output tokens** (13 reasoning tokens) and reported cost **US$0.0000069**. It used the exact Meta model/provider, low reasoning, no fallback and disposable local broker authentication/KV with the real upstream API. Known successful paid health-probe cost is now **US$0.00002191**, excluding the earlier timeout with unknown usage.
+
+### Follow-up verification
+
+Broker syntax/self-test passed, including Muse's 16-token minimum, eight-token budgets for other probes, and its unchanged 4,000-token photo budget. Compact 0.29.1 typecheck, build and security scan passed. The mobile provider-picker/selected-model test passed (1 test, 2.8 seconds). The first UI check used the unrelated global `playwright` executable and failed before any tests ran; invoking the project-local Playwright CLI resolved it.
+
+The earlier `88b3eea` Pages release succeeded in workflow `37997840074`, and its Admin CI verification succeeded in `37997839996`. The two Netlify runs (`37997839986`, `37997840022`) were blocked by account credits; no credit purchase or paid-plan change was made. Subsequent exact-SHA release receipts are kept with the private verification artifacts.
+
+### Why the health budget is small
+
+The July 15 selected-model repair (`67cde57`, Handover Session 59) introduced short exact-model Settings probes. Session 60 made non-empty content or reasoning sufficient for availability, preserving eight output tokens instead of increasing budgets just to obtain full JSON. The general AGENTS wording was synchronized in `8f6df0f5` on September 25. This policy bounds health-test generation/cost; it does not limit normal receipt/email/itinerary answers or Pi/HERO/Tommy/Oreo output. Current normal broker budgets are 4,000 output tokens, or 10,000 for trip tasks. Eight versus sixteen output tokens still represents one request for RPM/request-count purposes. Muse now receives only the provider-required exception.
+
+The local saved broker session is expired. Boss was asked asynchronously to retry the original selected model from the logged-in Settings page; that production UI confirmation remains pending. Deployment health, local button routing and real upstream inference are recorded separately and are not presented as an authenticated production-browser success.

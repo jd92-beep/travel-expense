@@ -41,8 +41,10 @@ dependency is affected; keep all applicable cross-client checks below.
 - Provider calls go through the Credential Broker. Preserve the selected-model
   contract: `429`, quota, and daily-limit failures are hard stops, not fallback
   opportunities. Health tests use the exact selected provider/model with
-  `kind=test`, no fallback, and at most eight output tokens; normal tasks retain
-  strict JSON parsing.
+  `kind=test`, no fallback, and at most eight output tokens, except
+  `openrouter/meta/muse-spark-1.3-contributor`: Boss approved its required
+  16-token API minimum on 2026-10-10. This budget applies only to health tests;
+  normal tasks retain strict JSON parsing and their existing output budgets.
 - Compact automatic image routing is Muse Spark Contributor then MiMo-V2.6-Flash.
   Automatic text routing is free Nemotron 3 Super, North Mini Code, Apodex Mini,
   then paid Qwen3.7 Flash. Explicit category selections make one model attempt;

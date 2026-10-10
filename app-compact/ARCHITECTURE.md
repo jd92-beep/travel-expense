@@ -42,7 +42,7 @@ Mobile Chrome URL
 - Provider groups start collapsed and use +/− toggles with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.
 - An explicit category selection runs only that provider/model and reports its failure. Stale/hidden settings migrate to `auto`; automatic photo routing is Muse Contributor → MiMo-V2.6-Flash, and automatic text routing is Nemotron Super → North Mini Code → Apodex Mini → Qwen3.7 Flash. Quota failures stop the chain.
 - Voice uses browser speech transcription followed by text extraction. Translation language persists; original names accompany translations. Unknown dates/payment stay blank, and currency cents/line totals are retained.
-- Broker keys remain private. Health checks make one exact-model request with at most eight output tokens. Native response JSON and capability validation apply to normal tasks.
+- Broker keys remain private. Health checks make one exact-model request with eight output tokens; Muse Contributor uses its required 16-token minimum, approved by Boss on 2026-10-10. These limits apply to availability probes only. Native response JSON and capability validation apply to normal tasks.
 - Trip update always creates a preview first. Apply updates local trip state; Notion sync creates/updates the trip page when the broker session is active.
 - [2026-10-10 model rollout, measured results and limitations](../docs/ai-model-rollout-2026-10-10.md).
 
