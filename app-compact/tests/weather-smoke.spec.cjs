@@ -31,6 +31,7 @@ async function seed(page, itinerary = [day()], options = {}) {
     activeTripId: active.id, trips, tripName: active.name,
     tripDateRange: { start: active.startDate, end: active.endDate },
     tripCurrency: 'HKD', customItinerary: active.itinerary,
+    ...options.state,
   };
   await page.addInitScript((payload) => {
     window.__disable_supabase_configured = true;
@@ -149,6 +150,8 @@ test('HKO daily and observation retain their sources while real model hours rema
   await expect(page.locator('.wx-bulletin').getByRole('link', { name: /香港天文台 HKO/ })).toHaveAttribute('href', 'https://www.hko.gov.hk/tc/');
   await expect(page.locator('.wx-forecast-credit')).toContainText('Open-Meteo');
   await expect(page.locator('.wx-hours time')).toHaveText(['08:00', '13:00', '18:00']);
+  // Opening the tab lands on the hour in progress (10:30 local → the 13:00 slot is the next one).
+  await expect(page.getByRole('button', { name: /^13:00 預報/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('img', { name: /所選日期逐時溫度走勢/ })).toBeVisible();
   const morning = page.getByRole('button', { name: /^08:00 預報/ });
   await morning.focus();
@@ -166,7 +169,19 @@ test('HKO daily and observation retain their sources while real model hours rema
     shortButtons: [...station.querySelectorAll('button')].filter((button) => button.getBoundingClientRect().height < 44).map((button) => button.textContent),
   }));
   expect(layout).toEqual({ overflow: 0, shortButtons: [] });
-  expect(await page.locator('#wx-place-heading').evaluate(node => getComputedStyle(node).color)).toBe('rgb(244, 251, 255)');
+  // Hero colours come from the trip theme; the place name must stay readable on the tinted card.
+  const heroContrast = await page.locator('#wx-place-heading').evaluate((node) => {
+    // color-mix() reports `color(srgb r g b)` with 0–1 channels; rgb() uses 0–255.
+    const rgb = (value) => {
+      const channels = (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+      return value.startsWith('color(') ? channels.map((c) => c * 255) : channels;
+    };
+    const lum = ([r, g, b]) => [r, g, b].map((c) => { const v = c / 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const text = lum(rgb(getComputedStyle(node).color));
+    const surface = lum(rgb(getComputedStyle(node.closest('.wx-overview')).backgroundColor));
+    return (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05);
+  });
+  expect(heroContrast).toBeGreaterThanOrEqual(4.5);
   expect(await page.locator('.compact-mobile-title-art').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   if (process.env.COMPACT_CAPTURE_DIR) {
     const path = require('node:path');
@@ -440,3 +455,71 @@ test('denied location permission explains recovery and preserves the selected de
   await expect(page.getByRole('button', { name: '使用目前位置' })).toBeEnabled();
   expect(reverseCalls).toHaveLength(0);
 });
+
+for (const viewport of [{ width: 344, height: 844 }, { width: 1280, height: 900 }]) {
+  test(`redesigned surfaces fit every theme at ${viewport.width}px`, async ({ page }) => {
+    test.setTimeout(300_000);
+    const fs = require('node:fs');
+    const output = '/tmp/travel-expense-completion-review';
+    fs.mkdirSync(output, { recursive: true });
+    await page.setViewportSize(viewport);
+    const visualTrip = { ...trip('weather_test', 'Weather Test', [day()]), currencies: ['HKD', 'JPY'] };
+    await seed(page, [day()], { trips: [visualTrip], state: { tripCurrency: 'JPY', rate: 20, rateMode: 'fixed' } });
+    await routeHko(page);
+    await routeModel(page, modelFixture({ hours: Array.from({ length: 24 }, (_, hour) => hour) }));
+    await openWeather(page);
+    const themes = await page.evaluate(async () => {
+      const { TRIP_THEMES } = await import('/travel-expense/compact/src/theme/tripTheme.tsx');
+      return Object.keys(TRIP_THEMES);
+    });
+    expect(themes).toHaveLength(20);
+    const nav = page.getByLabel('主要分頁');
+    async function capture(theme, surface) {
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${theme}/${surface} overflow`).toBe(true);
+      const dialog = page.getByRole('dialog');
+      if (await dialog.count()) {
+        const box = await dialog.locator('.modal').boundingBox();
+        expect(box.x, `${theme}/${surface} left`).toBeGreaterThanOrEqual(-1);
+        expect(box.x + box.width, `${theme}/${surface} right`).toBeLessThanOrEqual(viewport.width + 1);
+      }
+      await page.screenshot({ path: `${output}/${viewport.width}-${theme}-${surface}.png`, animations: 'disabled' });
+    }
+    for (const theme of themes) {
+      await nav.getByRole('button', { name: '設定', exact: true }).click();
+      const themeToggle = page.locator('[aria-controls="settings-theme-panel"]');
+      if (await themeToggle.getAttribute('aria-expanded') !== 'true') await themeToggle.click();
+      await page.locator(`input[name="app-theme"][value="${theme}"]`).check();
+      await expect(page.locator('html')).toHaveAttribute('data-app-theme', theme);
+      await page.locator('.settings-command').scrollIntoViewIfNeeded();
+      await capture(theme, 'settings');
+      const aiToggle = page.locator('[aria-controls="settings-ai-models-panel"]');
+      if (await aiToggle.getAttribute('aria-expanded') !== 'true') await aiToggle.click();
+      await page.locator('.ai-model-field').first().scrollIntoViewIfNeeded();
+      await capture(theme, 'ai');
+      await nav.getByRole('button', { name: '記帳', exact: true }).click();
+      await expect(page.getByRole('button', { name: /貨幣計數機/ })).toBeVisible();
+      await capture(theme, 'scan');
+      await page.getByRole('button', { name: '匯率 Exchange Rate', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await capture(theme, 'rates');
+      await page.getByRole('dialog').getByRole('button', { name: '關閉', exact: true }).click();
+      await page.getByRole('button', { name: /貨幣計數機/ }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await capture(theme, 'calculator');
+      await page.getByRole('dialog').getByRole('button', { name: '關閉', exact: true }).click();
+      await page.getByRole('button', { name: '手動', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('tab', { name: '鎖定匯率', exact: true }).click();
+      await capture(theme, 'editor');
+      await page.getByRole('dialog').getByRole('button', { name: '×', exact: true }).click();
+      await nav.getByRole('button', { name: '主頁', exact: true }).click();
+      await expect(page.locator('.today-verdict')).toBeVisible();
+      await page.locator('.washi-today-stats-card').scrollIntoViewIfNeeded();
+      await capture(theme, 'home');
+      await nav.getByRole('button', { name: '天氣', exact: true }).click();
+      await expect(page.locator('.wx-temperature')).toHaveText('28°');
+      await expect(page.locator('.wx-hour[aria-pressed="true"]')).toContainText('10:00');
+      await capture(theme, 'weather');
+    }
+  });
+}

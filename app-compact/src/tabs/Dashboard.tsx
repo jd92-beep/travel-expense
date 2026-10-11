@@ -17,7 +17,10 @@ import {
   BarChart3,
   MoreHorizontal,
   Camera,
-  Wallet
+  Wallet,
+  CircleCheck,
+  CircleAlert,
+  CircleDashed,
 } from 'lucide-react';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
@@ -889,6 +892,12 @@ export function Dashboard({
   const dailyBudgetSecondary = showTripCurrency ? displayMoney(dailyBudgetHkd, 'HKD') : displayMoney(dailyBudget, resolvedTripCurrency);
   const dayRemainingPrimary = showTripCurrency ? displayMoney(dayRemainingTrip, resolvedTripCurrency) : displayMoney(dayRemainingHkd, 'HKD');
   const dayRemainingSecondary = showTripCurrency ? displayMoney(dayRemainingHkd, 'HKD') : displayMoney(dayRemainingTrip, resolvedTripCurrency);
+  // 今日狀態：一個百分比（環）+ 一句結論，唔再重複顯示。
+  const todayTone: 'idle' | 'ok' | 'near' | 'over' = dailyBudget <= 0 ? 'idle' : todayBudgetPct > 100 ? 'over' : todayBudgetPct >= 80 ? 'near' : 'ok';
+  const todayOverPrimary = showTripCurrency
+    ? displayMoney(Math.max(0, Math.round(todayTotal - dailyBudget)), resolvedTripCurrency)
+    : displayMoney(Math.max(0, Math.round(todaySpentHkd - dailyBudgetHkd)), 'HKD');
+  const todayToneColor = { idle: 'var(--theme-muted)', ok: 'var(--theme-status-success)', near: 'var(--theme-status-warning)', over: 'var(--theme-status-danger)' }[todayTone];
 
   const displaySpots: ItinerarySpot[] = daySpots.length > 0 ? daySpots : [];
 
@@ -1164,41 +1173,36 @@ export function Dashboard({
           </div>
           <DashboardWeatherChip state={state} variant="mini" />
         </div>
-        <div className="preview-dashboard-today-chart" aria-label="每日預算使用率">
+        <div className={`preview-dashboard-today-chart today-meter is-${todayTone}`} aria-label="每日預算使用率">
           <AnimatedCircularProgressBar
             value={todayBudgetPctCapped}
-            gaugePrimaryColor={todayBudgetPct > 100 ? '#D94132' : '#3F6F49'}
-            gaugeSecondaryColor="rgba(122, 99, 67, 0.16)"
+            gaugePrimaryColor={todayToneColor}
+            gaugeSecondaryColor="color-mix(in srgb, var(--theme-text) 10%, transparent)"
             className="size-full"
           >
             <div className="preview-dashboard-today-chart-copy">
               <strong><TickerMoney text={`${Math.round(todayBudgetPct)}%`} /></strong>
-              <span>每日預算使用</span>
+              <span>已用預算</span>
             </div>
           </AnimatedCircularProgressBar>
           <div className="preview-dashboard-today-chart-text">
-            <span>今日 vs 平均每日預算</span>
-            <strong>{todaySpendPrimary} / {dailyBudgetPrimary}</strong>
-            <small>{todayBudgetPct > 100 ? '今日已高於平均每日預算' : '仍在今日平均預算線內'} · {todaySpendSecondary}</small>
-          </div>
-        </div>
-        <div className="preview-dashboard-today-grid">
-          <div>
             <span>今日支出</span>
             <strong><TickerMoney text={todaySpendPrimary} /></strong>
-            <small>{todaySpendSecondary} · 已記 {dailyReceipts.length} 筆{dailyIncludeFL ? '' : '（圖表口徑，未含機票/住宿/交通）'}</small>
+            <small>≈ {todaySpendSecondary} · 已記 {dailyReceipts.length} 筆{dailyIncludeFL ? '' : '（未含機票/住宿/交通）'}</small>
           </div>
+        </div>
+        <div className={`today-verdict is-${todayTone}`} role="status">
+          {todayTone === 'over' ? <CircleAlert size={22} aria-hidden="true" /> : todayTone === 'idle' ? <CircleDashed size={22} aria-hidden="true" /> : <CircleCheck size={22} aria-hidden="true" />}
           <div>
-            <span>每日預算使用</span>
-            <strong>{Math.round(todayBudgetPct)}%</strong>
-            <i><b style={{ width: `${Math.min(100, Math.round(todayBudgetPct))}%` }} /></i>
-            <small>目標：{dailyBudgetPrimary} · {dailyBudgetSecondary}</small>
-          </div>
-          <div>
-            <span>日均結餘</span>
-            <strong>{dayRemainingPrimary}</strong>
-            <small>{dayRemainingSecondary}</small>
-            <small>{dayRemainingHkd > 0 ? '狀態良好' : '需要留意'}</small>
+            <strong>
+              {todayTone === 'idle' ? '未設定每日預算'
+                : todayTone === 'over' ? `今日已超出 ${todayOverPrimary}`
+                : `今日仲可以用 ${dayRemainingPrimary}`}
+            </strong>
+            <small>
+              {todayTone === 'idle' ? '喺預算總覽設定總預算，就會計到每日預算。'
+                : `每日預算 ${dailyBudgetPrimary} · ${dailyBudgetSecondary}${todayTone === 'near' ? ' · 接近上限' : ''}`}
+            </small>
           </div>
         </div>
       </GlassCard>

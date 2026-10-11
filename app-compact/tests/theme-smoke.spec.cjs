@@ -237,7 +237,7 @@ test('theme selector previews a manual Taiwan world while auto follows the activ
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await openThemeAccordion(page);
-  await expect(page.getByRole('radiogroup', { name: 'App theme' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('radiogroup', { name: '旅程地區' })).toBeVisible({ timeout: 15_000 });
   const rootAuto = await page.evaluate(() => ({
     tripTheme: document.documentElement.dataset.tripTheme,
     appTheme: document.documentElement.dataset.appTheme,
@@ -405,8 +405,9 @@ test('Taiwan dark keeps operating data readable across dashboard, history, weath
     { name: 'dashboard used value', text: '.preview-dashboard-budget-row.is-used strong', surface: '.preview-dashboard-budget' },
     { name: 'dashboard remaining value', text: '.preview-dashboard-budget-row.is-left strong', surface: '.preview-dashboard-budget' },
     { name: 'dashboard today heading', text: '.preview-dashboard-today-head h3', surface: '.preview-dashboard-today' },
-    { name: 'dashboard today label', text: '.preview-dashboard-today-grid span', surface: '.preview-dashboard-today' },
-    { name: 'dashboard today value', text: '.preview-dashboard-today-grid strong', surface: '.preview-dashboard-today' },
+    { name: 'dashboard today label', text: '.preview-dashboard-today-chart-text span', surface: '.preview-dashboard-today' },
+    { name: 'dashboard today value', text: '.preview-dashboard-today-chart-text strong', surface: '.preview-dashboard-today' },
+    { name: 'dashboard today verdict', text: '.today-verdict strong', surface: '.today-verdict' },
   ]));
 
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
@@ -509,12 +510,13 @@ test('mobile dock reflows at 200% text without overlapping navigation labels', a
   expect(layout.right).toBeLessThanOrEqual(layout.viewport);
 });
 
-test('theme catalog exposes six choices, semantic roles, and accessible color schemes', async ({ page }) => {
+test('regional and style theme catalogs expose their choices, semantic roles, and accessible color schemes', async ({ page }) => {
   await seedThemeState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await openThemeAccordion(page);
-  const group = page.getByRole('radiogroup', { name: 'App theme' });
+  const group = page.getByRole('radiogroup', { name: '旅程地區' });
   await expect(group.getByRole('radio')).toHaveCount(13, { timeout: 15_000 });
+  await expect(page.getByRole('radiogroup', { name: '風格主題' }).getByRole('radio')).toHaveCount(8);
   await page.getByRole('button', { name: /旅伴 \/ 分帳比例/ }).click();
   const primaryAction = page.getByRole('button', { name: '新增', exact: true });
   await expect(primaryAction).toBeVisible();

@@ -604,6 +604,7 @@ export function App() {
                   {safeTab === 'scan' && (
                     <Scan
                       state={state}
+                      updateState={updateState}
                       onManual={() => setEditing(null)}
                       onDraft={setEditing}
                       onImport={importReceipts}

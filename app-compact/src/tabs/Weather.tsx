@@ -20,6 +20,17 @@ function timestamp(at: string | number | undefined, zone: string): string {
   return at ? weatherLocalTime(at, zone).replace('T', ' ') || '時間未提供' : '時間未提供';
 }
 
+// Centre the pressed chip inside its own horizontal rail without scrolling the page.
+function centreInRail(rail: HTMLElement | null, selector: string) {
+  const chip = rail?.querySelector<HTMLElement>(selector);
+  if (!rail || !chip) return;
+  const railBox = rail.getBoundingClientRect();
+  const chipBox = chip.getBoundingClientRect();
+  const left = rail.scrollLeft + (chipBox.left - railBox.left) - (railBox.width - chipBox.width) / 2;
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  rail.scrollTo({ left: Math.max(0, left), behavior: reduced ? 'auto' : 'smooth' });
+}
+
 function SourceLink({ source }: { source: WeatherSource }) {
   return <a className="wx-source-link" href={source.url} target="_blank" rel="noopener noreferrer">
     {source.official ? <ShieldCheck size={14} aria-hidden="true" /> : <CloudSun size={14} aria-hidden="true" />}
@@ -27,7 +38,7 @@ function SourceLink({ source }: { source: WeatherSource }) {
   </a>;
 }
 
-function WeatherTrend({ hours }: { hours: WeatherHour[] }) {
+function WeatherTrend({ hours, selectedIndex }: { hours: WeatherHour[]; selectedIndex: number }) {
   const temperatures = hours.flatMap((hour) => hour.temp == null ? [] : [hour.temp]);
   if (temperatures.length < 2) return null;
   const min = Math.floor(Math.min(...temperatures) - 2);
@@ -38,27 +49,33 @@ function WeatherTrend({ hours }: { hours: WeatherHour[] }) {
     if (point.y == null) return;
     segments.push(`${i === 0 || points[i - 1].y == null ? 'M' : 'L'}${point.x},${point.y}`);
   });
+  const marker = points[selectedIndex];
   return <svg className="wx-trend" viewBox="0 0 720 140" role="img" aria-label={`所選日期逐時溫度走勢，${value(Math.min(...temperatures))} 至 ${value(Math.max(...temperatures))} 攝氏度；詳細數值見下方時段。`}>
     {[32, 72, 112].map((y) => <line key={y} x1="24" x2="696" y1={y} y2={y} className="wx-trend-grid" />)}
+    {marker && <line x1={marker.x} x2={marker.x} y1="20" y2="124" className="wx-trend-now" />}
     <path d={segments.join(' ')} fill="none" className="wx-trend-line" />
     {points.filter((_, i) => i % Math.max(1, Math.floor(hours.length / 6)) === 0).map((point) => point.y == null ? null : <circle key={point.x} cx={point.x} cy={point.y} r="3" className="wx-trend-dot" />)}
+    {marker?.y != null && <circle cx={marker.x} cy={marker.y} r="7" className="wx-trend-selected" />}
   </svg>;
 }
 
 function Forecast({ report, selectedHour, onHour }: { report: WeatherReport; selectedHour: string; onHour: (hour: string) => void }) {
   const hours = report.hourly;
   const selected = hours.find((hour) => hour.time === selectedHour) || hours[0];
+  const railRef = useRef<HTMLDivElement>(null);
+  // Opening a day lands on that day's matching hour, not on the first slot of the rail.
+  useEffect(() => { centreInRail(railRef.current, '.wx-hour[aria-pressed="true"]'); }, [selected?.time, hours.length]);
   return <section className="wx-forecast" aria-labelledby="wx-forecast-heading">
-    <div className="wx-section-heading"><div><span className="wx-eyebrow">THE DAY AHEAD</span><h2 id="wx-forecast-heading">逐時看天氣</h2></div><span className="wx-unit">°C · km/h</span></div>
+    <div className="wx-section-heading"><div><span className="wx-eyebrow">HOURLY</span><h2 id="wx-forecast-heading">逐時預報</h2></div><span className="wx-unit">°C · km/h</span></div>
     {report.hourlySource && <div className="wx-forecast-credit"><SourceLink source={report.hourlySource} /><span>預報時間為目的地當地時間</span></div>}
     {!hours.length ? <p className="wx-empty-copy">此來源未提供所選日期的逐時預報。可查看官方每日摘要，或稍後重新整理。</p> : <>
-      <WeatherTrend hours={hours} />
-      <div className="wx-hours" role="group" aria-label="選擇預報時段" tabIndex={0}>
+      <div className="wx-hours" ref={railRef} role="group" aria-label="選擇預報時段" tabIndex={0}>
         {hours.map((hour) => <button type="button" key={hour.time} aria-pressed={selected?.time === hour.time} onClick={() => onHour(hour.time)} className="wx-hour" aria-label={`${hour.time.slice(11)} 預報 ${value(hour.temp, ' 度')} ${weatherLabel(hour.code)}`}>
-          <time dateTime={hour.time}>{hour.time.slice(11)}</time><WeatherIcon code={hour.code} size={28} hour={Number(hour.time.slice(11, 13))} />
+          <time dateTime={hour.time}>{hour.time.slice(11)}</time><WeatherIcon code={hour.code} size={30} hour={Number(hour.time.slice(11, 13))} />
           <strong>{value(hour.temp, '°')}</strong><span><Droplets size={11} aria-hidden="true" />{value(hour.rain, '%')}</span>
         </button>)}
       </div>
+      <WeatherTrend hours={hours} selectedIndex={Math.max(0, hours.findIndex((hour) => hour.time === selected?.time))} />
       {selected && <div className="wx-hour-detail" aria-live="polite">
         <div className="wx-detail-title"><time dateTime={selected.time}>{selected.time.slice(11)}</time><span>{weatherLabel(selected.code)}</span></div>
         <dl className="wx-metrics">
@@ -85,6 +102,7 @@ export function Weather({ state }: { state: AppState }) {
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState('');
   const locationRequest = useRef(0);
+  const dateRailRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     locationRequest.current += 1;
     setLocating(false);
@@ -92,6 +110,7 @@ export function Weather({ state }: { state: AppState }) {
     return () => { locationRequest.current += 1; };
   }, [trip.id]);
   const dateChoice = selection.tripId === trip.id ? selection.date : 'today';
+  useEffect(() => { centreInRail(dateRailRef.current, '.wx-date[aria-pressed="true"]'); }, [dateChoice, itinerary.length]);
   const selectedDay = itinerary.find((day) => day.date === dateChoice);
   const locationDays = dateChoice === 'today' ? itinerary.filter((day) => day.date === today) : selectedDay ? [selectedDay] : [];
   const days = locationDays.length ? locationDays : dateChoice === 'today' ? itinerary : [];
@@ -122,7 +141,9 @@ export function Weather({ state }: { state: AppState }) {
   const { report, busy, error, refresh } = useWeatherReport(locationNeedsZone ? undefined : coord, date, state);
   const [hourChoice, setHourChoice] = useState('');
   const localNow = weatherLocalTime(clock, report?.timezone || zone);
-  const defaultHour = report?.hourly.find((hour) => hour.time >= localNow)?.time || report?.hourly[0]?.time || '';
+  // Default to the same clock hour on the selected day (today: the hour in progress).
+  const targetHour = `${date}T${localNow.slice(11, 13) || '00'}:00`;
+  const defaultHour = report?.hourly.find((hour) => hour.time >= targetHour)?.time || report?.hourly[report.hourly.length - 1]?.time || '';
   const selectedHour = report?.hourly.some((hour) => hour.time === hourChoice) ? hourChoice : defaultHour;
   const daily = report?.daily;
   const observation = report?.observation;
@@ -152,20 +173,20 @@ export function Weather({ state }: { state: AppState }) {
   };
 
   return <div className="wx-station" aria-label="旅程氣象站">
-    <header className="wx-masthead"><div><span className="wx-eyebrow">WEATHER / FIELD NOTES</span><h1>旅程氣象站<span aria-hidden="true">.</span></h1><p>天氣有依據，出發有準備。</p></div><button className="wx-refresh" type="button" onClick={refresh} disabled={busy || !coord || coord.missing} aria-label="重新整理天氣"><RefreshCw size={18} className={busy ? 'wx-spinning' : ''} /><span>{busy ? '更新中' : '更新'}</span></button></header>
+    <header className="wx-masthead"><div><span className="wx-eyebrow">WEATHER</span><h1>旅程氣象站</h1><p>天氣有依據，出發有準備。</p></div><button className="wx-refresh" type="button" onClick={refresh} disabled={busy || !coord || coord.missing} aria-label="重新整理天氣"><RefreshCw size={18} className={busy ? 'wx-spinning' : ''} /><span>{busy ? '更新中' : '更新'}</span></button></header>
 
     <div className="wx-planner">
-      <div className="wx-location-controls"><button type="button" className="wx-locate" onClick={locate} disabled={locating}><LocateFixed size={17} aria-hidden="true" />{locating ? '定位中…' : '使用目前位置'}</button><details className="wx-location-privacy"><summary>定位如何使用</summary><p>只會在按下按鈕後要求定位權限。座標會傳送至 <a href="https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api" target="_blank" rel="noopener noreferrer">BigDataCloud</a> 辨識國家及時區，再向氣象服務查詢；該服務會使用匿名 GPS／IP 配對改善定位。本 app 不儲存位置紀錄。</p></details></div>
-      {locationError && <p className="wx-location-message" role="alert">{locationError}</p>}
-      {currentLocation && coord === currentLocation.coord && <div className="wx-location-message" role="status"><p>目前位置 · 定位精度約 ±{currentLocation.accuracyMeters < 1000 ? `${Math.round(currentLocation.accuracyMeters)} m` : `${(currentLocation.accuracyMeters / 1000).toFixed(1)} km`} · {coord.countryCode || '國家未確認'}</p>{currentLocation.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>}
       <div className="wx-trip-label"><CalendarDays size={16} aria-hidden="true" /><span>{trip.name || '我的旅程'}</span><span>{itinerary.length} 日行程</span></div>
-      <div className="wx-date-rail" role="group" aria-label="選擇天氣日期" tabIndex={0}>
-        <button type="button" className="wx-date" aria-pressed={dateChoice === 'today'} onClick={() => selectDate('today')}><span>所選地點</span><strong>今日</strong><small>當地日期</small></button>
-        {itinerary.map((day: ItineraryDay) => <button type="button" className="wx-date" key={day.dayId || day.date} aria-pressed={dateChoice === day.date} onClick={() => selectDate(day.date)} aria-label={`Day ${day.day} ${day.date}`}><span>Day {day.day}</span><strong>{day.date.slice(5).replace('-', '/')}</strong><small>{day.date < today ? '已過日期' : dayLabel(day.date).split('（')[1]?.replace('）', '') || day.region}</small></button>)}
+      <div className="wx-date-rail" ref={dateRailRef} role="group" aria-label="選擇天氣日期" tabIndex={0}>
+        <button type="button" className="wx-date wx-date-today" aria-pressed={dateChoice === 'today'} onClick={() => selectDate('today')}><span>所選地點</span><strong>今日</strong><small>當地日期</small></button>
+        {itinerary.map((day: ItineraryDay) => <button type="button" className="wx-date" key={day.dayId || day.date} aria-pressed={dateChoice === day.date} onClick={() => selectDate(day.date)} aria-label={`Day ${day.day} ${day.date}`}><span>Day {day.day}</span><strong>{day.date.slice(5).replace('-', '/')}</strong><small>{day.date < today ? '已過日期' : day.date === today ? '今日' : dayLabel(day.date).split('（')[1]?.replace('）', '') || day.region}</small></button>)}
       </div>
       <div className="wx-places" role="group" aria-label="選擇預報地點">
         {coords.map((place, index) => <button type="button" key={`${weatherLocationKey(place)}:${index}`} aria-pressed={place === coord} onClick={() => selectLocation(place)}><MapPin size={14} aria-hidden="true" />{place.label}{place === coord && <Check size={14} aria-hidden="true" />}</button>)}
       </div>
+      <div className="wx-location-controls"><button type="button" className="wx-locate" onClick={locate} disabled={locating}><LocateFixed size={17} aria-hidden="true" />{locating ? '定位中…' : '使用目前位置'}</button><details className="wx-location-privacy"><summary>定位如何使用</summary><p>只會在按下按鈕後要求定位權限。座標會傳送至 <a href="https://www.bigdatacloud.com/free-api/free-reverse-geocode-to-city-api" target="_blank" rel="noopener noreferrer">BigDataCloud</a> 辨識國家及時區，再向氣象服務查詢；該服務會使用匿名 GPS／IP 配對改善定位。本 app 不儲存位置紀錄。</p></details></div>
+      {locationError && <p className="wx-location-message" role="alert">{locationError}</p>}
+      {currentLocation && coord === currentLocation.coord && <div className="wx-location-message" role="status"><p>目前位置 · 定位精度約 ±{currentLocation.accuracyMeters < 1000 ? `${Math.round(currentLocation.accuracyMeters)} m` : `${(currentLocation.accuracyMeters / 1000).toFixed(1)} km`} · {coord.countryCode || '國家未確認'}</p>{currentLocation.notices.map((notice) => <p key={notice}>{notice}</p>)}</div>}
     </div>
 
     {!coord ? <div className="wx-state"><MapPin size={32} aria-hidden="true" /><h2>先加入旅程地點</h2><p>在行程設定城市、國家或景點座標，就可以查看對應天氣。</p></div>
@@ -179,15 +200,15 @@ export function Weather({ state }: { state: AppState }) {
           <div className="wx-overview-top"><span>{dayLabel(date)}</span><span>{report.stale ? '上次資料 · 更新失敗' : report.cached ? '已儲存資料' : '資料已更新'}</span></div>
           <h2 id="wx-place-heading">{coord.label}</h2><div className="wx-zone"><MapPin size={13} aria-hidden="true" />{report.timezone} <span>·</span> {localNow.slice(11)}</div>
           <div className="wx-condition"><div><span className="wx-reading-label">{observation ? observationFresh ? '測站最新觀測' : '測站上次觀測' : '所選時段預報'}</span><strong className="wx-temperature">{value(observation ? headline : currentHour?.temp)}<sup>°</sup></strong><p>{weatherLabel(observation ? observation.code : currentHour?.code ?? daily?.code)}</p></div><div className="wx-weather-illustration"><WeatherIcon code={observation ? observation.code : currentHour?.code ?? daily?.code} size={132} hour={Number((observation ? weatherLocalTime(observation.observedAt, zone) : currentHour?.time || localNow).slice(11, 13))} /></div></div>
-          <div className="wx-temperature-range"><span><ArrowDown size={15} />最低 <b>{value(daily?.min, '°')}</b></span><span><ArrowUp size={15} />最高 <b>{value(daily?.max, '°')}</b></span><small>{daily?.source.official ? '官方每日預報' : daily ? '每日模型預報' : '未提供每日高低溫'}</small></div>
+          <div className="wx-temperature-range"><span><ArrowDown size={15} aria-hidden="true" />最低 <b>{value(daily?.min, '°')}</b></span><span><ArrowUp size={15} aria-hidden="true" />最高 <b>{value(daily?.max, '°')}</b></span><small>{daily?.source.official ? '官方每日預報' : daily ? '每日模型預報' : '未提供每日高低溫'}</small></div>
           <div className="wx-overview-foot">{observation ? <><SourceLink source={observation.source} /><span>{observation.station} · {timestamp(observation.observedAt, report.timezone)}</span></> : <><span>{currentHour ? `${currentHour.time.slice(11)} 預報 · 非實測` : '未有測站觀測'}</span>{report.hourlySource && <SourceLink source={report.hourlySource} />}</>}</div>
         </section>
 
-        {daily && <section className="wx-bulletin" aria-label="每日氣象摘要"><div className="wx-bulletin-heading"><ShieldCheck size={19} aria-hidden="true" /><h2>{daily.source.official ? '官方氣象摘要' : '每日預報摘要'}</h2></div><p>{daily.text || weatherLabel(daily.code)}</p>{daily.wind && <p className="wx-bulletin-wind"><Wind size={15} aria-hidden="true" />{daily.wind}</p>}{daily.significantRain && <p>顯著降雨概率：{daily.significantRain}</p>}<SourceLink source={daily.source} />{daily.source.issuedAt && <small>發布：{timestamp(daily.source.issuedAt, report.timezone)}</small>}</section>}
-
         <Forecast report={report} selectedHour={selectedHour} onHour={setHourChoice} />
 
-        <section className="wx-provenance" aria-label="天氣資料來源與有效時間"><div className="wx-section-heading"><h2>每個數字，都有出處</h2><ShieldCheck size={19} aria-hidden="true" /></div><p>擷取時間 {timestamp(report.fetchedAt, report.timezone)} · 所有時段以目的地時區顯示。</p>{report.notices.map((notice) => <p key={notice}>{notice}</p>)}<p>「—」代表來源未提供；觀測、每日及逐時預報各自保留來源。最新警報請以當地官方公布為準。</p>{service && <a href={service.url} target="_blank" rel="noopener noreferrer">查看 {service.name} 官方天氣及警報 <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only">（新分頁）</span></a>}<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer" className="wx-license">Open-Meteo / GeoNames 資料及授權</a></section>
+        {daily && <section className="wx-bulletin" aria-label="每日氣象摘要"><div className="wx-bulletin-heading"><ShieldCheck size={19} aria-hidden="true" /><h2>{daily.source.official ? '官方氣象摘要' : '每日預報摘要'}</h2></div><p>{daily.text || weatherLabel(daily.code)}</p>{daily.wind && <p className="wx-bulletin-wind"><Wind size={15} aria-hidden="true" />{daily.wind}</p>}{daily.significantRain && <p>顯著降雨概率：{daily.significantRain}</p>}<SourceLink source={daily.source} />{daily.source.issuedAt && <small>發布：{timestamp(daily.source.issuedAt, report.timezone)}</small>}</section>}
+
+        <section className="wx-provenance" aria-label="天氣資料來源與有效時間"><div className="wx-section-heading"><h2>資料來源</h2><ShieldCheck size={19} aria-hidden="true" /></div><p>擷取時間 {timestamp(report.fetchedAt, report.timezone)} · 所有時段以目的地時區顯示。</p>{report.notices.map((notice) => <p key={notice}>{notice}</p>)}<p>「—」代表來源未提供；觀測、每日及逐時預報各自保留來源。最新警報請以當地官方公布為準。</p>{service && <a href={service.url} target="_blank" rel="noopener noreferrer">查看 {service.name} 官方天氣及警報 <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only">（新分頁）</span></a>}<a href="https://open-meteo.com/en/licence" target="_blank" rel="noopener noreferrer" className="wx-license">Open-Meteo / GeoNames 資料及授權</a></section>
       </>}
   </div>;
 }

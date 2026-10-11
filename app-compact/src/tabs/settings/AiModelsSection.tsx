@@ -118,7 +118,7 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
           {AI_TRANSLATION_LANGUAGES.map(language => <option key={language.id} value={language.id}>{language.name}</option>)}
         </select>
       </label>
-      <div className="form-grid ai-model-grid">
+      <div className="ai-model-grid">
         <AiModelField task="scan" label="掃描 receipt 模型" value={state.scanModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(scanModel) => updateState({ scanModel })} />
         <AiModelField task="voice" label="語音文字記帳模型" value={state.voiceModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(voiceModel) => updateState({ voiceModel })} />
         <AiModelField task="email" label="Email 模型" value={state.emailModel} state={state} hiddenModels={state.hiddenAiModels || []} scanResults={state.aiModelScan?.results} onChange={(emailModel) => updateState({ emailModel })} />

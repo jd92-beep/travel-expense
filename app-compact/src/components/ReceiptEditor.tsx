@@ -6,6 +6,8 @@ import { activeTrip } from '../domain/trip/normalize';
 import type { AppState, CategoryId, PaymentId, Receipt, ReceiptLineItem, SplitMode } from '../lib/types';
 import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 import { GradientButton } from './ui/gradient-button';
+import { SegmentedControl } from './ui';
+import { formatRate, knownLiveRate, settingsFixedRate } from '../lib/rateMode';
 
 const newId = () => `manual_${Date.now()}_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
@@ -397,7 +399,7 @@ export function ReceiptEditor({
         <label>店名 / 項目
           <input value={draft.store} onChange={(e) => set('store', e.target.value)} autoFocus disabled={readOnly} />
         </label>
-        <div className="form-grid">
+        <div className="form-grid form-grid--pair">
           <label>日期
             <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} disabled={readOnly} />
           </label>
@@ -405,7 +407,7 @@ export function ReceiptEditor({
             <input type="time" value={draft.time || ''} onChange={(e) => set('time', e.target.value)} disabled={readOnly} />
           </label>
         </div>
-        <div className="form-grid">
+        <div className="form-grid form-grid--pair">
           <label>金額
             <input type="text" inputMode="decimal" value={totalInput} disabled={readOnly} onChange={(e) => {
               setTotalInput(e.target.value);
@@ -426,38 +428,66 @@ export function ReceiptEditor({
             </select>
           </label>
         </div>
-        {editCurrencyCode !== 'HKD' && (
-          <div className="receipt-rate-pin">
-            <label className="check-row">
-              <input type="checkbox" checked={Boolean(draft.exchangeRatePinned)} disabled={readOnly} onChange={(e) => {
-                const checked = e.target.checked;
-                setDraft((d) => ({
-                  ...d,
-                  exchangeRatePinned: checked ? true : undefined,
-                  // 勾選：預填呢張單已有嘅匯率，冇就用而家嘅匯率。
-                  // 取消：refresh 返而家嘅匯率，等 normalize 跟返 app 設定。
-                  exchangeRate: checked
-                    ? (Number(d.exchangeRate) > 0 ? Number(d.exchangeRate) : currentPerHkd)
-                    : currentPerHkd,
-                }));
-              }} />
-              鎖定匯率
-            </label>
-            {draft.exchangeRatePinned && (
-              <label>固定匯率（1 HKD = {editCurrencyCode}）
-                <input type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} disabled={readOnly} onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  set('exchangeRate', Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : undefined);
-                }} />
-                <small className="muted field-hint">釘死咗 — 之後匯率點變呢張單都唔會改 · 折合約 HK$ {Math.round((Number(draft.total) || 0) / editPerHkd).toLocaleString('en-US')}</small>
-              </label>
-            )}
-          </div>
-        )}
+        {editCurrencyCode !== 'HKD' && (() => {
+          // 匯率：預設跟 app 設定（即時／固定）並直接顯示用緊嘅數；揀「鎖定匯率」先釘死呢張單。
+          const appFixed = settingsFixedRate(state, editCurrencyCode);
+          const liveRate = knownLiveRate(state, editCurrencyCode);
+          const pinRate = (rate: number) => setDraft((d) => ({ ...d, exchangeRatePinned: true, exchangeRate: Math.min(1_000_000, rate) }));
+          const presets = [
+            appFixed ? { key: 'settings', label: '設定固定匯率', rate: appFixed } : null,
+            liveRate ? { key: 'live', label: '即時匯率', rate: liveRate } : null,
+            receipt?.exchangeRate && Number(receipt.exchangeRate) > 0 ? { key: 'saved', label: '此單原有匯率', rate: Number(receipt.exchangeRate) } : null,
+          ].filter((preset): preset is { key: string; label: string; rate: number } => !!preset)
+            .filter((preset, index, list) => list.findIndex((other) => Math.abs(other.rate - preset.rate) < 1e-9) === index);
+          const amountHkd = Math.round((Number(draft.total) || 0) / editPerHkd).toLocaleString('en-US');
+          return (
+            <div className="receipt-rate-pin">
+              <div className="receipt-rate-head">
+                <span>匯率（1 HKD = {editCurrencyCode}）</span>
+                <SegmentedControl ariaLabel="收據匯率" value={draft.exchangeRatePinned ? 'pinned' : 'auto'}
+                  options={[{ value: 'auto', label: appFixed ? '設定固定匯率' : '即時匯率' }, { value: 'pinned', label: '鎖定匯率' }]}
+                  onChange={(mode) => {
+                    if (readOnly) return;
+                    if (mode === 'pinned') pinRate(Number(draft.exchangeRate) > 0 ? Number(draft.exchangeRate) : currentPerHkd);
+                    // 取消鎖定：跟返 app 設定嘅匯率，等 normalize 處理。
+                    else setDraft((d) => ({ ...d, exchangeRatePinned: undefined, exchangeRate: currentPerHkd }));
+                  }} />
+              </div>
+              {draft.exchangeRatePinned ? (
+                <div className="receipt-rate-locked">
+                  <label className="receipt-rate-input">
+                    <span>鎖定匯率</span>
+                    <input aria-label={`鎖定匯率（1 HKD = ${editCurrencyCode}）`} type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} disabled={readOnly} onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      set('exchangeRate', Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : undefined);
+                    }} />
+                  </label>
+                  {presets.length > 0 && (
+                    <div className="receipt-rate-presets" role="group" aria-label="快速選擇匯率">
+                      {presets.map((preset) => (
+                        <button key={preset.key} type="button" disabled={readOnly}
+                          aria-pressed={Math.abs(Number(draft.exchangeRate) - preset.rate) < 1e-9}
+                          onClick={() => pinRate(preset.rate)}>
+                          <small>{preset.label}</small><b>{formatRate(preset.rate)}</b>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <small className="muted field-hint">釘死咗 — 之後匯率點變呢張單都唔會改 · 折合約 HK$ {amountHkd}</small>
+                </div>
+              ) : (
+                <p className="receipt-rate-current">
+                  <b>{formatRate(currentPerHkd)}</b>
+                  <span>{appFixed ? '跟設定固定匯率' : '即時匯率 · 自動更新'} · 折合約 HK$ {amountHkd}</span>
+                </p>
+              )}
+            </div>
+          );
+        })()}
         <label>Booking Ref
           <input value={draft.bookingRef || ''} onChange={(e) => set('bookingRef', e.target.value)} placeholder="KNR358047 / booking id" disabled={readOnly} />
         </label>
-        <div className="form-grid">
+        <div className="form-grid form-grid--pair">
           <label>類別
             <select value={draft.category} onChange={(e) => set('category', e.target.value as CategoryId)} disabled={readOnly}>
               {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -470,7 +500,7 @@ export function ReceiptEditor({
             </select>
           </label>
         </div>
-        <div className="form-grid">
+        <div className="form-grid form-grid--pair">
           <label>付款人
             <select value={draft.personId || first?.id || ''} onChange={(e) => set('personId', e.target.value)} disabled={readOnly}>
               {persons.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

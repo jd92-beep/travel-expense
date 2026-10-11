@@ -1,4 +1,4 @@
-import { FlaskConical, LoaderCircle } from 'lucide-react';
+import { ChevronDown, FlaskConical, LoaderCircle } from 'lucide-react';
 import { useId, useState } from 'react';
 import { AI_MODELS, DEFAULT_TRIP_UPDATE_MODEL_ID, DEFAULT_SCAN_VOICE_MODEL_ID } from '../../lib/constants';
 import {
@@ -48,9 +48,13 @@ export function AiModelField({
   onChange: (value: string) => void;
 }) {
   const groupId = useId();
+  // Level 1: the category opens to show 自動 + providers. Level 2: a provider opens its models.
+  const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string[]>([]);
   const defaultId = task === 'scan' ? DEFAULT_SCAN_VOICE_MODEL_ID : DEFAULT_TRIP_UPDATE_MODEL_ID;
-  const selectedId = value && value !== 'auto' ? value : defaultId;
+  const isAuto = !value || value === 'auto';
+  const selectedId = isAuto ? defaultId : value;
+  const selectedModel = AI_MODELS.find((model) => model.id === selectedId);
   const [status, setStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const runTest = async () => {
@@ -69,38 +73,55 @@ export function AiModelField({
   const providers = [...new Set(visibleModels.map(model => model.providerId))];
   const choose = (id: string) => { setStatus('idle'); setMessage(''); onChange(id); };
   return (
-    <div className="ai-model-field">
-      <fieldset className="ai-model-picker">
-        <legend>{label}</legend>
-        <p className="muted">使用：{aiModelLabel(selectedId)}</p>
-        <label className="ai-model-option"><input type="radio" name={groupId} value="auto" checked={!value || value === 'auto'} onChange={() => choose('auto')} />自動（預設及後備）</label>
-        {providers.map(provider => {
-          const models = visibleModels.filter(model => model.providerId === provider);
-          const open = expanded.includes(provider);
-          return <div key={provider}>
-            <button type="button" className="secondary ai-provider-toggle" aria-expanded={open} aria-controls={`${groupId}-${provider}`} onClick={() => setExpanded(prev => open ? prev.filter(id => id !== provider) : [...prev, provider])}>
-              <span aria-hidden="true">{open ? '−' : '+'}</span> {models[0].providerName}
-            </button>
-            <div id={`${groupId}-${provider}`} hidden={!open}>
-              {models.map(model => <label key={model.id} className="ai-model-option">
-                <input type="radio" name={groupId} value={model.id} checked={value === model.id} onChange={() => choose(model.id)} />
-                {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
-              </label>)}
-            </div>
-          </div>;
-        })}
-      </fieldset>
-      <button
-        type="button"
-        className="secondary compact ai-model-test-button"
-        aria-label={`測試 ${label}`}
-        disabled={status === 'testing'}
-        onClick={() => void runTest()}
-      >
-        {status === 'testing' ? <LoaderCircle size={16} className="spin" /> : <FlaskConical size={16} />}
-        測試
+    <div className={`ai-model-field${open ? ' is-open' : ''}`}>
+      <button type="button" className="ai-model-category" aria-expanded={open} aria-controls={`${groupId}-body`} onClick={() => setOpen((current) => !current)}>
+        <span className="ai-model-category-text">
+          <strong>{label}</strong>
+          <span className="ai-model-current">
+            <em>{isAuto ? '自動' : '已選'}</em>
+            <span>{aiModelLabel(selectedId)}</span>
+          </span>
+        </span>
+        <ChevronDown size={18} className="ai-model-chevron" aria-hidden="true" />
       </button>
-      <small className={`ai-model-test-status ${status}`} aria-live="polite">{message}</small>
+      <div id={`${groupId}-body`} className="ai-model-body" hidden={!open}>
+        <fieldset className="ai-model-picker">
+          <legend className="sr-only">{label}</legend>
+          <label className={`ai-model-option is-auto${isAuto ? ' is-selected' : ''}`}><input type="radio" name={groupId} value="auto" checked={isAuto} onChange={() => choose('auto')} />自動（預設及後備）</label>
+          {providers.map(provider => {
+            const models = visibleModels.filter(model => model.providerId === provider);
+            const providerOpen = expanded.includes(provider);
+            const holdsSelection = !isAuto && selectedModel?.providerId === provider;
+            return <div key={provider} className="ai-provider-group">
+              <button type="button" className="ai-provider-toggle" aria-expanded={providerOpen} aria-controls={`${groupId}-${provider}`} onClick={() => setExpanded(prev => providerOpen ? prev.filter(id => id !== provider) : [...prev, provider])}>
+                <span>{models[0].providerName}</span>
+                {holdsSelection && <small className="ai-provider-selected">已選</small>}
+                <small className="ai-provider-count">{models.length} 款</small>
+                <ChevronDown size={16} className="ai-model-chevron" aria-hidden="true" />
+              </button>
+              <div id={`${groupId}-${provider}`} className="ai-provider-models" hidden={!providerOpen}>
+                {models.map(model => <label key={model.id} className={`ai-model-option${value === model.id ? ' is-selected' : ''}`}>
+                  <input type="radio" name={groupId} value={model.id} checked={value === model.id} onChange={() => choose(model.id)} />
+                  {model.name}{scanResults?.[model.id] === 'quota' ? '（限額）' : ''}
+                </label>)}
+              </div>
+            </div>;
+          })}
+        </fieldset>
+        <div className="ai-model-test-row">
+          <button
+            type="button"
+            className="secondary compact ai-model-test-button"
+            aria-label={`測試 ${label}`}
+            disabled={status === 'testing'}
+            onClick={() => void runTest()}
+          >
+            {status === 'testing' ? <LoaderCircle size={16} className="spin" /> : <FlaskConical size={16} />}
+            測試
+          </button>
+          <small className={`ai-model-test-status ${status}`} aria-live="polite">{message}</small>
+        </div>
+      </div>
     </div>
   );
 }

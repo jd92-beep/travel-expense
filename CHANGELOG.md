@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-11
+
+- **docs: English and Traditional Chinese repository guides.** English is the default README, with a linked Traditional Chinese guide and updated usage/development instructions. Removed stale production-version and AI-routing descriptions.
+- **fix(compact): finish currency tools and model-picker details.** Preserve signed calculator results and keyboard focus, reject superseded live-rate confirmations, refresh Scan conversion snapshots after confirmation, and wrap long selected model names.
+
+- **feat(compact): weather redesign, currency calculator and form/settings polish.** Compact `0.31.0` rebuilds the Weather tab on theme tokens (no fixed navy) and opens each day on the matching hour. Scan gains a rate sheet with a live/fixed switch, a currency calculator and no MRZ line or header gear. The source link now appears only in Settings. The receipt editor shows the rate in use, offers a 鎖定匯率 mode with presets and keeps paired fields side by side on phones. Settings gets a two-level AI model picker that shows the chosen model, puts 連線（進階）last and widens quick actions and status chips. Home aligns the daily-budget currencies and gives 今日狀態 one percentage plus a verdict line.
+
 ## 2026-10-10
 
 - **feat(compact): organized travel downloads with optional receipt images.** Compact `0.30.0` adds current-trip ZIP downloads with an offline HTML report, separate expense/item/allocation/people/itinerary/photo CSVs, a portable JSON backup and a file manifest. The image checkbox defaults off. Private originals use account-bound Storage access; thumbnail substitutes, missing/invalid images and limits are reported. CSV keeps multiline fields, monetary snapshots and formula protection. JSON remains text-only and uses the existing safe restore flow.

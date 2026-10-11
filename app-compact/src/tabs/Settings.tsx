@@ -418,15 +418,6 @@ export function Settings({
         applyTripDraft={applyTripDraft}
         requireNotionMirror={requireNotionMirror}
       />
-      <CredentialsSection
-        ctx={ctx}
-        brokerReady={brokerReady}
-        personalNotionStatus={personalNotionStatus}
-        setPersonalNotionStatus={setPersonalNotionStatus}
-        personalNotionDb={personalNotionDb}
-        setPersonalNotionDb={setPersonalNotionDb}
-        applyPersonalNotionConnection={applyPersonalNotionConnection}
-      />
       <DataSection ctx={ctx} session={sharingSession} syncState={syncState} storageScope={storageScope} brokerReady={brokerReady} notionMirrorReady={notionMirrorReady} onReset={onReset} />
       <AccountSection
         ctx={ctx}
@@ -438,6 +429,15 @@ export function Settings({
         deleteUserAccount={supabaseAuth.deleteUserAccount}
       />
       <ThemeSection ctx={ctx} />
+      <CredentialsSection
+        ctx={ctx}
+        brokerReady={brokerReady}
+        personalNotionStatus={personalNotionStatus}
+        setPersonalNotionStatus={setPersonalNotionStatus}
+        personalNotionDb={personalNotionDb}
+        setPersonalNotionDb={setPersonalNotionDb}
+        applyPersonalNotionConnection={applyPersonalNotionConnection}
+      />
       {showStressPanel && <ItineraryJsonSection ctx={ctx} />}
       {stress.stressToolsUnlocked && showStressPanel && <StressTestSection ctx={ctx} stress={stress} changeTab={changeTab} />}
 

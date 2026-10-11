@@ -843,7 +843,7 @@
     margin-right: 8px;
   }
 
-  & :is(.ticker-money, .amount, .history-ledger-amount strong, .dashboard-compact-recent-amount, .scan-mrz, .timeline-time) {
+  & :is(.ticker-money, .amount, .history-ledger-amount strong, .dashboard-compact-recent-amount, .timeline-time) {
     font-family: 'Share Tech Mono', ui-monospace, monospace !important;
     letter-spacing: .02em;
   }

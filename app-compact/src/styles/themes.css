@@ -511,15 +511,18 @@ html[data-app-theme][data-color-scheme] .settings-preview-controls button small 
 }
 
 html[data-app-theme][data-color-scheme] .settings-preview-controls button,
-html[data-app-theme][data-color-scheme] .compact-mobile-status,
-html[data-app-theme][data-color-scheme] .pwa-chip {
+html[data-app-theme][data-color-scheme] .compact-mobile-status {
   background: var(--theme-card) !important;
   border-color: var(--theme-border) !important;
   color: var(--theme-text) !important;
 }
 
-html[data-app-theme][data-color-scheme] .pwa-chip.ok { color: var(--theme-status-success) !important; }
-html[data-app-theme][data-color-scheme] .pwa-chip.warning { color: var(--theme-status-warning) !important; }
+/* Readiness chips: tinted by status tone, text stays theme ink for contrast. */
+html[data-app-theme][data-color-scheme] .pwa-chip {
+  background: color-mix(in srgb, var(--chip-tone, var(--theme-status-success)) 8%, var(--theme-card)) !important;
+  border-color: color-mix(in srgb, var(--chip-tone, var(--theme-status-success)) 24%, var(--theme-border)) !important;
+  color: var(--theme-text) !important;
+}
 
 html[data-app-theme][data-color-scheme] .app-floating-dock-mobile [aria-current='page']:not(.dock-item-scan),
 html[data-app-theme][data-color-scheme] .app-floating-dock-desktop [aria-current='page']:not(.dock-item-scan) {
@@ -1072,3 +1075,11 @@ html[data-color-scheme='dark'] .stats-switch {
     color: var(--theme-accent);
   }
 }
+
+/* Home inset panels follow the trip surface so dark themes keep readable ink. */
+html[data-app-theme][data-color-scheme] :is(.preview-dashboard-today-chart, .preview-dashboard-budget-strip) {
+  background: color-mix(in srgb, var(--theme-surface) 86%, transparent) !important;
+  border-color: var(--theme-border) !important;
+}
+html[data-app-theme][data-color-scheme] .preview-dashboard-budget-strip > div { border-color: var(--theme-border) !important; }
+html[data-app-theme][data-color-scheme] .preview-dashboard-budget-strip :is(span, svg) { color: var(--theme-muted) !important; }

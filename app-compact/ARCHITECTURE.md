@@ -43,9 +43,12 @@ Mobile Chrome URL
 - `ExchangeRateSection` stages fixed/live selection and the active-currency rate locally; `TripRateInput` does not write on blur. Confirmation commits the existing `rateMode`, `rate` and `rateTable` keys through `updateState`, preserving sync compatibility.
 - Live confirmation requires a valid current-currency API rate before switching. Failed or stale-trip requests preserve the confirmed setting; fixed rates survive boot without a live refresh. New records use the confirmed rate, while stored receipts retain their own rate/HKD snapshots.
 
+- Scan shares the rate helpers in `lib/rateMode.ts`. Its fixed-rate input needs an explicit apply; live confirmation rejects responses after a newer choice, trip/currency change or unmount.
+- `CurrencyTools` renders its calculator in a body portal to avoid transformed tab wrappers. Its rate choice is local to the calculator, arithmetic preserves signed results, and keyboard focus stays within the dialog.
+
 ## AI Flow
 
-- Provider groups start collapsed and use +/− toggles with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.
+- Task categories start collapsed and show the currently selected model. Expanding a category reveals collapsed provider groups with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.
 - An explicit category selection runs only that provider/model and reports its failure. Stale/hidden settings migrate to `auto`; automatic photo routing is Muse Contributor → MiMo-V2.6-Flash, and automatic text routing is Nemotron Super → North Mini Code → Apodex Mini → Qwen3.7 Flash. Quota failures stop the chain.
 - Voice uses browser speech transcription followed by text extraction. Translation language persists; original names accompany translations. Unknown dates/payment stay blank, and currency cents/line totals are retained.
 - Broker keys remain private. Health checks make one exact-model request with eight output tokens; Muse Contributor uses its required 16-token minimum, approved by Boss on 2026-10-10. These limits apply to availability probes only. Native response JSON and capability validation apply to normal tasks.

@@ -122,7 +122,8 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據').first()).toBeVisible();
-  await expectTouchTarget(page.getByRole('button', { name: '更多操作' }), 'scan mobile header action', 40);
+  await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
+  await expectTouchTarget(page.getByRole('button', { name: /貨幣計數機/ }), 'scan currency calculator', 56);
   await expectTouchTarget(page.getByRole('button', { name: /相機/ }).first(), 'scan camera card', 80);
   await expectTouchTarget(page.getByRole('button', { name: /相簿/ }).first(), 'scan gallery card', 80);
   await expectTouchTarget(page.getByRole('button', { name: /匯率 Exchange Rate/ }), 'scan wide exchange action', 64);

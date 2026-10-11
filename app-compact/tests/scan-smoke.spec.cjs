@@ -71,6 +71,9 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.locator('.scan-route')).toHaveText(['相簿', '語音', 'Email', '手動']);
   await expect(page.getByRole('button', { name: '匯率' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '今日入帳' })).toBeVisible();
+  await expect(page.locator('.scan-page')).not.toContainText('P<HKG');
+  await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /貨幣計數機/ })).toBeVisible();
   await expect(page.locator('.scan-function-art')).toHaveCount(0);
   await expect(page.getByLabel('Scan cockpit')).toHaveCount(0);
   const shutter = await page.locator('.scan-stamp-shutter').boundingBox();
@@ -163,7 +166,42 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(fxDialog).toBeVisible();
   await fxDialog.locator('input').first().fill('2000');
   await expect(fxDialog).toContainText('2000 JPY');
-  await fxDialog.getByRole('button', { name: '關閉' }).click();
+  await expect(fxDialog).not.toContainText('來源');
+  // The sheet switches to a fixed rate in place (same contract as Settings 匯率設定).
+  await fxDialog.getByRole('tab', { name: '固定匯率' }).click();
+  await fxDialog.getByLabel('固定匯率（1 HKD = JPY）').fill('20');
+  await fxDialog.getByRole('button', { name: '採用' }).click();
+  const fixedDialog = page.getByRole('dialog', { name: '固定匯率' });
+  await expect(fixedDialog).toContainText('已採用固定匯率：1 HKD = 20 JPY');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')).rateMode)).toBe('fixed');
+  await fixedDialog.getByRole('button', { name: '關閉' }).click();
+
+  await page.getByRole('button', { name: /貨幣計數機/ }).click();
+  const calc = page.getByRole('dialog', { name: '貨幣計數機' });
+  await expect(calc).toBeVisible();
+  await expect(calc).toContainText('1 HKD = 20 JPY · 設定固定匯率');
+  for (const key of ['1', '0', '0', '0', '+', '1', '0', '0', '0']) await calc.getByRole('button', { name: key, exact: true }).click();
+  await expect(calc.locator('output')).toHaveText('1000+1000');
+  await expect(calc.locator('.calc-line.is-result')).toContainText('HK$ 100');
+  await calc.getByRole('button', { name: '調轉換算方向' }).click();
+  await expect(calc.locator('.calc-line.is-result')).toContainText('40,000');
+  await calc.getByRole('button', { name: '關閉' }).click();
+  await expect(calc).toHaveCount(0);
+
+  // Manual entry shows the rate in use; 鎖定匯率 opens the input and rate presets.
+  await page.getByRole('button', { name: '手動', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: '手動記一筆' });
+  const rateBox = editor.locator('.receipt-rate-pin');
+  await expect(rateBox.getByRole('tab', { name: '設定固定匯率' })).toHaveAttribute('aria-selected', 'true');
+  await expect(rateBox.locator('.receipt-rate-current')).toContainText('20');
+  await rateBox.getByRole('tab', { name: '鎖定匯率' }).click();
+  await expect(editor.getByLabel('鎖定匯率（1 HKD = JPY）')).toHaveValue('20');
+  await expect(rateBox.getByRole('button', { name: /設定固定匯率/ })).toHaveAttribute('aria-pressed', 'true');
+  const dateBox = await editor.locator('input[type="date"]').boundingBox();
+  const timeBox = await editor.locator('input[type="time"]').boundingBox();
+  expect(Math.abs(dateBox.y - timeBox.y)).toBeLessThan(4);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await editor.getByRole('button', { name: '×' }).click();
 
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
   await page.getByPlaceholder(/搜尋店名|搜尋店家/).fill('M5 Email');

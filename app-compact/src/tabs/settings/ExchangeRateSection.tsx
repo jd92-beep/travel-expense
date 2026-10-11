@@ -2,15 +2,17 @@ import { ArrowRightLeft, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { AccordionCard } from '../../components/AccordionCard';
 import { SegmentedControl } from '../../components/ui';
-import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, perHkdForCurrency } from '../../lib/currency';
+import { perHkdForCurrency } from '../../lib/currency';
+import { confirmLiveRate, fixedRatePatch, isValidFixedRate, rateCurrency } from '../../lib/rateMode';
 import { TripRateInput } from './TripRateInput';
 import type { SettingsContext } from './shared';
 
 export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
   const { state, updateState, busy } = ctx;
-  const code = String(state.tripCurrency || 'JPY').toUpperCase();
+  const code = rateCurrency(state);
   const confirmedMode = state.rateMode === 'fixed' ? 'fixed' : 'live';
   const committedRate = perHkdForCurrency(state, code);
+  const liveSource = state.rateTable?.[code]?.source !== 'manual' ? state.rateTable?.[code]?.source : '';
   const [draftMode, setDraftMode] = useState<'fixed' | 'live'>(confirmedMode);
   const [draftRate, setDraftRate] = useState(String(committedRate));
   const [saving, setSaving] = useState(false);
@@ -56,7 +58,7 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
     setError('');
     setMessage('');
     const rate = Number(draftRate);
-    if (draftMode === 'fixed' && (!Number.isFinite(rate) || rate < 0.01 || rate > 1_000_000)) {
+    if (draftMode === 'fixed' && !isValidFixedRate(rate)) {
       setError('固定匯率必須係 0.01 至 1,000,000 之間嘅數值。');
       return;
     }
@@ -64,28 +66,30 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
     setSaving(true);
     try {
       if (draftMode === 'fixed') {
-        updateState({
-          rateMode: 'fixed',
-          rate,
-          rateTable: { ...stateRef.current.rateTable, [code]: { currency: code, perHkd: rate, source: 'manual', fetchedAt: Date.now() } },
-        });
+        updateState(fixedRatePatch(stateRef.current, code, rate));
         dirtyRef.current = false;
         setMessage(`已確認：新記錄採用固定匯率，1 HKD = ${rate} ${code}。`);
       } else {
         // Obtain a valid live rate before changing the confirmed mode. Offline failure keeps
         // the prior fixed mode/rate, and a trip switch cannot receive this pending response.
-        const snapshot = await fetchLiveCurrencySnapshot();
+        let live: Awaited<ReturnType<typeof confirmLiveRate>>;
+        try {
+          live = await confirmLiveRate(code);
+        } catch (liveError) {
+          if (!mountedRef.current) return;
+          if (/有效/.test(String((liveError as Error)?.message))) {
+            setError(`未取得有效嘅 ${code} 即時匯率，原設定已保留。`);
+            return;
+          }
+          throw liveError;
+        }
         if (!mountedRef.current) return;
-        if (stateRef.current.activeTripId !== tripId || String(stateRef.current.tripCurrency || 'JPY').toUpperCase() !== code) {
+        if (stateRef.current.activeTripId !== tripId || rateCurrency(stateRef.current) !== code) {
           setError('旅程或貨幣已變更，請重新確認匯率。');
           return;
         }
-        const liveRate = Number(snapshot.rates[code]);
-        if (!Number.isFinite(liveRate) || liveRate <= 0) {
-          setError(`未取得有效嘅 ${code} 即時匯率，原設定已保留。`);
-          return;
-        }
-        updateState({ ...appRatePatchFromSnapshot(snapshot), rateMode: 'live' });
+        const liveRate = live.rate;
+        updateState(live.patch);
         dirtyRef.current = false;
         setMessage(`已確認：新記錄採用即時匯率，1 HKD = ${liveRate} ${code}。`);
       }
@@ -103,6 +107,7 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
       meta={<span>記錄用{confirmedMode === 'fixed' ? '固定匯率' : '即時匯率'}</span>}>
       <form className="settings-exchange-form" onSubmit={confirmRate} noValidate>
         <p className="muted">目前已確認：{confirmedMode === 'fixed' ? '固定匯率' : '即時匯率'} · 1 HKD = {committedRate} {code}</p>
+        {confirmedMode === 'live' && liveSource && <p className="muted settings-exchange-source">來源：{liveSource}</p>}
         <fieldset disabled={saving || !!busy}>
           <SegmentedControl ariaLabel="匯率模式" value={draftMode}
             options={[{ value: 'live', label: '即時匯率' }, { value: 'fixed', label: '固定匯率' }]}
@@ -112,9 +117,6 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
               readOnly={draftMode === 'live'} invalid={!!error && draftMode === 'fixed'} describedBy={error ? errorId : undefined}
               onChange={(value) => { dirtyRef.current = true; setDraftRate(value); setError(''); setMessage(''); }} />
           </label>
-          <p className="settings-exchange-preview">確認後，新增記錄會採用<strong>{modeLabel}</strong>。
-            {draftMode === 'live' ? '確認時會取得最新匯率；未能取得時會保留原設定。' : '使用你輸入嘅兌換價，唔會自動更新。'}</p>
-          <small className="muted">已儲存記錄保留入帳時嘅匯率同港幣金額。</small>
           <div className="settings-exchange-actions">
             <button className="primary" type="submit">{saving ? <LoaderCircle size={18} className="spin" /> : <CheckCircle2 size={18} />}
               {saving ? '確認中…' : `確認採用${modeLabel}`}</button>

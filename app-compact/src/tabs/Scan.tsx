@@ -1,6 +1,8 @@
-import { Camera, Check, ImageIcon, LoaderCircle, Mail, Mic, PenLine, RefreshCw, Repeat2, X } from 'lucide-react';
+import { Calculator, Camera, Check, ChevronRight, ImageIcon, LoaderCircle, Mail, Mic, PenLine, RefreshCw, Repeat2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { StatefulActionButton, Toast } from '../components/ui';
+import { CurrencyCalculator, RateModeSwitch } from '../components/CurrencyTools';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
 import { convertAmount, currencyPrefix, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { categoryById, compressPhoto, displayStore, getReceiptTripAmount, getResolvedTripCurrency, isPendingReceipt, todayForReceipts } from '../lib/domain';
@@ -45,12 +47,6 @@ function tripDayLabel(today: string, start?: string, end?: string): string {
   return Number.isFinite(e) ? `第 ${day} 日 / ${Math.round((e - s) / DAY_MS) + 1}` : `第 ${day} 日`;
 }
 
-// Passport machine-readable line: decorative, built only from the trip's own code and dates.
-function mrzLine(countryCode: string, currency: string, start?: string, end?: string): string {
-  const compact = (ymd?: string) => (ymd || '').replace(/-/g, '').slice(2) || '<<<<<<';
-  return `P<HKG${(countryCode || 'XX').toUpperCase()}<<ENTRY<${compact(start)}<${compact(end)}<<${currency}<HKD`.padEnd(44, '<').slice(0, 44);
-}
-
 // Stamp shape + ink follow the spend type: round for eating/shopping, ticket-square for getting
 // around, oval for stays and admissions — so the page reads at a glance.
 function stampKind(category?: string): 'round' | 'ticket' | 'oval' {
@@ -86,6 +82,7 @@ function receiptNeedsReview(receipt: Partial<Receipt>): boolean {
 }
 
 export function Scan({
+  updateState,
   onManual,
   onDraft,
   onImport,
@@ -96,6 +93,7 @@ export function Scan({
   batch,
   setBatch,
 }: {
+  updateState: (patch: Partial<AppState>) => void;
   onManual: () => void;
   onDraft: (receipt: Receipt) => void;
   onImport: (receipts: Receipt[]) => void;
@@ -125,6 +123,7 @@ export function Scan({
   const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
   const [fxOpen, setFxOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
   const [inputKey, setInputKey] = useState(0);
   const [lastScanFile, setLastScanFile] = useState<File | null>(null);
   const [lastDraft, setLastDraft] = useState<Receipt | null>(null);
@@ -182,6 +181,10 @@ export function Scan({
     return convertAmount(n, from, to, state, fx);
   }, [amount, from, to, state, fx]);
   const fxFixed = state.rateMode === 'fixed';
+  // A live confirmation writes a new snapshot; do not keep converting with the sheet's older cache.
+  useEffect(() => {
+    if (state.rateMode !== 'fixed') setFx(loadCurrencySnapshot());
+  }, [state.rateMode, state.rateTable]);
 
   useEffect(() => {
     if (!fxOpen) {
@@ -222,7 +225,6 @@ export function Scan({
   );
   const dayLabel = tripDayLabel(today, trip.startDate, trip.endDate);
   const rate = perHkdForCurrency(state, tripCurrency);
-  const countryCode = trip.intelligence?.countryCode || '';
   const toggleMode = (next: ScanMode) => setMode((current) => (current === next ? 'scan' : next));
 
   const handleImage = useCallback(async (file?: File, retry = false) => {
@@ -570,6 +572,7 @@ export function Scan({
   useEffect(() => {
     if (!fxOpen) return;
     batchPrevFocusRef.current = document.activeElement as HTMLElement;
+    fxContainerRef.current?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); setFxOpen(false); }
       if (e.key === 'Tab' && fxContainerRef.current) {
@@ -605,7 +608,6 @@ export function Scan({
               {trip.startDate && <span>{trip.startDate.slice(5).replace('-', '/')} – {(trip.endDate || '').slice(5).replace('-', '/')}</span>}
               {dayLabel && <b>{dayLabel}</b>}
             </p>
-            <p className="scan-mrz" aria-hidden="true">{mrzLine(countryCode, tripCurrency, trip.startDate, trip.endDate)}</p>
           </header>
 
           <div className="scan-press" aria-live="polite">
@@ -667,6 +669,15 @@ export function Scan({
               <span>手動</span>
             </button>
           </nav>
+
+          <button type="button" className="scan-calc-launch" onClick={() => setCalcOpen(true)}>
+            <i aria-hidden="true"><Calculator size={22} /></i>
+            <span>
+              <strong>貨幣計數機</strong>
+              <small>{tripCurrency === 'HKD' ? '港幣計算' : `${tripCurrency} ⇄ HKD · ${fxFixed ? '固定' : '即時'} ${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(2)}`}</small>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
 
           {mode === 'voice' && (
             <div className="scan-sheet">
@@ -763,20 +774,21 @@ export function Scan({
       </div>
 
       {status && <Toast tone={/失敗|未能|error/i.test(status) ? 'warning' : 'info'}>{status}</Toast>}
-      {fxOpen && (
+      {/* Portal to <body>: the tab's animated wrapper would otherwise anchor position:fixed to itself. */}
+      {fxOpen && createPortal(
         <div ref={fxContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label={fxFixed ? '固定匯率' : '即時匯率'} onClick={() => setFxOpen(false)}>
           <div className="modal sheet scan-fx-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <div>
                 <h2>{fxFixed ? '固定匯率' : '即時匯率'}</h2>
-                <p className="muted">{fxFixed ? '用緊你喺設定鎖定嘅匯率，唔會自動更新。' : '呢程即時匯率。'}</p>
+                <p className="muted">{fxFixed ? '用緊你鎖定嘅匯率，唔會自動更新。' : '新記錄會用最新市場匯率。'}</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
             </div>
+            <RateModeSwitch state={state} updateState={updateState} />
             <div className="scan-fx-result" aria-live="polite">
               <span>{Number(amount) || 0} {from}</span>
               <strong>{(Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
-              <small>{fxFixed ? '固定匯率（設定頁可改）' : fx?.source ? `來源：${fx.source}` : '使用已儲存匯率'}</small>
             </div>
             <div className="scan-fx-panel">
               <label>
@@ -808,8 +820,10 @@ export function Scan({
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
+      {calcOpen && <CurrencyCalculator state={state} onClose={() => setCalcOpen(false)} />}
       {batch.length > 0 && (
         <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setBatch([])}>
           <div className="modal sheet" onClick={(event) => event.stopPropagation()}>

@@ -192,7 +192,7 @@ Glass is allowed only when text remains readable in the worst background case.
 
 ## Scan Surface: Passport Stamp Page
 
-Recorded 2026-10-04 from the built `src/tabs/Scan.tsx` and `src/styles/scan.css`.
+Updated 2026-10-11 from the built `src/tabs/Scan.tsx` and `src/styles/scan.css`.
 This is a surface-scope language inside the theme world, not a new app identity.
 The trip is a passport and every receipt is an entry stamp.
 
@@ -241,9 +241,8 @@ drop-shadow `rgb(0 0 0 / .4–.5)`. If a theme looks wrong, fix the theme, not S
 ### Visa strip
 
 The header card: trip name left, rate button right, date range and a Day pill
-(`第 n 日 / total`, `出發前 n 日`, or `旅程已完`) below, then a dashed rule and a
-44-character passport machine-readable line built only from the trip's country
-code, dates and currencies (decorative, `aria-hidden`). Corners are 16px top,
+(`第 n 日 / total`, `出發前 n 日`, or `旅程已完`) below. The decorative
+passport machine-readable line and unused header gear are removed. Corners are 16px top,
 6px bottom; a row of 16px-pitch radial punches in `--theme-canvas` along the
 bottom edge makes the perforated tear. The rate button (min 96×64px, 12px radius,
 surface fill, border turns accent-tinted on hover) shows `1 HKD` / rate in trip
@@ -323,7 +322,7 @@ is removed; states still change by fill, colour and border.
 ### Accessibility and stable test hooks
 
 Focus is a 3px `--theme-focus` outline at 3px offset (6px on the shutter; on
-route stamps the ring carries it). Decorative SVG, glyphs, the MRZ line and the
+route stamps the ring carries it). Decorative SVG, glyphs and the
 empty ring are `aria-hidden`. These names and ids are test contracts and must
 stay stable:
 
@@ -390,3 +389,11 @@ specificity so it beats the colour layer in `themes.css`; dark kits re-ink the
 washi-era components that hard-code dark text; all loops and wiggles sit behind
 `prefers-reduced-motion: no-preference`. Settings shows each kit as a live
 miniature (font, shape, accent) instead of colour swatches.
+
+## Compact 0.31.0 surface updates
+
+- Weather uses the active theme's semantic colors for its planner, overview, hourly trend, bulletin and source details. Date/hour selection centers within its own rail and respects reduced motion.
+- Scan's rate sheet and currency calculator are body portals, so tab transforms cannot displace them. Both use theme surfaces and 44px controls; the calculator sits below the four input routes.
+- The receipt editor pairs date/time, amount/currency, category/payment and payer/sharing fields on mobile. Its rate selector reveals the lock input and available presets.
+- Home aligns both budget currencies. Today's status has one percentage ring, spending total and a remaining/over-budget verdict.
+- Settings quick actions fill their row; status chips follow theme colors. AI task headings show the current model and expand into collapsed provider groups. Advanced connection settings follow the daily-use sections.

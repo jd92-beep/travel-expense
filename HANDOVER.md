@@ -1,5 +1,14 @@
 # Agent Handover
 
+## 2026-10-11 — Completed Compact 0.31.0 UI update and bilingual repository guide
+
+- Resumed the interrupted Weather, Scan, receipt editor, Home and Settings update. Weather uses theme tokens and centers the matching local hour; Scan includes live/fixed rate controls and a calculator; the receipt form pairs fields and exposes rate presets. Home has aligned currencies and one daily-budget percentage; Settings has two-level model choices, full wrapping model names and advanced connections last.
+- Completion repairs: calculator results retain negative signs and operator precedence, division by zero stays visibly unavailable, keyboard focus stays in the calculator, delayed live confirmations cannot overwrite newer fixed choices or survive closing/changing trips, and Scan conversions use the newly confirmed live snapshot.
+- Root `README.md` now provides English instructions; `README.zh-HK.md` keeps a linked Traditional Chinese guide. Both cover sign-in, trips, rates, AI, sharing, exports, development and release boundaries without obsolete production-version claims. App README, architecture and design notes are aligned.
+- Verification: typecheck, final build, security scan, shared Compact/React contract and `git diff --check` passed. The 10 targeted browser suites have 60 enabled tests passing across the full run and isolated reruns, with one existing skipped Settings dry-run test. A local Vite reload interrupted one exchange-settings test; its isolated rerun passed. Final model-name wrapping and both all-theme layout tests passed again (3/3).
+- Visual checks exercised all 20 themes at 344px and 1280px across Weather, Home, Settings/AI, Scan, rates, calculator and receipt editor. Screenshots were inspected. Tests use disposable browser state and mocked backends; no live provider/account, physical-device or deployment claim is made.
+- Boss approved committing and pushing this completed update to `main`. Deployment verification follows the exact source commit. No migration or Admin write is part of this release. The pre-existing untracked `.impeccable/` directory remains untouched by this completion work.
+
 ## 2026-10-10 — Organized exports and optional receipt images (Compact 0.30.0)
 
 - Settings **資料管理 → 下載旅程資料** now downloads a current-trip ZIP. Its image checkbox defaults off. The archive organizes a readable/printable offline report, six CSV tables, itinerary JSON, portable text backup, photo status and file manifest. Standalone CSV/Backup downloads remain available. See [the export format contract](docs/compact-export-format.md).
@@ -54,7 +63,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.30.0`; the Android branch is `0.24.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.31.0`; the Android branch is `0.24.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)

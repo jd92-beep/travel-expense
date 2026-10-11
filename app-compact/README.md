@@ -1,12 +1,12 @@
 # Travel Expense Compact
 
-This is the independent compact version of the Travel Expense app.
+This is the active public Compact client of the Travel Expense app.
+
+User instructions: [English](../README.md) · [繁體中文](../README.zh-HK.md).
 
 - Local dev: `npm run dev`
 - Local URL: `http://localhost:8903/travel-expense/compact/`
-- Netlify production URL: `https://travel-expense-compact.netlify.app`
 - Vercel production URL: `https://travel-expense-compact.vercel.app`
-- Netlify site: `travel-expense-compact`
 - Vercel project: `travel-expense-compact`
 - Compact UI system: `DESIGN_SYSTEM.md`
 - Mobile visual QA: `npm run smoke:contact-sheet`
@@ -19,10 +19,20 @@ This is the independent compact version of the Travel Expense app.
 - Post-deploy live proof: `npm run smoke:deploy-live`
 
 The compact version is an independent React + Vite app with its own package,
-Vite base path, Netlify site, Vercel project, mobile scroll contract, and centered circular Scan
+Vite base path, Vercel project, mobile scroll contract, and centered circular Scan
 dock. The Pages root is a stateless CSP-protected redirect to this maintained app. Changes here
 should not be mirrored into `app-react/`
 unless Boss explicitly asks for parity work.
+
+## Currency tools and UI checks
+
+Scan's **匯率** sheet applies live/fixed settings; its **貨幣計數機** converts with either
+rate without changing the confirmed app setting. Receipt-level **鎖定匯率** affects that
+receipt. AI categories show the chosen model and expand into provider groups.
+
+- `npm run smoke:currency-tools`: signed arithmetic, keyboard focus, delayed/failed rate confirmation.
+- `npm run smoke:scan`: receipt input, fixed rates, calculator and paired editor fields.
+- `npm run smoke:weather`: provider behavior and mobile/desktop layout of the redesigned surfaces across all 20 themes.
 
 ## Local export downloads
 

@@ -389,8 +389,9 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
 
   await setAccordion(page, 'AI 模型選擇');
   const picker = page.locator('#settings-ai-models-panel .ai-model-field').first();
-  for (const provider of ['Google', 'OpenRouter', 'OpenCode Zen']) await expect(picker.getByRole('button', { name: new RegExp(provider) })).toHaveAttribute('aria-expanded', 'false');
-  await picker.getByRole('button', {name:/OpenRouter/}).click();
+  await picker.locator('.ai-model-category').click();
+  for (const provider of ['Google', 'OpenRouter', 'OpenCode Zen']) await expect(picker.locator('.ai-provider-toggle').filter({ hasText: provider })).toHaveAttribute('aria-expanded', 'false');
+  await picker.locator('.ai-provider-toggle').filter({ hasText: 'OpenRouter' }).click();
   await expect(picker.getByRole('radio', {name:/Muse Spark/})).toBeVisible();
   await expect(picker.getByRole('radio', {name:/Kimi|Volcano/})).toHaveCount(0);
   await picker.getByRole('radio', {name:/Muse Spark/}).check();
@@ -1742,7 +1743,9 @@ test('Exchange settings are independently collapsed and apply fixed/live rates o
   expect((await storedExchangeState(page)).rateMode).toBe('live');
   expect((await storedExchangeState(page)).rateTable.JPY.perHkd).toBe(25);
   expect(requests).toBe(requestsBeforeDraft);
-  await expect(panel.getByText(/確認後，新增記錄會採用/)).toContainText('固定匯率');
+  // The draft explanation lines were removed; only the confirm button names the pending mode.
+  await expect(panel.getByText(/確認後，新增記錄會採用/)).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: '確認採用固定匯率' })).toBeVisible();
   await panel.getByRole('button', { name: '取消修改', exact: true }).click();
   await expect(panel.getByRole('tab', { name: '即時匯率', exact: true })).toHaveAttribute('aria-selected', 'true');
   expect((await storedExchangeState(page)).rateMode).toBe('live');

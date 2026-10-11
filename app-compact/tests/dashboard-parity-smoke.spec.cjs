@@ -59,8 +59,10 @@ async function openDashboard(page, statsIncludeTransportLodging, extraState = {}
   await expect(page.getByText('預算控制')).toHaveCount(0);
   await expect(page.getByText('預算提醒')).toHaveCount(0);
   await expect(page.locator('.washi-budget-card')).toBeVisible();
-  await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-grid > div')).toHaveCount(3);
+  await expect(page.locator('.washi-today-stats-card .today-verdict')).toBeVisible();
   await expect(page.locator('.washi-today-stats-card .preview-dashboard-today-chart')).toBeVisible();
+  // 今日狀態 shows the budget percentage once (ring only).
+  expect(await page.locator('.washi-today-stats-card').evaluate((card) => (card.textContent || '').match(/\d+%/g)?.length || 0)).toBe(1);
 }
 
 test('Dashboard spending toggle matches legacy semantics for today stats but budget is consistent', async ({ browser }) => {
@@ -189,7 +191,7 @@ test('Dashboard new trip wizard lets users choose trip days on step two', async 
     contentType: 'application/json',
     body: JSON.stringify({ query: { search: [] } }),
   }));
-  await page.route('**/kimi/json', async (route) => {
+  await page.route('**/openrouter/json', async (route) => {
     const body = route.request().postDataJSON();
     tripIntelligenceCalls.push(body);
     const isStage1 = String(body.prompt || '').includes('stage 1 of a two-stage');
@@ -301,9 +303,9 @@ Day 2 (2026-05-09): Jeju City.`,
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(tripIntelligenceCalls.length).toBe(2);
+  expect(tripIntelligenceCalls.length).toBe(1);
   expect(tripIntelligenceCalls[0].prompt).toContain('濟州');
-  expect(tripIntelligenceCalls[0].model).toBe('kimi-code');
+  expect(tripIntelligenceCalls[0].model).toBe('nvidia/nemotron-3-super-120b-a12b:free');
 
   const created = await page.evaluate(() => {
     const raw = localStorage.getItem('boss-japan-tracker');
@@ -338,27 +340,12 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
 
-  await page.route('**/kimi/json', async (route) => {
+  await page.route('**/openrouter/json', async (route) => {
     const body = route.request().postDataJSON();
-    calls.push({ path: 'kimi', model: body.model });
-    await route.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: false, error: 'kimi model unavailable' }),
-    });
-  });
-  await page.route('**/google/json', async (route) => {
-    const body = route.request().postDataJSON();
-    calls.push({ path: 'google', model: body.model });
-    await route.fulfill({
-      status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ ok: false, error: 'google fast trip fallback unavailable' }),
-    });
-  });
-  await page.route('**/mimo/json', async (route) => {
-    const body = route.request().postDataJSON();
-    calls.push({ path: 'mimo', model: body.model });
+    calls.push({ path: 'openrouter', model: body.model });
+    if (body.model === 'nvidia/nemotron-3-super-120b-a12b:free') {
+      return route.fulfill({ status: 500, json: { ok: false, error: 'temporary model unavailable' } });
+    }
     const isStage1 = String(body.prompt || '').includes('stage 1 of a two-stage');
     if (isStage1) {
       await route.fulfill({
@@ -432,7 +419,8 @@ Day 2 (2026-05-09): Jeju City.`,
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(calls.map((call) => call.path)).toEqual(['mimo', 'mimo']);
+  expect(calls.map((call) => call.path)).toEqual(['openrouter', 'openrouter']);
+  expect(calls.map((call) => call.model)).toEqual(['nvidia/nemotron-3-super-120b-a12b:free', 'cohere/north-mini-code:free']);
   expect(calls.every((call) => call.model)).toBe(true);
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
@@ -448,22 +436,13 @@ Day 2 (2026-05-09): Jeju City.`,
   expect(created.syncQueued).toBe(true);
 });
 
-test('Dashboard new trip wizard tries model fallbacks after quota before destination fallback', async ({ page }) => {
-  const calls = { kimi: 0, mimo: 0, google: 0 };
+test('Dashboard new trip wizard uses destination suggestions after non-quota model failures', async ({ page }) => {
+  const calls = [];
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
-
-  await page.route('**/kimi/json', async (route) => {
-    calls.kimi += 1;
-    await route.fulfill({ json: { ok: true, data: {} } });
-  });
-  await page.route('**/mimo/json', async (route) => {
-    calls.mimo += 1;
-    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'mimo unavailable' }) });
-  });
-  await page.route('**/google/json', async (route) => {
-    calls.google += 1;
-    await route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'google unavailable' }) });
+  await page.route('**/openrouter/json', async (route) => {
+    calls.push(route.request().postDataJSON().model);
+    await route.fulfill({ status: 500, json: { ok: false, error: 'temporary model unavailable' } });
   });
 
   await openDashboard(page, false, {
@@ -481,9 +460,7 @@ test('Dashboard new trip wizard tries model fallbacks after quota before destina
   await page.getByRole('button', { name: /完成創建/ }).click();
 
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
-  expect(calls.kimi).toBeGreaterThanOrEqual(1);
-  expect(calls.mimo).toBeGreaterThanOrEqual(1);
-  expect(calls.google).toBeGreaterThanOrEqual(1);
+  expect(calls).toEqual(['nvidia/nemotron-3-super-120b-a12b:free', 'cohere/north-mini-code:free', 'apodex/apodex-1.1-mini:free', 'qwen/qwen3.7-flash']);
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     const trip = state.trips?.find((item) => item.id === state.activeTripId);

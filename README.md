@@ -1,364 +1,155 @@
 # Travel Expense App
 
-這是一個旅行記帳網站。你可以用它記低每一筆旅行開支，例如食飯、交通、酒店、門票和購物。
+**English** · [繁體中文（廣東話）](README.zh-HK.md)
 
-## 小朋友都明白的版本
+Track travel expenses, organize receipts and itineraries, and calculate shared costs. Each trip has its own records. **Compact** is the main public app; the parallel React client uses compatible data contracts.
 
-最簡單的想法是：
+## Open the app
 
-1. 你去旅行。
-2. 你花了錢。
-3. 你把收據、金額或文字放入這個 app。
-4. App 幫你整理成清楚的記錄。
-5. 你可以在不同旅程之間切換，不會把資料混在一起。
+- [Compact — main app](https://travel-expense-compact.vercel.app)
+- [Compact on GitHub Pages](https://jd92-beep.github.io/travel-expense/compact/)
+- [Parallel React app](https://travel-expense-react.vercel.app)
+- [React on GitHub Pages](https://jd92-beep.github.io/travel-expense/react/)
+- [Admin Console — administrators only](https://travel-expense-admin-kanban.vercel.app)
 
-請記住一件事：每個人要用自己的登入 email。這樣你的旅行開支就不會和其他人的開支混在一起。
+The [GitHub Pages root](https://jd92-beep.github.io/travel-expense/) redirects to Compact. Check the version shown in Settings when reporting an issue. Source versions and deployed versions can differ; this README is not a deployment receipt.
 
-## 打開 App
+## First-time setup
 
-- Compact app（主要公開 app）: https://travel-expense-compact.vercel.app
-- React app: https://travel-expense-react.vercel.app
-- Admin Console: https://travel-expense-admin-kanban.vercel.app
-- GitHub Pages React app: https://jd92-beep.github.io/travel-expense/react/
-- GitHub Pages root（安全轉址到 Compact）: https://jd92-beep.github.io/travel-expense/
+1. Open Compact and sign in with your own email or **使用 Google 帳號登入** (Sign in with Google). If using an email sign-in link, open the link from your inbox.
+2. Follow the welcome guide to create a trip: enter its name, destination and dates.
+3. Set your budget and trip currency. Add travel companions and their sharing weights if needed. The initial companion is `User 1`.
+4. Add an expense, review the extracted or entered details, then save it.
+5. Open **紀錄** (Records) to confirm it appears under the correct trip.
 
-請優先使用 Compact app。GitHub Pages root 只係無狀態安全轉址，唔再部署舊版內嵌 vault／provider-key app；React 版仍保留獨立入口。GitHub Pages 有時會因 GitHub Actions 下載問題而比 Vercel 慢更新。
+Use a separate account for each person. Expense-splitting companions are calculation participants; adding one does not grant another app user access to the trip.
 
-## Compact App Developer Quick Start
+## Everyday use
+
+| Screen / Chinese label | What to do |
+| --- | --- |
+| Home / 首頁 | Select the active trip; check your budget, today's spending and itinerary. |
+| Scan / 記帳 | Take a receipt photo, choose an image, paste email text, enter an expense manually or use voice input. |
+| Records / 紀錄 | Search and filter expenses; open a record to review or edit it. |
+| Itinerary / 行程 | View the trip's daily places, times and related expenses. |
+| Weather / 天氣 | Choose a day and location; inspect hourly forecasts, source and freshness. |
+| Stats / 統計 | Review totals, spending categories and shared costs. |
+| Settings / 設定 | Manage trips, exchange rates, AI models, sync, themes and backups. |
+
+Always select the correct trip before adding or syncing records. Before saving a receipt, check its merchant, date, time, currency, amount, payment method, payer and sharing mode. AI output is a draft and may need correction.
+
+### Exchange rates and calculator
+
+Rates are displayed as **1 HKD = N units of the trip currency**.
+
+- In **設定 → 匯率設定** (Settings → Exchange rates), choose live or fixed mode, then confirm. Typing a fixed rate alone does not apply it. Failed live-rate confirmation preserves the previous setting.
+- Scan's top-right **匯率** button also lets you switch modes or enter and apply a fixed rate. Rate-source information is shown in Settings.
+- **貨幣計數機** (Currency calculator), below the Scan input buttons, converts amounts in either direction using live or fixed rates. Calculator-only rate edits do not change the trip's confirmed settings.
+- The receipt editor shows the current rate. Choose **鎖定匯率** (Lock rate) to enter a rate for that receipt or use an available preset. Date/time, category/payment and payer/sharing fields sit side by side on phones.
+- Saved receipts retain their recorded rates and HKD amounts when the app's exchange-rate setting changes.
+
+### Itinerary and weather
+
+Paste itinerary, hotel, restaurant, transport or booking text into Trip Update AI. Review the proposed dates, places and missing details before applying changes.
+
+Weather uses the selected trip date and location. Its hourly rail opens at the corresponding local clock hour where available, and you can select another hour. Forecasts distinguish observations, daily bulletins and hourly models, including their sources and freshness. Official services are preferred where supported; missing fields can use labelled fallback providers. Unavailable dates or fields are shown explicitly. Device location requires your action and browser permission.
+
+### AI models
+
+In **設定 → AI 模型選擇**, expand a task category, then a provider, to choose a model. The category header shows the current model without expanding it.
+
+- **Automatic photo routing:** Muse Spark Contributor, then MiMo-V2.6-Flash.
+- **Automatic text routing:** free Nemotron 3 Super, North Mini Code, Apodex Mini, then paid Qwen3.7 Flash.
+- An explicit selection makes one model attempt and shows failures. HTTP `429`, quota and daily-limit errors stop automatic retries to other models.
+- Availability tests use the exact selected model, no fallback, and an eight-output-token budget; Muse Contributor requires 16 tokens. Normal task budgets are separate.
+
+All credentialed AI calls go through the server-side Credential Broker. Never paste a provider API key into public frontend code or a backup. Manual expense entry remains available when AI is unavailable.
+
+### Themes
+
+Use **外觀主題** (Appearance) in Settings. **自動（依旅程）** follows the active trip's recommendation; a manual choice stays selected across trips. The current catalog includes regional and style themes, with light and dark options. Selection saves immediately. Compact's theme UI is independent of the parallel React client.
+
+### Sync and trip sharing
+
+Supabase is the shared primary store. Notion is an optional mirror.
+
+- Personal Notion sync requires your own connected database and the resolved active trip. If it is not connected, Supabase-only sync is normal.
+- Shared trips distinguish app members from expense-splitting companions. Owners/admins manage membership; editors can contribute according to permissions; viewers have read-only access.
+- Shared receipt writes use Supabase RPCs; server-side jobs handle the Notion mirror. Ordinary members do not need a shared Notion token.
+- Check visible sync errors before assuming a record has reached the cloud. Version conflicts and exhausted retries require attention.
+
+See [HANDOVER.md](HANDOVER.md) for outstanding integration checks. A local test does not establish that a production sync completed.
+
+## Export and restore
+
+In **設定 → 資料管理 → 下載旅程資料** (Settings → Data management → Download trip data):
+
+1. Leave **連同收據圖片下載** unchecked for a data-only ZIP, or select it to include receipt images.
+2. Download and extract the entire ZIP.
+3. Open `summary.html` for an offline, printable report. Open the CSV files in Excel or Numbers.
+
+The archive contains the current trip's expense, item, allocation, companion, itinerary and photo tables, plus a portable JSON backup. Missing images, failed downloads and thumbnail substitutes are labelled; the text data is still available. Standalone CSV and JSON downloads are also available.
+
+JSON restore previews the imported data and removes credentials, cloud IDs and stale or foreign trip links. It restores text data, not the ZIP's receipt images. Downloads can contain private records: keep them in a private location. See the [export format](docs/compact-export-format.md).
+
+## Troubleshooting
+
+- **Missing records:** check the sign-in email and active trip first.
+- **AI unavailable:** read the displayed error; use manual entry while resolving availability or quota limits.
+- **Live exchange-rate update failed:** the confirmed setting is retained. Check the network and retry deliberately.
+- **Notion not syncing:** check your personal connection and active trip in Settings.
+- **Layout or stale build:** reload once; report the app URL, version, screen and device size if it persists.
+- **Shared device:** use the app's clear-device-data option when removing this account's cached data, then sign out.
+
+## Developer quick start
+
+Use Node.js **22.x**, as declared by Compact's package. Start from your clone:
 
 ```bash
-cd app-compact
-npm install
+git clone https://github.com/jd92-beep/travel-expense.git
+cd travel-expense/app-compact
+npm ci
 npm run dev
+```
+
+Open [local Compact](http://localhost:8903/travel-expense/compact/). Live sign-in and provider features require their configured backend services; local startup alone does not provision them. Keep private credentials in the approved server-side broker/vault.
+
+Required checks for Compact changes:
+
+```bash
 npm run typecheck
 npm run build
 npm run security:scan
-npm run smoke:mobile-layout
+npm run smoke:scan
 npm run smoke:settings
-npm run smoke:production-gate
-```
-
-Compact app 和 React app 獨立版本管理。現時 production 版本係 Compact Web `0.24.0`、React `0.2.10`、Admin `1.4.1` 同 Broker `2026.09.15.1`；Android worktree
-仍係 `0.22.0`（versionCode `2200`）。Compact 同 React 已部署到 Vercel、Netlify 同 GitHub Pages；Supabase 私有 receipt-photo cutover 同 Broker Durable Object 亦已套用。Admin Console 由 protected
-workflow `35483016157` 以 commit `9eb6627` promotion 到 Vercel deployment
-`dpl_CW3X2nrzhS5MDXN7LUncToEgcWwR`；live `/api/health` 回 `200`、exact SHA 及
-`acceptingReadTraffic=true`，未登入 `/api/admin/session` 回 canonical `401`。Console Providers 會列出六個
-approved Volcano app LLM；Compact/Android Settings 可以用指定 model、無 fallback、最多 8 output
-tokens 嘅 request 測試 availability。Seedance 係 media model，唔會混入 LLM selector。
-
-## 外觀主題（Compact／Android）
-
-Compact 同 Android Settings 頂部有「外觀主題」選擇器，毋須另外儲存：
-
-- `自動（依旅程）` 會跟目前旅程建議的主題。
-- 亦可以手動固定 `日本和紙`、`韓國韓紙`、`台灣夜市`、`歐洲鐵路` 或 `全球旅誌`，切換旅程後仍然保留。
-- `台灣夜市` 是真正 dark theme；其餘四款是 light theme。Android status/navigation bars 會跟主題轉換 icon 明暗。
-- 選擇會保存在這部裝置，並透過現有 account settings 同步；切回 `自動（依旅程）` 就會重新跟旅程。
-- 登出會保留最後使用的主題，避免下次開 app 閃色；只有「清除此裝置資料」才會刪除裝置提示。
-
-React app 只保留相同資料欄位，避免同步時刪除 Compact／Android 的選擇；React 本身今次沒有新增主題 UI。
-
-首版只提供這五款 reviewed themes，沒有 user color builder 或 runtime AI theme generator。新增第六款 curated theme 應只新增 catalog／semantic token 定義、可選細 SVG、contrast contract 同 reviewed contact sheets；如果需要改個別 page component，就代表 semantic theme contract 仍未完整。
-
-Admin Console production URL 是 `https://travel-expense-admin-kanban.vercel.app`。readiness 會在呼叫 Edge
-前拒絕格式錯誤嘅 hash；production health 與 unauthenticated route 行為已驗證：未登入 session 回 `401`，
-direct catch-all session query 回 `404`。現有 Admin passphrase 維持不變並仍然需要；passkey 只會新增保護，不會取代它。
-第一個 Boss passkey 已完成登記，bootstrap secret 已從 production 移除；post-bootstrap fresh-browser login 已喺 live
-`1.3.9` 通過，並喺 `1.4.1` 重新驗證。Generic runtime writes 維持 server-disabled；只有 reviewed 窄通道存在
-（provider probe-only 模式，以及預設關閉嘅 gated `admin_purge_user`），R3 與 generic controls 保持 server-disabled。
-任何 passphrase、token 或 secret 都不會寫入 README、GitHub 或前端程式碼。
-
-## 第一次使用
-
-1. 打開主要公開 app 或 Compact app。
-2. 用自己的 email 登入 Supabase，或在 Compact app 按 `使用 Google 帳號登入`。
-3. 如果使用 email link，去 email inbox 按登入連結。
-4. 回到 app 後，第一次使用指引會帶你建立第一個旅程。
-5. 預設會先建立一位旅伴 `User 1`。如果有同行者，再加入每位旅伴名字和分帳比例，例如 `Tony 2`, `May 1`, `Sam 0.5`。
-6. 新增第一筆開支。
-7. 去 Records tab 看看記錄有沒有出現。
-
-記住：每個人要用自己的 email。不要全班、全家或公開用戶共用同一個帳號。
-
-## 每次旅行怎樣用
-
-1. 先選對旅程。
-2. 花錢後新增一筆開支。
-3. 儲存前檢查日期、店名和金額。
-4. 去 Records tab 看是否儲存成功。
-5. 有需要就去 Stats tab 看總數。
-6. 如果你有連接 Notion，可以同步多一份筆記簿副本。
-
-## 天氣資料
-
-Compact app 的 Weather 頁會根據行程城市、國家和景點座標抓天氣。日本、新加坡、美國和加拿大旅程會優先使用當地官方氣象資料，例如 JMA、NEA/data.gov.sg、NWS 和 MSC GeoMet，再用 WeatherAPI 或 Open-Meteo 補回官方資料沒有的欄位，例如體感、UV 或雲量。其他國家的官方氣象源會按是否可安全直連、是否需要 API key、是否需要代理伺服器逐步加入；API key 不會放入公開前端。
-
-## 誰可以用
-
-每位公開用戶都應該用自己的 Supabase email 登入。
-
-不同人用不同帳號時：
-
-- A 同學只會看到 A 同學自己的旅程和收據。
-- B 同學只會看到 B 同學自己的旅程和收據。
-- 資料庫規則會阻止一個人偷看另一個人的私人記錄。
-
-如果你用共用手機或共用電腦，登出前可以按 Supabase 登出按鈕旁邊的垃圾桶圖示。它會清走這部機內屬於這個帳號的暫存資料。
-
-## 旅程共享
-
-旅程共享正在用「一個旅程、一套共享記帳簿」的方式建立。新的 React 和 Compact app 已經有共同資料結構、Welcome Guide 分享步驟、Settings `旅程共享` 管理卡、Supabase migration/RLS 基礎，以及 shared-trip receipt save/delete RPC。
-
-目前設計重點：
-
-- Trip members 是可以登入和存取旅程的 app 使用者。
-- 分帳旅伴是用來計算誰付款、誰分帳的人，兩者不一定是一樣。
-- Owner/Admin 可以邀請 editor 或 viewer。
-- Editor 會用同一個共享 ledger 新增自己的記錄。
-- Viewer 只應該看資料，不能新增或修改。
-- Shared-trip 記帳會經 Supabase RPC 寫入，不再由瀏覽器直接寫 shared Notion。
-- Notion 會作為同一個 trip notebook 的後端副本；RPC 會建立 pending Notion retry job。處理這些 jobs 的 worker `v38` 已部署並通過 negative canary（只確認失敗路徑）；一筆 shared-trip receipt 成功寫入再同步到 Notion 的完整正向流程仍未有實際證明。
-
-注意：`supabase/migrations/20260612153000_trip_sharing_dual_backend.sql` 和 `supabase/migrations/20260612165000_shared_ledger_receipt_rpc.sql` 已於 2026-06-12 套用到 live Supabase project，migration 名稱分別是 `trip_sharing_dual_backend` 和 `shared_ledger_receipt_rpc`。不要把 Supabase service role、Notion token 或 invite token 寫入前端或 GitHub。
-
-## 可以做甚麼
-
-### 1. 建立旅程
-
-在主頁或 Settings 頁：
-
-1. 從旅程下拉選單選一個旅程，或建立新旅程。
-2. 幫旅程改名，例如 `Japan 2026`。
-3. 填旅行日期。
-4. 填你打算花多少錢。
-5. 建議貼上完整行程、酒店、餐廳、交通或 booking 文字，讓 AI 幫你整理每日景點。
-
-App 會把每個旅程分開保存。
-
-如果你有多個旅程，例如 `Japan 2026` 和 `Taiwan 2026`，請先在首頁下拉選單選對旅程，再新增開支。這樣 app 才知道那筆錢屬於哪一個旅行。
-
-Trip Update AI 會先顯示確認視窗，逐日列出 AI 抽到的日期、酒店、景點、餐廳、時間、城市、國家和缺漏欄位。你確認後，Itinerary 和 Weather 才會更新。行程日期支援 `2026-06-13`、`2026/6/13`、`6/13`、`6月13日` 這類格式；沒有年份時，app 會用同一旅程的年份或旅程 ID 推斷，避免因瀏覽器時區把日期變成前一日。
-
-### 2. 新增開支
-
-你可以用幾種方法新增開支：
-
-- 掃描收據相片。
-- 從相簿選收據。
-- 貼上 email 文字。
-- 自己打字輸入。
-- 用聲音輸入。
-
-每筆開支都要看清楚：
-
-- 店名
-- 日期
-- 時間
-- 金額
-- 貨幣
-- 類別
-- 支付方法
-- 旅程
-
-看清楚後按儲存。
-
-### 3. 查看記錄
-
-去 Records tab 可以看到目前旅程的所有開支。
-
-你可以：
-
-- 用店名或備註搜尋。
-- 按類別篩選。
-- 打開一筆記錄來修改。
-- 確認等待處理的 email 記錄。
-
-如果你在手機 Chrome 見到卡片太闊或畫面怪怪的，先刷新頁面一次，再確認你正在用主要公開 app。如果問題仍在，請把 tab 名稱和手機型號記下來交給開發者。
-
-### 4. 查看行程
-
-Itinerary tab 會顯示目前旅程的行程。Compact app 會以目前旅程的開始/結束日期做邊界；景點只會出現在旅程日期內。預設 Nagoya trip 是 `2026-04-20` 至 `2026-04-25`，如果同步資料暫時只帶回部分日期，app 會補回原本六日行程。
-
-它可以顯示：
-
-- 第幾天
-- 去哪些地方
-- 酒店和交通
-- 每一天相關的開支
-- 目前時間去到哪一個景點
-
-Timeline 左邊的行程線會跟住景點走，不是單純用 24 小時比例。當今日剛好在旅程日期內，深色動畫會停在目前時間所屬的景點附近；如果今日不在這個旅程日期內，行程線會保留原本紅、金、綠顏色，但會變暗，表示這只是過去或未來的參考行程。
-
-在手機上，用底部的 tab 轉頁。Itinerary 卡片已經為手機縮細排版，地圖和編輯按鈕會放在右側，讓一屏可以看到更多行程點。
-
-### 5. 查看統計
-
-Stats tab 幫你回答簡單問題：
-
-- 我用了多少錢？
-- 哪一類用了最多錢？
-- 哪些店最貴？
-- 幾個旅伴應該怎樣分帳？
-
-### 6. 使用 Notion
-
-Notion 可以像一本同步筆記簿，保存開支記錄。
-
-簡單來說：
-
-- Supabase 是公開多人使用的主要資料庫。
-- Notion 可以多保存一份筆記簿副本。
-- 連接 Notion 後，app 可以推送和拉取記錄。
-
-私人旅程公開使用時，每個人如果想用 Notion sync，應該連接自己的 Notion database。不要讓所有人共用同一個 Notion database 和密碼。
-
-共享旅程則不同：同一個 trip 應該有同一個 Notion backend notebook/database，普通同行者不需要自己的 Notion token。Shared-trip receipt save/delete 會先經 Supabase RPC 儲存，並建立 Notion retry job；真正 Notion 寫入由 server-side worker / broker 完成。
-
-Notion 同步之前，請先確認目前選中的旅程是正確的。每筆 Notion 記錄都應該有 `TripID`，app 會用它來避免不同旅程的記錄混在一起。
-
-如果你還未連接自己的 Personal Notion，Settings 會只顯示 Supabase 同步。這是正常的，代表 app 不會用舊的共享 Notion notebook。
-
-### 7. 使用 AI
-
-App 只會經 server-side Credential Broker 使用 AI。瀏覽器不應該存放真正的 AI API key。
-
-目前主要模型規則：
-
-- 每一種 AI 工作都先用 Settings 選定的 primary model。
-- 新裝置預設：Receipt scan / Voice 使用 `mimo-v2.5`。
-- 新裝置預設：Email / Trip Update 使用 `mimo-v2.5-pro`。
-- Trip Update 會按固定次序嘗試 contract default、Google fast fallbacks，再到其他允許的
-  slower fallbacks；每一步都會保留實際 model evidence。
-- `429`、quota或daily-limit是 hard stop，不會偷偷換 provider 繞過用量限制。
-
-如果 AI 暫時不能用，你仍然可以自己打字記帳。
-
-如果 app 說今日 AI 用量已滿，代表系統保護大家的公開用量。這時 app 不會偷偷改用另一個 AI 供應商；你可以先手動輸入，或等明天再用 AI。
-
-在 Settings 的 Model routing 選好 trip update model 後，Trip Update AI 會用該模型作主要分析來源。進階診斷、Notion schema、stress test、deploy recovery 等維護工具已收在開發者面板內，普通使用時 Settings 只保留旅程、AI、同步、備份和資料管理等日常控制。
-
-### 8. 匯出和備份
-
-在 Settings：
-
-- Compact 的「資料管理 → 下載旅程資料」會下載目前旅程 ZIP，內有離線可讀／列印的 `summary.html`、開支／品項／付款分帳／旅伴／行程／圖片清單 CSV，以及 JSON 備份。
-- 「連同收據圖片下載」預設不勾選；勾選後會加入 `receipts/` 圖片資料夾。原圖未能取得時可保留本地縮圖，清單會標示縮圖、遺失或下載失敗，文字資料仍可下載。
-- 解壓整個 ZIP 後開啟 `summary.html`，報告內的圖片連結可以離線使用；CSV 可用 Excel／Numbers 開啟。
-- Export CSV 會單獨匯出目前旅程的開支表，包含原幣金額、HKD、收據匯率、付款人、備註及紀錄 ID。
-- Export Backup JSON 只會匯出目前旅程和這個旅程的文字資料；圖片不嵌入 JSON。
-- Import Backup JSON 可以還原安全的本機資料，但會移除秘密資料和雲端 ID。
-
-下載包含本機可見的私人紀錄，適合個人保存。JSON 還原不會自動附回 ZIP 圖片；格式和欄位說明見 [下載格式文件](docs/compact-export-format.md)。不要把真正 API key 或 token 放進 backup 檔。
-
-## 安全規則
-
-- 不要把真正 API key 放入 GitHub、Vercel、Netlify 或瀏覽器程式碼。
-- 不要讓所有公開用戶共用同一個登入帳號。
-- 公開用戶要用 Supabase auth；Compact app 也支援 Google login。
-- Notion 應該是每個人自己的同步筆記簿，不是一個大家共用的公開筆記簿。
-- 如果用共用裝置，登出前清除這部裝置的資料。
-
-## 新用戶註冊通知
-
-Supabase 已設定 `notify-new-user` Edge Function 和 `auth.users` 後置 trigger。
-當新用戶註冊時，資料庫會把事件寫入 `public.admin_signup_notifications`，然後用 private shared secret 呼叫 Edge Function。
-
-Supabase Edge Function secret `RESEND_API_KEY` 已設定。現時 Resend account 仍在 testing 限制內，所以通知會寄去 Resend 允許的 account email。若要改寄其他 email，需要先在 Resend verify domain，然後更新 `ADMIN_SIGNUP_NOTIFY_EMAIL` 和 `SIGNUP_NOTIFY_FROM`。
-
-不要把 `SIGNUP_NOTIFY_SECRET`、`RESEND_API_KEY`、或任何 email provider key 寫入 repo。
-
-## 如果出現問題
-
-- 看不到自己的資料：先確認是否用同一個 email 登入。
-- 記錄去了錯的旅程：回到首頁選正確旅程，再檢查 Records tab。
-- Notion 沒有同步：去 Settings 檢查 Notion database 是否是自己的。
-- AI 不能用：可以先用手動輸入，記帳功能仍然可以用。
-- 共用手機用完：登出前按清除裝置資料，避免下一個人看到你的暫存資料。
-
-## Developer Quick Start
-
-```bash
-cd /Users/tommy_1/Documents/Projects/travel-expense
-
-# React public app
-cd app-react
-npm install
-npm run dev
-npm run typecheck
-npm run build
-```
-
-Local React URL:
-
-```text
-http://localhost:8902/travel-expense/react/
-```
-
-Useful checks:
-
-```bash
-cd app-react
-npm run security:scan
-npm run db:policy:scan
-npm run db:rls:smoke
-npm run smoke:settings
-npm run smoke:security
+npm run smoke:weather
+npm run smoke:dashboard
 npm run smoke:ai-routing
-npm run smoke:shared-ledger
 npm run smoke:mobile-layout
 ```
 
-`npm run db:rls:smoke` is a live Supabase database check. It needs `SUPABASE_DB_URL` in your shell. Do not write that URL into any file.
+The browser smoke wrapper starts an isolated local server with safe environment loading. Playwright blocks unmocked external hosts. Install its Chromium browser with `npx playwright install chromium` if it is missing. Run the smoke suites relevant to your change; see [Compact's scripts and notes](app-compact/README.md) and [architecture](app-compact/ARCHITECTURE.md).
 
-Supabase public-mode checks:
+For the parallel client, run `npm ci` and `npm run dev` from `app-react/`, then open [local React](http://localhost:8902/travel-expense/react/). Compact and React version independently. Changes to shared storage or trip/receipt contracts need cross-client checks.
 
-```bash
-cd app-react
-SUPABASE_REDIRECT_SMOKE=1 npm run smoke:security
-SUPABASE_AI_SMOKE=1 npm run smoke:ai-routing
-SUPABASE_MIRROR_SMOKE=1 npm run smoke:supabase-notion-mirror
-SUPABASE_TRIP_ACTIVE_SMOKE=1 npx playwright test tests/supabase-trip-active-smoke.spec.cjs --workers=1 --browser=chromium --reporter=line
-```
+## Repository map
 
-## Project Shape
+| Path | Purpose |
+| --- | --- |
+| `app-compact/` | Active public React/Vite client |
+| `app-react/` | Parallel public client |
+| `app-admin-kanban/` | Admin frontend and same-origin BFF |
+| `workers/credential-broker/` | Credentialed provider access |
+| `supabase/` | Database migrations and Edge Functions |
+| `index.html` | Stateless redirect to Compact |
+| `docs/` | Contracts, runbooks and technical notes |
+| `AGENTS.md` | Repository working rules |
+| `HANDOVER.md` / `CHANGELOG.md` | Continuation notes and change history |
 
-```text
-travel-expense/
-  app-react/                 React 19 + Vite public app
-  app-admin-kanban/          Admin Console 1.4.1 Vercel surface
-  index.html                 Stateless CSP-protected redirect to Compact
-  legacy-notion.js           Legacy Notion sync helper
-  email-to-notion.gs         Google Apps Script email importer
-  workers/credential-broker/ Cloudflare Worker for secrets and AI provider access
-  supabase/migrations/       Supabase schema and RLS hardening
-  docs/                      Legacy tab notes
-  AGENTS.md                  Agent rules for this folder
-  HANDOVER.md                Latest technical handover
-  CHANGELOG.md               Human-readable change history
-```
+## Releases and maintenance
 
-## Deploy
+GitHub Pages builds from `main`: Compact under `/compact/`, React under `/react/`, and a redirect at the root. Vercel has separate app targets. Admin production uses a protected, explicitly dispatched workflow. Legacy Netlify configuration remains in the repository; it is not the recommended public entry point.
 
-Normal deploy is:
+A push to `main` can trigger deployment. Obtain the repository owner's explicit authorization before pushing, merging or deploying, and verify the intended source SHA and live app afterwards. Bump the touched app's visible `APP_VERSION`, package version and lockfile version together. Database migrations, Admin writes and credential changes require separate authorization for their target.
 
-```bash
-git push origin main
-```
-
-GitHub Actions builds both maintained web apps, publishes a CSP-protected Compact redirect at the root, React under `/react/`, and Compact under `/compact/`.
-
-Vercel is connected to the same GitHub repo and serves the React app at `/`; the separate Admin
-Console production URL is `https://travel-expense-admin-kanban.vercel.app`.
-
-Netlify config is present. The Compact Netlify workflow and public URL were healthy in the
-2026-07-15 `0.16.6` live verification; Vercel remains the primary production entry point.
-
-## For The Next Agent
-
-Read these first:
-
-1. `AGENTS.md`
-2. `HANDOVER.md`
-3. `CHANGELOG.md`
-
-Do not commit real secrets. Do not stage `CLAUDE.md` unless Boss explicitly asks.
+Read [AGENTS.md](AGENTS.md), the relevant app architecture and [HANDOVER.md](HANDOVER.md) before maintenance. Never commit secrets, `.env` files, personal exports, generated deployment output or local graph indexes.

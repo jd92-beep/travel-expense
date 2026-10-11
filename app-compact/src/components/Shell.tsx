@@ -657,17 +657,6 @@ export function Shell({
               <RefreshCw size={11} className={pulling ? 'spin' : undefined} />
             </button>
           </div>
-        ) : active === 'scan' ? (
-          // Gear shortcut into Settings from the Scan header (Scan itself owns its own
-          // "更多方式" input-method sheet; this is the global settings entry).
-          <button
-            className="compact-mobile-action compact-touch-action relative z-10"
-            type="button"
-            aria-label="更多操作"
-            onClick={() => onTab('settings')}
-          >
-            <Settings size={25} />
-          </button>
         ) : null}
       </header>
       {active === 'settings' && (
