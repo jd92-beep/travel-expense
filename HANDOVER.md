@@ -1,5 +1,11 @@
 # Agent Handover
 
+## 2026-10-16 — Compact 0.31.1 Welcome Guide trip isolation
+
+- Welcome Guide now analyzes new itineraries against an empty trip context, including local-parser and provider-failure paths. It assigns fresh trip/day/spot identities even for identical dates/destinations, avoids inheriting the outgoing trip's budget/cloud/sharing metadata, and resets legacy display overrides when activating the new trip. Existing saved trips remain intact.
+- Settings retains the existing current-trip parser and partial/full update behavior. Model selection, credentials, quota hard stops and shared storage contracts are unchanged.
+- Verification: typecheck, production build, security scan, local-parser tests, diff check and 17 mobile browser checks passed (AI routing, Welcome Guide creation/failure, and Settings itinerary confirmation/fallbacks). Browser checks use disposable state and mocked providers; no live AI/account/database operation or deployment verification is part of this fix.
+
 ## 2026-10-11 — Completed Compact 0.31.0 UI update and bilingual repository guide
 
 - Resumed the interrupted Weather, Scan, receipt editor, Home and Settings update. Weather uses theme tokens and centers the matching local hour; Scan includes live/fixed rate controls and a calculator; the receipt form pairs fields and exposes rate presets. Home has aligned currencies and one daily-budget percentage; Settings has two-level model choices, full wrapping model names and advanced connections last.
@@ -63,7 +69,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.31.0`; the Android branch is `0.24.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.31.1`; the Android branch is `0.24.0`.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)

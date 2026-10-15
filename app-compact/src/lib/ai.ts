@@ -1536,6 +1536,56 @@ function clampPartialTripDraft(draft: TripDraft, current: { id: string; name: st
   };
 }
 
+// Onboarding creates a trip, even when its dates/destination match an existing trip.
+// Isolate both AI context and local/failure fallbacks; keep model/auth preferences.
+export async function parseNewTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
+  const now = Date.now();
+  const id = `trip_${crypto.randomUUID()}`;
+  const currency = resolveTripContext(paragraph).primaryCurrency;
+  const emptyTrip: TripProfile = {
+    id,
+    name: '',
+    destinationSummary: '',
+    startDate: '',
+    endDate: '',
+    homeCurrency: 'HKD',
+    currencies: ['HKD', currency],
+    timezones: [],
+    budget: 0,
+    version: 1,
+    active: true,
+    archived: false,
+    itinerary: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  const draft = await parseTripParagraph(paragraph, {
+    ...state,
+    trips: [emptyTrip],
+    activeTripId: id,
+    tripName: '',
+    tripDateRange: { start: '', end: '' },
+    tripCurrency: currency,
+    budget: 0,
+    customItinerary: [],
+    itineraryOverrides: {},
+  });
+  return {
+    ...draft,
+    trip: {
+      ...draft.trip,
+      id,
+      sourceId: `trip_${id}`,
+      version: 1,
+      createdAt: now,
+      itinerary: normalizeItinerary(draft.trip.itinerary.map(({ id: _id, dayId: _dayId, spots, ...day }) => ({
+        ...day,
+        spots: spots.map(({ id: _spotId, spotId: _stableId, ...spot }) => spot),
+      })), id, currency),
+    },
+  };
+}
+
 export async function parseTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
   const current = activeTrip(state);
   const currentTrip = {

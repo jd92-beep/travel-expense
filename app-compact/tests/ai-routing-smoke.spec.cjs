@@ -33,11 +33,112 @@ async function library(page, action) {
     const {DEFAULT_STATE} = await import('/travel-expense/compact/src/lib/constants.ts');
     const state = {...DEFAULT_STATE,credentialSession:'disposable-model-smoke',credentialSessionExpiresAt:Date.now()+3600000,...action.state};
     try {
-      if (action.kind==='trip') return {result:await ai.parseTripParagraph('2026-10-20 首爾 09:30 景福宮',state)};
+      if (action.kind==='trip') return {result:await ai[action.newTrip ? 'parseNewTripParagraph' : 'parseTripParagraph'](action.paragraph || '2026-10-20 首爾 09:30 景福宮',state)};
       return {result:await ai.parseTextWithAi('日本酒店 HANA8，2026-10-20 入住，JPY24000，2晚',state,action.kind==='voice'?'react-voice':'react-email')};
     } catch(e) { return {error:e.message}; }
   },action);
 }
+const oldTrip = {
+  id:'old-seoul-trip',supabaseId:'old-cloud-trip',sourceId:'old-source',
+  name:'OLD_PRIVATE_TRIP',destinationSummary:'Seoul',startDate:'2026-10-20',endDate:'2026-10-21',
+  budget:98765,homeCurrency:'HKD',currencies:['HKD','NZD'],timezones:['Asia/Seoul'],
+  version:7,active:true,createdAt:1,updatedAt:1,
+  notionPageId:'old-notion-page',sharing:{isShared:true,role:'owner',memberCount:2},
+  itinerary:[
+    {date:'2026-10-20',day:1,region:'Seoul',timezone:'Asia/Seoul',currency:'KRW',lodging:{name:'OLD_HOTEL'},spots:[{time:'08:00',name:'OLD_BREAKFAST',type:'food'}]},
+    {date:'2026-10-21',day:2,region:'Seoul',timezone:'Asia/Seoul',currency:'KRW',spots:[{time:'10:00',name:'OLD_SECOND_DAY',type:'other'}]},
+  ],
+};
+const oldTripState = {
+  trips:[oldTrip],activeTripId:oldTrip.id,tripName:oldTrip.name,
+  tripDateRange:{start:oldTrip.startDate,end:oldTrip.endDate},
+  tripCurrency:'NZD',budget:oldTrip.budget,customItinerary:oldTrip.itinerary,
+};
+const newSeoulTrip = {
+  name:'New Seoul',destinationSummary:'Seoul',startDate:'2026-10-20',endDate:'2026-10-21',
+  itinerary:[{date:'2026-10-20',day:1,region:'Seoul',city:'Seoul',country:'South Korea',timezone:'Asia/Seoul',currency:'KRW',spots:[{time:'19:00',timeEnd:'21:00',name:'NEW_SHOW',type:'ticket'}]}],
+};
+
+test('new-trip parsing excludes old context and metadata even for matching dates and destination',async({page})=>{
+  const calls=await setup(page,{},()=>({data:{trip:newSeoulTrip}}));
+  const state={...oldTripState,tripUpdateModel:NEM};
+  const first=await library(page,{kind:'trip',newTrip:true,state});
+  const second=await library(page,{kind:'trip',newTrip:true,state});
+  expect(first.error).toBeUndefined();expect(second.error).toBeUndefined();
+  const trip=first.result.trip;
+  expect(trip.id).not.toBe(oldTrip.id);expect(trip.id).not.toBe(second.result.trip.id);
+  expect(trip.version).toBe(1);expect(trip.budget).toBe(0);
+  for(const key of ['supabaseId','notionPageId','sharing'])expect(trip[key]).toBeUndefined();
+  expect(trip.sourceId).toBe(`trip_${trip.id}`);expect(trip.createdAt).toBeGreaterThan(1);
+  expect(trip.currencies).not.toContain('NZD');
+  expect(trip.itinerary).toHaveLength(1);
+  expect(trip.itinerary[0].spots.map(s=>s.name)).toEqual(['NEW_SHOW']);
+  expect(trip.itinerary[0].lodging).toBeUndefined();
+  expect(trip.itinerary[0].dayId).not.toBe(second.result.trip.itinerary[0].dayId);
+  expect(trip.itinerary[0].spots[0].spotId).not.toBe(second.result.trip.itinerary[0].spots[0].spotId);
+  for(const call of calls){
+    expect(call.prompt).toContain('FULL REPLACEMENT');
+    for(const old of ['OLD_PRIVATE_TRIP','OLD_HOTEL','OLD_BREAKFAST','OLD_SECOND_DAY',oldTrip.id])expect(call.prompt).not.toContain(old);
+  }
+});
+
+test('Settings parser still merges partial updates and retains the existing trip identity',async({page})=>{
+  const calls=await setup(page,{},()=>({data:{trip:newSeoulTrip}}));
+  const r=await library(page,{kind:'trip',state:{...oldTripState,tripUpdateModel:NEM}});
+  expect(r.error).toBeUndefined();
+  expect(calls[0].prompt).toContain('PARTIAL UPDATE');
+  expect(calls[0].prompt).toContain('OLD_SECOND_DAY');
+  const trip=r.result.trip;
+  expect(trip.id).toBe(oldTrip.id);expect(trip.supabaseId).toBe(oldTrip.supabaseId);
+  expect(trip.budget).toBe(oldTrip.budget);expect(trip.itinerary).toHaveLength(2);
+  expect(trip.itinerary[0].spots.map(s=>s.name)).toEqual(expect.arrayContaining(['NEW_SHOW','OLD_BREAKFAST']));
+  expect(trip.itinerary[1].spots[0].name).toBe('OLD_SECOND_DAY');
+});
+
+test('new-trip local and total-failure fallbacks cannot recover old itinerary or year',async({page})=>{
+  await setup(page,{},()=>({status:502,error:'Provider unavailable'}));
+  const state={...oldTripState,tripUpdateModel:'auto',trips:[{...oldTrip,startDate:'2033-10-20'}]};
+  const local=await library(page,{kind:'trip',newTrip:true,state,paragraph:'Day 1 7月10日 首爾\n09:30 景福宮'});
+  expect(local.error).toBeUndefined();
+  expect(local.result.trip.itinerary).toHaveLength(1);
+  expect(local.result.trip.itinerary[0].date).toBe(`${new Date().getFullYear()}-07-10`);
+  expect(JSON.stringify(local.result)).not.toContain('OLD_');
+  expect(local.result.trip.budget).toBe(0);
+  const failed=await library(page,{kind:'trip',newTrip:true,state,paragraph:'not an itinerary'});
+  expect(failed.error).toBeUndefined();
+  expect(failed.result.trip.itinerary).toEqual([]);
+  expect(JSON.stringify(failed.result)).not.toContain('OLD_');
+});
+
+test('Welcome Guide creates an independent trip from AI while preserving the old saved trip',async({page})=>{
+  const calls=await setup(page,{...oldTripState,lastTab:'settings',tripUpdateModel:NEM},()=>({data:{trip:newSeoulTrip}}));
+  await page.getByRole('button',{name:'重新開啟歡迎指南'}).click();
+  const guide=page.locator('.welcome-guide-modal');
+  await guide.locator('textarea').fill('Day 1 2026-10-20 Seoul\n19:00-21:00 NEW_SHOW');
+  await guide.getByRole('button',{name:/開始 AI 智能解析/}).click();
+  await expect(guide).toContainText('New Seoul');
+  await expect(guide).not.toContainText('OLD_SECOND_DAY');
+  await guide.getByRole('button',{name:'確認建立新旅程',exact:true}).click();
+  await expect(guide).toHaveCount(0);
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('boss-japan-tracker')));
+  const fresh=stored.trips.find(t=>t.id===stored.activeTripId);
+  expect(fresh.id).not.toBe(oldTrip.id);expect(fresh.itinerary).toHaveLength(1);
+  expect(fresh.itinerary[0].spots.map(s=>s.name)).toEqual(['NEW_SHOW']);
+  expect(stored.trips.find(t=>t.id===oldTrip.id).itinerary).toMatchObject(oldTrip.itinerary);
+  expect(calls[0].prompt).not.toContain('OLD_PRIVATE_TRIP');
+});
+
+test('Welcome Guide does not offer the old trip as a successful analysis after providers fail',async({page})=>{
+  await setup(page,{...oldTripState,lastTab:'settings',tripUpdateModel:'auto'},()=>({status:502,error:'Provider unavailable'}));
+  await page.getByRole('button',{name:'重新開啟歡迎指南'}).click();
+  const guide=page.locator('.welcome-guide-modal');
+  await guide.locator('textarea').fill('not an itinerary');
+  await guide.getByRole('button',{name:/開始 AI 智能解析/}).click();
+  await expect(guide).toContainText('Provider unavailable');
+  await expect(guide.locator('textarea')).toHaveValue('not an itinerary');
+  await expect(guide.getByRole('button',{name:'確認建立新旅程',exact:true})).toHaveCount(0);
+  expect(await page.evaluate(()=>JSON.parse(localStorage.getItem('boss-japan-tracker')).activeTripId)).toBe(oldTrip.id);
+});
 test('provider groups start collapsed, filter image capability and persist a real selection',async({page})=>{
   const calls=await setup(page,{lastTab:'settings'});
   const section=page.locator('.accordion-card').filter({has:page.getByRole('button',{name:/AI 模型選擇/})});

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Compass, Sparkles, Calendar, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
-import { parseTripParagraph } from '../lib/ai';
+import { parseNewTripParagraph } from '../lib/ai';
 import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
@@ -181,7 +181,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
     setError('');
     setAiDraft(null);
     try {
-      const result = await parseTripParagraph(tripText, state);
+      const result = await parseNewTripParagraph(tripText, state);
       const hasSpots = result && result.trip && Array.isArray(result.trip.itinerary) &&
         result.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
       if (hasSpots) {

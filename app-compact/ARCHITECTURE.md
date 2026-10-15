@@ -53,6 +53,7 @@ Mobile Chrome URL
 - Voice uses browser speech transcription followed by text extraction. Translation language persists; original names accompany translations. Unknown dates/payment stay blank, and currency cents/line totals are retained.
 - Broker keys remain private. Health checks make one exact-model request with eight output tokens; Muse Contributor uses its required 16-token minimum, approved by Boss on 2026-10-10. These limits apply to availability probes only. Native response JSON and capability validation apply to normal tasks.
 - Trip update always creates a preview first. Apply updates local trip state; Notion sync creates/updates the trip page when the broker session is active.
+- Welcome Guide uses `parseNewTripParagraph`: AI prompts and local/failure fallbacks receive an empty trip context, and each result gets fresh trip/day/spot identities. Existing trip dates, itinerary, budget and cloud metadata are not inherited. Settings continues using `parseTripParagraph` for current-trip partial/full updates.
 - [2026-10-10 model rollout, measured results and limitations](../docs/ai-model-rollout-2026-10-10.md).
 
 ## Notion Flow
