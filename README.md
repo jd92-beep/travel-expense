@@ -54,16 +54,18 @@ Paste itinerary, hotel, restaurant, transport or booking text into Trip Update A
 
 Weather uses the selected trip date and location. Its hourly rail opens at the corresponding local clock hour where available, and you can select another hour. Forecasts distinguish observations, daily bulletins and hourly models, including their sources and freshness. Official services are preferred where supported; missing fields can use labelled fallback providers. Unavailable dates or fields are shown explicitly. Device location requires your action and browser permission.
 
+The packing checklist uses the same fixed 52-item template in every theme. AI itinerary imports may append activity-specific extras in a separate **AI 推薦額外用品** group at the bottom. They never rewrite the fixed items. Duplicates are skipped; saved completion, edits and deletions remain local to the account and trip.
+
 ### AI models
 
 In **設定 → AI 模型選擇**, expand a task category, then a provider, to choose a model. The category header shows the current model without expanding it.
 
-- **Automatic photo routing:** Muse Spark Contributor, then MiMo-V2.6-Flash.
-- **Automatic text routing:** free Nemotron 3 Super, North Mini Code, Apodex Mini, then paid Qwen3.7 Flash.
-- An explicit selection makes one model attempt and shows failures. HTTP `429`, quota and daily-limit errors stop automatic retries to other models.
+- **Default for photos, voice text, email and itinerary:** DeepSeek V4.1 Flash 1017.
+- Qwen3.7 Flash and free models such as Ling 3.2 Flash remain selectable for each supported task.
+- Each request uses only its default or explicitly selected model and shows failures. HTTP `429`, quota and daily-limit errors stop the request.
 - Availability tests use the exact selected model, no fallback, and an eight-output-token budget; Muse Contributor requires 16 tokens. Normal task budgets are separate.
 
-All credentialed AI calls go through the server-side Credential Broker. Never paste a provider API key into public frontend code or a backup. Manual expense entry remains available when AI is unavailable.
+Sign in to the app once using Google or email; AI reuses that app session, without another Google or OpenRouter sign-in. All credentialed AI calls go through the server-side Credential Broker. Never paste a provider API key into public frontend code or a backup. Manual expense entry remains available when AI is unavailable.
 
 ### Themes
 

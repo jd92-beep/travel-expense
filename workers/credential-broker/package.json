@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-credential-broker",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "check": "node --check src/index.js && node --check scripts/seed-vault.mjs && node --check test/self-test.mjs",
@@ -13,7 +13,7 @@
     "wrangler": "~4.106.0"
   },
   "overrides": {
-    "undici": "^7.29.0",
+    "undici": "^7.30.1",
     "sharp": "^0.35.5"
   }
 }

@@ -1,5 +1,11 @@
 # Agent Handover
 
+## 2026-11-15 — Compact 0.36.3 rebuild and AI defaults
+
+- DeepSeek 1017 is the Compact default for all four AI categories; Qwen3.7 and free Ling remain manual choices. The fixed 52-item packing list is shared across themes, with AI extras last. Normalized rejection markers prevent deleted extras from returning under differently formatted names.
+- Repaired the obsolete wizard-model assertions and existing CI blockers: supported Ubuntu browser runners, patched Vite/Undici dependencies, and an integrity-locked native npm import for the same Edge Supabase version. Versions: Compact 0.36.3, React 0.2.12, Admin package 1.5.4 and Broker package 0.1.1.
+- Verification and publication scope: [rebuild report](docs/reviews/2026-11-15-compact-rebuild.md). Local browser/contract/build/audit checks are distinct from exact-SHA release receipts. Boss authorized commit/push; no manual Admin, Edge or Worker promotion is included.
+
 ## 2026-10-16 — Compact 0.31.1 Welcome Guide trip isolation
 
 - Welcome Guide now analyzes new itineraries against an empty trip context, including local-parser and provider-failure paths. It assigns fresh trip/day/spot identities even for identical dates/destinations, avoids inheriting the outgoing trip's budget/cloud/sharing metadata, and resets legacy display overrides when activating the new trip. Existing saved trips remain intact.
@@ -69,7 +75,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web is `0.31.1`; the Android branch is `0.24.0`.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web source is `0.36.3`, React source is `0.2.12`; the Android branch is `0.24.0`. Verify deployed versions separately.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)

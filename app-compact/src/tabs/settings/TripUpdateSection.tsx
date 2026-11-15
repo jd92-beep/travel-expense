@@ -25,7 +25,7 @@ export function TripUpdateSection({ ctx, tripDraft, setTripDraft, setTripDraftMo
   return (
     <>
     <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />} defaultOpen={false}>
-      <p className="muted">使用 {tripUpdateModelName}。貼上行程、預訂同要帶嘅用品。確認後，每日時間、地點、航班、住宿、清單及行程小測驗會套用到目前旅程。</p>
+      <p className="muted">使用 {tripUpdateModelName}。貼上行程同預訂，確認後每日時間、地點、航班、住宿及行程小測驗會套用到目前旅程。固定用品清單保留，AI 額外用品建議另列在最下方。</p>
       <textarea
         rows={10}
         value={tripParagraph}

@@ -810,7 +810,7 @@ async function run() {
     assert.equal(restoreFetch.mimoBodies().at(-1).model, 'mimo-v2.5');
     assert.deepEqual(restoreFetch.mimoBodies().at(-1).thinking, { type: 'disabled' });
     assert.equal(restoreFetch.mimoBodies().at(-1).stream, false);
-    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 10000);
+    assert.equal(restoreFetch.mimoBodies().at(-1).max_tokens, 24000);
 
     const mimoTest = await jsonFetch(env, '/mimo/json', {
       method: 'POST',
@@ -910,13 +910,14 @@ async function run() {
     env.OPENROUTER_API_KEY = 'openrouter-fixture-secret';
     env.OPENCODE_API_KEY = 'opencode-fixture-secret';
     let compatibleStatus = 200;
+    let compatibleFinish = 'stop';
     globalThis.fetch = async (url, init) => {
       if (!String(url).includes('/chat/completions')) return priorFetch(url, init);
       compatibleCalls.push({ url: String(url), body: JSON.parse(init.body) });
       if (compatibleStatus !== 200) return Response.json({ error: { message: 'Rate limit exceeded' } }, { status: compatibleStatus });
       const body = JSON.parse(init.body);
       if (body.model === 'meta/muse-spark-1.3-contributor' && body.max_tokens < 16) return Response.json({ error: { message: 'max_output_tokens must be >= 16' } }, { status: 400 });
-      return Response.json({ choices: [{ message: { content: body.max_tokens === 8 ? '' : '{"store":"Fixture","total":1}' } }], usage: { prompt_tokens: 10, completion_tokens: 8 } });
+      return Response.json({ choices: [{ finish_reason:compatibleFinish, message: { content: body.max_tokens === 8 ? '' : '{"store":"Fixture","total":1}' } }], usage: { prompt_tokens: 10, completion_tokens: 8 } });
     };
     try {
       for (const [provider, model] of [['openrouter','inclusionai/ling-3.2-flash:free'], ['openrouter','deepseek/deepseek-v4.1-flash-1017'], ['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free'], ['openrouter','meta/muse-spark-1.3-contributor'], ['openrouter','xiaomi/mimo-v2.6-flash'], ['openrouter','qwen/qwen3.7-flash'], ['openrouter','z-ai/glm-5.3-flash']]) {
@@ -927,6 +928,14 @@ async function run() {
         assert.equal(compatibleCalls.at(-1).body.max_tokens, model === 'meta/muse-spark-1.3-contributor' ? 16 : 8);
       }
       assert.deepEqual(compatibleCalls[0].body.provider.max_price, { prompt: 0, completion: 0 });
+      const trip = await jsonFetch(env, '/openrouter/json', {method:'POST',session,body:{prompt:'Fixture trip',kind:'trip',model:'deepseek/deepseek-v4.1-flash-1017'}});
+      assert.equal(trip.response.status,200);
+      assert.equal(compatibleCalls.at(-1).body.max_tokens,24000);
+      compatibleFinish='length';
+      const truncated = await jsonFetch(env, '/openrouter/json', {method:'POST',session,body:{prompt:'Fixture trip',kind:'trip',model:'deepseek/deepseek-v4.1-flash-1017'}});
+      assert.equal(truncated.response.status,502);
+      assert.match(truncated.data.error,/不完整/);
+      compatibleFinish='stop';
       const beforeRejected = compatibleCalls.length;
       const rejected = await jsonFetch(env, '/openrouter/json', { method:'POST', session, body: { prompt:'Read image', kind:'scan', model:'cohere/north-mini-code:free', image:{mime:'image/png',base64:'AA=='} } });
       assert.equal(rejected.response.status, 400);

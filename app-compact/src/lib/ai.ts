@@ -1,9 +1,10 @@
 import { packingSuggestions, dayQuestions } from './journeyActivities';
+import { defaultChecklist } from './journeyTools';
 import { buildReceiptPrompt, buildTextReceiptPrompt, translationGuidance } from './aiPrompts';
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext } from '../domain/trip/context';
 import { brokerAiJson, hasCredentialBrokerSession, redactedError, testProviderConnection } from './credentialBroker';
-import { DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
+import { DEFAULT_AI_MODEL_ID, DEFAULT_GOOGLE_BACKUP_MODEL, DEFAULT_TRIP_UPDATE_MODEL_ID, AI_MODELS } from './constants';
 // @ts-expect-error TS5097: Node's strip-types runner needs the extension.
 import { resolveCatalogAiModelId } from './providerCatalog.ts';
 import type { AppState, CategoryId, ItineraryDay, PaymentId, Receipt, ReceiptLineItem, TripDraft, TripExtractionReport, TripIntelligence, TripProfile } from './types';
@@ -1075,11 +1076,7 @@ export function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | '
     if (!record?.tasks.includes(kind === 'trip' ? 'trip-update' : kind)) throw new Error('所選模型唔支援呢個功能，請重新選擇。');
     return [selectedModelAttempt(chosen)];
   }
-  const models = [
-    'openrouter/inclusionai/ling-3.2-flash:free',
-    'openrouter/deepseek/deepseek-v4.1-flash-1017',
-  ];
-  return models.map(selectedModelAttempt);
+  return [selectedModelAttempt(DEFAULT_AI_MODEL_ID)];
 }
 
 async function callModelAttemptJson(
@@ -1363,7 +1360,7 @@ Your job:
 1. Read the whole user text across Markdown tables, HTML-ish pasted text, plain timetables, Cantonese/Chinese/English/Korean names, duplicate lines, and mixed date formats.
 2. Preserve stated plans and flag conflicts or missing details in warnings. Do not invent activities, bookings, addresses, travel times or payment.
 3. Rewrite it into your own organizedItinerary: a clean canonical itinerary grouped day-by-day, with date, day number, lodging, transport, flights, meals, attractions, shopping, optional notes, timing, and important constraints.
-4. Keep explicit packing lists, quantities, gear needed for activities, guide notes, named traveller requirements, stated budget/currency, check-in/out, flight dates, local zones and references. Preserve facts useful for an itinerary quiz. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
+4. Keep explicit guide notes, named traveller requirements, stated budget/currency, check-in/out, flight dates, local zones and references. Preserve facts useful for an itinerary quiz. Keep any explicit preparation details in notes. Never regenerate or modify the fixed packing checklist; extra suggestions are handled separately during extraction. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
 ${intentInstruction}
 ${existingContext}
 
@@ -1413,10 +1410,12 @@ Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return this exact JSON object structure, replacing empty placeholders with source evidence. summary, warnings and changes are OUTSIDE trip. Ensure every opened brace/bracket is closed; validate the JSON before replying:
-{"organizedItinerary":"","trip":{"name":"","destinationSummary":"","startDate":"","endDate":"","currencies":[],"budget":null,"itinerary":[{"date":"","day":0,"region":"","city":"","country":"","timezone":"","currency":"","highlight":"","note":"","lodging":{"name":"","address":"","checkIn":"","checkOut":"","bookingRef":""},"spots":[{"time":"","timeEnd":"","endDate":"","timezone":"","endTimezone":"","name":"","type":"other","note":"","address":"","bookingRef":""}],"packing":[{"label":"","note":"","suggested":false}],"quiz":[{"question":"","options":[],"answer":"","evidence":""}]}]},"summary":"","warnings":[],"changes":[]}
+{"organizedItinerary":"","trip":{"name":"","destinationSummary":"","startDate":"","endDate":"","currencies":[],"budget":null,"itinerary":[{"date":"","day":0,"region":"","city":"","country":"","timezone":"","currency":"","highlight":"","note":"","lodging":{"name":"","address":"","checkIn":"","checkOut":"","bookingRef":""},"spots":[{"time":"","timeEnd":"","endDate":"","timezone":"","endTimezone":"","name":"","type":"other","note":"","address":"","bookingRef":""}],"packing":[{"label":"","note":"","suggested":true}],"quiz":[{"question":"","options":[],"answer":"","evidence":""}]}]},"summary":"","warnings":[],"changes":[]}
 
 Compact renders these fields in every theme. Extract the complete schedule before generating extras. Use day.highlight for the main visit and day.note for practical guide information in the text. Link each booking, address, check-in/out, both local flight times and any known arrival date/endTimezone to its actual day and spot. Use the budget only when explicitly stated in the primary trip currency, otherwise null. Put the primary trip currency first in currencies. Never create transactions from estimates or bookings.
-For day.packing, route each explicit preparation/packing item to the day it is needed (trip-wide items on the first day), preserving quantities and bag/location in note. Add a few useful activity-specific suggestions with suggested:true. Do not assume children, medicines, visa rules or weather. Packing is separate from scheduled spots.
+The app already has this fixed 52-item packing template (names only; not evidence about this traveller):
+${defaultChecklist().map(item => item.label).join('、')}
+Never regenerate, remove, rename or duplicate those fixed items or their equivalents. For day.packing, return ONLY useful EXTRA items suggested by the actual activities, at most ten across the trip. Put trip-wide extras on the first day. Mark every extra suggested:true. Use the same checklist format: a short item label and note "數量 · 隨身／行李／穿著；用途" (e.g. {"label":"觀鳥望遠鏡","note":"1 副 · 隨身；公園觀鳥用。","suggested":true}). Quantities are suggestions; use "按需要" if unknown. Do not infer children, medical needs, visa requirements or weather from the template. If no useful extras remain, return []. Preserve explicit source preparation details in day.note. Extras appear only in the bottom AI recommendations section and never replace the fixed template.
 A single flight from A to B with an explicit arrival is ONE type:"flight" spot. Set its time and timezone to departure, timeEnd and endTimezone to arrival, and endDate to the stated arrival date ("same day" = day.date; "next day" = the following date). Retain the flight number and both airports in its name or note. When a hotel check-in or check-out time is given, set lodging.checkIn or lodging.checkOut even if there is also a timed lodging spot. Do not split the two endpoints into separate activities. An independent transfer after landing is a separate spot. Before returning, check every flight with an explicit arrival against these five fields.
 For day.quiz, design a small multiple-choice travel quiz based ONLY on the extracted day. Aim for one or two distinct questions per day, up to ten across the trip if there are enough facts. Use 2–4 distinct options. The answer must exactly match one option and be a literal part of evidence, an exact value or substring of ONE spot.name, spot.time, day.lodging.name, day.highlight or day.note in the JSON you are returning. For example if the answer is a time, copy only the HH:MM as evidence. Never combine multiple fields or rephrase the evidence. Do not use booking references or personal information. Return plain text and arrays; the app runs the game. Copy names as written without bilingual glosses unless both versions appear in the source. Keep unsupported fields empty. No invented reservations, route timings, weather observations or exchange rates.
 

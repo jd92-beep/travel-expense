@@ -52,7 +52,8 @@ Mobile Chrome URL
 ## AI Flow
 
 - Task categories start collapsed and show the currently selected model. Expanding a category reveals collapsed provider groups with accessible radio choices. Photo choices are filtered by image support. Direct Kimi/MiMo/Volcano choices are hidden; validated OpenRouter and OpenCode choices are available.
-- An explicit category selection runs only that provider/model and reports its failure. Stale/hidden settings migrate to `auto`; automatic photo routing is Muse Contributor → MiMo-V2.6-Flash, and automatic text routing is Nemotron Super → North Mini Code → Apodex Mini → Qwen3.7 Flash. Quota failures stop the chain.
+- All four task defaults (photo, voice text, email, itinerary) use only DeepSeek V4.1 Flash 1017. Legacy `auto` values resolve to that same single model; valid manual choices, including Qwen3.7 Flash and free Ling, remain selectable and are preserved. Errors and quota failures stay visible without switching to another model.
+- The broker allows 24,000 output tokens for itinerary work and rejects `finish_reason=length` before JSON repair, preventing a truncated model response from becoming an accepted partial AI itinerary.
 - Voice uses browser speech transcription followed by text extraction. Translation language persists; original names accompany translations. Unknown dates/payment stay blank, and currency cents/line totals are retained.
 - Broker keys remain private. Health checks make one exact-model request with eight output tokens; Muse Contributor uses its required 16-token minimum, approved by Boss on 2026-10-10. These limits apply to availability probes only. Native response JSON and capability validation apply to normal tasks.
 - Trip update always creates a preview first. Apply updates local trip state; Notion sync creates/updates the trip page when the broker session is active.
@@ -163,6 +164,7 @@ for unavailable originals; they are labelled. No bucket policy or database chang
 - `components/journey/` contains the shared date rail, trip cover/mark, overview, planner, booking summaries, local checklist and offline matching game. Existing receipt, weather, settlement and settings data services remain the owners of their data.
 - Flights and stays use existing itinerary spots and lodging fields. Create/edit actions use the existing itinerary editor; shared viewers cannot write bookings. No booking-provider API or live status is added.
 - `lib/journeyTools.ts` validates checklist imports and creates RFC 5545 calendar downloads with UTF-8 line folding. Valid per-spot IANA time zones are converted to UTC; absent zones retain floating local time. Invalid zones and nonexistent daylight-saving times produce a visible export error.
+- Every theme starts from the same fixed 52-item `pocketPacking` template. `aiChecklistItems` filters duplicate fixed/user items and appends extras in the final AI recommendation group, using stable gear IDs. Import and Welcome previews distinguish these extras from the fixed template. Existing user entries, completion states and rejected template/AI items remain preserved.
 - Checklist storage keys encode both authenticated account and active trip. Save failures remain visible; importing merges only whitelisted checklist fields, and export/import is separate from the existing trip backup contract. Checklists do not sync to the shared cloud database.
 - The game is local UI state and performs no network request. New features require no migration, provider credential or new dependency.
 

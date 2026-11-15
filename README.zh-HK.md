@@ -54,16 +54,18 @@
 
 天氣按所選旅程日期同地點顯示；有對應資料時，逐時欄會自動揀當地相同鐘數，亦可以手動轉時段。實測、每日預報、逐時模型各自標示來源同新鮮程度；支援地區優先用官方資料，缺漏欄位可以用已標示嘅後備來源。冇資料嘅日期或欄位會清楚顯示。使用裝置位置需要你主動按掣同授權。
 
+用品清單喺所有主題都用同一份固定 52 項範本。AI 匯入行程可將額外用品放喺最底嘅 **AI 推薦額外用品**，沿用名稱、數量及攜帶位置格式，唔會改寫固定項目。重覆項目會略過；勾選、個人修改同刪除會按帳號、旅程保留。
+
 ### AI 模型
 
 喺 **設定 → AI 模型選擇**，先打開工作類別，再打開 provider 揀模型。類別標題直接顯示目前模型。
 
-- 自動圖片：Muse Spark Contributor → MiMo-V2.6-Flash。
-- 自動文字：免費 Nemotron 3 Super → North Mini Code → Apodex Mini → 付費 Qwen3.7 Flash。
-- 指定模型只嘗試該模型；錯誤會顯示。`429`、quota、daily-limit 會停止轉用其他模型。
+- 圖片、語音文字、Email 同行程預設全部使用 DeepSeek V4.1 Flash 1017。
+- Qwen3.7 Flash 仍可手動選擇，亦可按工作類別選用 Ling 3.2 Flash 等免費模型。
+- 每次只用預設或指定模型；錯誤會顯示。`429`、quota、daily-limit 會立即停止。
 - 連線測試用指定模型、冇 fallback，最多八個 output tokens；Muse Contributor 必須用 16 個。正常工作使用獨立輸出預算。
 
-需要憑證嘅 AI 呼叫經 server-side Credential Broker。唔好將 API key 放喺公開前端或備份。AI 暫時唔可用時仍然可以手動記帳。
+用 Google 或 email 登入 App 一次後，AI 會沿用呢個登入，毋須再登入另一個 Google 或 OpenRouter 帳戶。需要憑證嘅 AI 呼叫經 server-side Credential Broker。唔好將 API key 放喺公開前端或備份。AI 暫時唔可用時仍然可以手動記帳。
 
 ### 外觀主題
 

@@ -2,15 +2,14 @@
 import { pocketPacking } from './pocketPacking.ts';
 import type { ItineraryDay, ItinerarySpot, PackingSuggestion } from './types';
 
-export type ChecklistGroup = '行前準備' | '隨身物品' | '行李' | '行程用品' | keyof typeof pocketPacking;
+export const AI_CHECKLIST_GROUP = 'AI 推薦額外用品';
+export type ChecklistGroup = '行前準備' | '隨身物品' | '行李' | '行程用品' | typeof AI_CHECKLIST_GROUP | keyof typeof pocketPacking;
 export type ChecklistItem = { id: string; label: string; group: ChecklistGroup; note: string; done: boolean };
-export const CHECKLIST_GROUPS: ChecklistGroup[] = [...Object.keys(pocketPacking) as (keyof typeof pocketPacking)[], '行程用品', '行前準備', '隨身物品', '行李'];
+export const CHECKLIST_GROUPS: ChecklistGroup[] = [...Object.keys(pocketPacking) as (keyof typeof pocketPacking)[], '行程用品', '行前準備', '隨身物品', '行李', AI_CHECKLIST_GROUP];
 export const CHECKLIST_LIMIT = 300;
 
 export function defaultChecklist(): ChecklistItem[] {
-  return ([['確認機票及住宿', '行前準備'], ['旅遊保險資料', '行前準備'], ['下載離線地圖', '行前準備'],
-    ['護照及旅遊證件', '隨身物品'], ['電話與充電器', '隨身物品'], ['常用藥物', '隨身物品'],
-    ['轉插', '行李'], ['換洗衣物', '行李'], ['雨具', '行李']] as const).map(([label, group], i) => ({ id: `starter-${i}`, label, group, note: '', done: false }));
+  return pocketChecklist();
 }
 
 export function pocketChecklist(): ChecklistItem[] {
@@ -18,35 +17,43 @@ export function pocketChecklist(): ChecklistItem[] {
     pocketPacking[group].map(([label, note], i) => ({ id: `pocket-${g}-${i}`, label, note, group, done: false })));
 }
 
-export function checklistSeeds(pocket: boolean, packing: PackingSuggestion[]): ChecklistItem[] {
-  const extras: ChecklistItem[] = packing.map(({ label, note, suggested }) => ({
-    id: `gear-${Array.from(label).reduce((hash, ch) => (Math.imul(hash, 31) + ch.codePointAt(0)!) >>> 0, 0).toString(36)}`,
-    label, note: [suggested ? '行程建議' : '來自行程', note].filter(Boolean).join(' · ').slice(0, 500), group: '行程用品', done: false,
-  }));
-  return [...(pocket ? pocketChecklist() : []), ...extras];
+const checklistLabel = (label: string) => label.normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+
+export function aiChecklistItems(packing: PackingSuggestion[]): ChecklistItem[] {
+  const known = new Set(defaultChecklist().map(item => checklistLabel(item.label)));
+  return packing.flatMap(({ label, note }) => {
+    const key = checklistLabel(label);
+    if (!key || known.has(key)) return [];
+    known.add(key);
+    return [{
+      id: `gear-${Array.from(label).reduce((hash, ch) => (Math.imul(hash, 31) + ch.codePointAt(0)!) >>> 0, 0).toString(36)}`,
+      label, note: (note || '').slice(0, 500), group: AI_CHECKLIST_GROUP, done: false,
+    }];
+  });
 }
 
 // A saved list is the traveller's copy. Remember which templates have been seen
 // so switching themes, re-importing a trip or reloading never resurrects a deletion.
-export function reconcileChecklist(saved: unknown, pocket: boolean, packing: PackingSuggestion[]) {
-  const items = saved ? parseChecklist(saved) : pocket ? [] : defaultChecklist();
+export function reconcileChecklist(saved: unknown, packing: PackingSuggestion[] = []) {
+  const items = saved ? parseChecklist(saved).map<ChecklistItem>(item => item.id.startsWith('gear-') && item.group === '行程用品'
+    ? { ...item, group: AI_CHECKLIST_GROUP } : item) : [];
   const known = new Set(items.map(item => item.id));
   const rawSeen = saved && typeof saved === 'object' && 'seen' in saved ? saved.seen : [];
   const seen = new Set<string>(Array.isArray(rawSeen) ? rawSeen.filter((id): id is string => typeof id === 'string') : []);
-  const additions = checklistSeeds(pocket, packing);
+  const additions = [...defaultChecklist(), ...aiChecklistItems(packing)];
   let omitted = 0;
   for (const item of additions) {
-    if (seen.has(item.id)) continue;
-    const match = items.findIndex(row => row.label === item.label && (row.group === item.group || item.group === '行程用品'));
-    if (!known.has(item.id) && match >= 0 && item.group === '行程用品') {
-      const row = items[match];
-      items[match] = { ...row, note: [row.note, item.note].filter(Boolean).join(' · ').slice(0, 500) };
-    } else if (!known.has(item.id) && match === -1) {
+    const seenLabel = item.group === AI_CHECKLIST_GROUP ? `ai-label:${checklistLabel(item.label)}` : item.id;
+    if (seen.has(item.id) || seen.has(seenLabel)) { seen.add(seenLabel); continue; }
+    const match = items.findIndex(row => checklistLabel(row.label) === checklistLabel(item.label)
+      && (row.group === item.group || item.group === AI_CHECKLIST_GROUP));
+    if (!known.has(item.id) && match === -1) {
       if (items.length >= CHECKLIST_LIMIT) { omitted++; continue; }
       items.push(item);
       known.add(item.id);
     }
     seen.add(item.id);
+    seen.add(seenLabel);
   }
   return { items, seen: [...seen], omitted };
 }

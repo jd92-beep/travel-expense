@@ -106,7 +106,7 @@ export function AiModelsSection({ ctx, brokerReady }: { ctx: SettingsContext; br
         </span>
       )}
     >
-      <p className="muted">手動選擇會只用所選模型，失敗時會報錯。自動模式依預設及後備次序處理；額度或限流會立即停止。語音先由瀏覽器轉成文字，再交所選模型處理。掃描只測每款一次。</p>
+      <p className="muted">所有功能預設使用 DeepSeek V4.1 Flash 1017。可改選 Qwen3.7 Flash，或 Ling 等免費模型；每次只用所選模型，失敗或限流會顯示錯誤。語音先由瀏覽器轉成文字，再交所選模型處理。掃描只測每款一次。</p>
       {aiScanSummary && (
         <p className="muted">
           上次掃描:{aiScanSummary.atLabel} · {aiScanSummary.ok}/{aiScanSummary.total} 個連接到

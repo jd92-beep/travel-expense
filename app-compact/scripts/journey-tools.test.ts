@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { calendarInstant, calendarTime, checklistStorageKey, defaultChecklist, pocketChecklist, reconcileChecklist, itineraryCalendar, mergeChecklist, parseChecklist, routeDirections } from '../src/lib/journeyTools.ts';
+import { AI_CHECKLIST_GROUP, aiChecklistItems, calendarInstant, calendarTime, checklistStorageKey, defaultChecklist, pocketChecklist, reconcileChecklist, itineraryCalendar, mergeChecklist, parseChecklist, routeDirections } from '../src/lib/journeyTools.ts';
 import type { ItineraryDay } from '../src/lib/types.ts';
 
 assert.notEqual(checklistStorageKey('account-a', 'trip-one'), checklistStorageKey('account-b', 'trip-one'));
@@ -17,7 +17,7 @@ assert.equal('accountId' in incoming[1], false);
 const merged = mergeChecklist(current, incoming);
 assert.equal(merged[0].done, true, 'import must not reset existing completion');
 assert.equal(merged.length, current.length + 3);
-assert.equal(current.length, 9, 'merge does not mutate source');
+assert.equal(current.length, 52, 'merge does not mutate the fixed template');
 assert.throws(() => parseChecklist({ version: 2, items: [] }));
 assert.throws(() => parseChecklist({ version: 1, items: [{ ...current[0], label: '' }] }));
 assert.throws(() => parseChecklist({ version: 1, items: Array.from({ length: 301 }, () => current[0]) }));
@@ -54,14 +54,39 @@ console.log('Journey tools passed: account/trip keys, safe merge and validation,
 const family = pocketChecklist();
 assert.deepEqual(Object.values(Object.groupBy(family, item => item.group)).map(group => group!.length), [7,8,8,13,8,8]);
 assert.equal(new Set(family.map(i => i.id)).size, 52);
-const old = {version: 1, items: [{...defaultChecklist()[0], label: '我自己的預訂資料', done: true}]};
-const upgrade = reconcileChecklist(old, true, [{label:'登山杖', note:'高山步道', suggested:true}]);
-assert.equal(upgrade.items.length, 54);
+const old = {version: 1, items: [{id:'starter-0', group:'行前準備', label:'我自己的預訂資料', note:'保留個人資料', done:true}]};
+const upgrade = reconcileChecklist(old);
+assert.equal(upgrade.items.length, 53);
 assert.deepEqual(upgrade.items[0], old.items[0]);
-const afterDelete = reconcileChecklist({version: 1, seen: upgrade.seen, items: upgrade.items.slice(0, -1)}, true, [{label:'登山杖'}]);
-assert.equal(afterDelete.items.length, 53, 'deleted seed must stay deleted');
+const afterDelete = reconcileChecklist({version: 1, seen: upgrade.seen, items: upgrade.items.slice(0, -1)});
+assert.equal(afterDelete.items.length, 52, 'deleted template item must stay deleted');
 const calendarOvernight = itineraryCalendar('return', [{...days[0], spots:[{name:'Flight', type:'flight', time:'23:30', timeEnd:'00:15'}]}]);
 assert.match(calendarOvernight, /DTEND:20261203T151500Z/);
 
-const longNote = reconcileChecklist(null, false, [{label: '備用電池', note: '甲'.repeat(500)}]);
+assert.deepEqual(reconcileChecklist(null).items, family, 'all themes start with the fixed video template');
+const longNote = reconcileChecklist({version:1,items:[{id:'manual-battery',group:'行李',label:'備用電池',note:'甲'.repeat(500),done:false}]});
 assert.doesNotThrow(() => parseChecklist({version: 1, items: longNote.items}));
+
+const suggestions = [
+  {label:'觀鳥望遠鏡',note:'1 副 · 隨身；公園觀鳥用。',suggested:true},
+  {label:family[0].label,note:'不可重覆固定用品',suggested:true},
+  {label:' 觀鳥望遠鏡 ',note:'重覆建議',suggested:true},
+];
+assert.equal(aiChecklistItems(suggestions).length,1);
+const withExtras = reconcileChecklist(null,suggestions);
+assert.deepEqual(withExtras.items.slice(0,52),family,'AI extras must not edit the fixed template');
+assert.equal(withExtras.items.length,53);
+assert.equal(withExtras.items.at(-1)!.group,AI_CHECKLIST_GROUP);
+withExtras.items.at(-1)!.done=true;
+const refreshed = reconcileChecklist({version:1,items:withExtras.items,seen:withExtras.seen},[...suggestions,{label:'賞鳥圖鑑',note:'1 本 · 行李；辨認鳥類。',suggested:true}]);
+assert.equal(refreshed.items.length,54);
+assert.equal(refreshed.items.find(item=>item.label==='觀鳥望遠鏡')!.done,true,'new AI suggestions preserve prior completion');
+const rejectedExtra = reconcileChecklist({version:1,items:refreshed.items.filter(item=>item.label!=='觀鳥望遠鏡'),seen:refreshed.seen},suggestions);
+assert.equal(rejectedExtra.items.some(item=>item.label==='觀鳥望遠鏡'),false,'deleted AI suggestions must not reappear');
+const movedLegacy = reconcileChecklist({version:1,items:[{...withExtras.items.at(-1)!,group:'行程用品'}]},suggestions);
+assert.equal(movedLegacy.items[0].group,AI_CHECKLIST_GROUP);
+assert.equal(movedLegacy.items[0].done,true,'moving old AI items keeps completion');
+const cameraExtra = reconcileChecklist(null,[{label:'Go Pro',note:'1 部 · 隨身',suggested:true}]);
+const removedCamera = {version:1,items:cameraExtra.items.filter(item=>item.group!==AI_CHECKLIST_GROUP),seen:cameraExtra.seen};
+assert.equal(reconcileChecklist(removedCamera,[{label:'ＧＯＰＲＯ',note:'同一件用品',suggested:true}]).items.length,52,
+  'deleted AI items stay deleted when the model changes case, width or whitespace');

@@ -98,7 +98,7 @@ test('booking create, edit and reload preserve existing itinerary and lodging de
 test('checklist survives reload, supports undo and safe imports, and is isolated by trip', async ({ page }) => {
   await install(page);
   await planner(page, '清單');
-  await page.getByLabel('護照及旅遊證件', { exact: true }).check();
+  await page.getByLabel('全家護照（含孩子）', { exact: true }).check();
   await page.getByLabel('新增清單項目').fill('測試相機');
   await page.getByRole('button', { name: '加入清單', exact: true }).click();
   await page.getByRole('button', { name: '編輯 測試相機', exact: true }).click();
@@ -110,21 +110,21 @@ test('checklist survives reload, supports undo and safe imports, and is isolated
   const dl = page.waitForEvent('download');
   await page.getByRole('button', { name: '匯出清單', exact: true }).click();
   const exported = JSON.parse(await readDownload(await dl));
-  expect(exported.items).toHaveLength(10);
+  expect(exported.items).toHaveLength(53);
   expect(exported.items.find(i => i.label === '測試相機').note).toBe('兩顆電池');
   await page.getByLabel('匯入清單檔案').setInputFiles({ name: 'checklist.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });
   await expect(page.getByRole('status')).toContainText('已加入 0 項');
   await page.reload(); await planner(page, '清單');
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).toBeChecked();
   await expect(page.locator('.journey-check-row').filter({ hasText: '測試相機' })).toContainText('兩顆電池');
   await page.locator('.journey-trip-trigger').click();
   await page.locator('.journey-trip-menu').getByRole('button', { name: /第二趟旅程/ }).click();
   await planner(page, '清單');
   await expect(page.locator('.journey-check-row').filter({ hasText: '測試相機' })).toHaveCount(0);
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).not.toBeChecked();
   await page.getByLabel('匯入清單檔案').setInputFiles({ name: 'invalid.json', mimeType: 'application/json', buffer: Buffer.from('{"version":2,"items":[]}') });
   await expect(page.getByRole('alert')).toContainText('清單格式不正確');
-  await expect(page.locator('.journey-check-row')).toHaveCount(9);
+  await expect(page.locator('.journey-check-row')).toHaveCount(52);
 });
 
 test('a pending checklist import preserves edits made while the file is loading', async ({page}) => {
@@ -140,7 +140,7 @@ test('a pending checklist import preserves edits made while the file is loading'
   await page.getByLabel('匯入清單檔案').setInputFiles({
     name:'items.json', mimeType:'application/json', buffer:Buffer.from(JSON.stringify({version:1,items:[item]})),
   });
-  const passport = page.getByRole('checkbox', {name:'護照及旅遊證件',exact:true});
+  const passport = page.getByRole('checkbox', {name:'全家護照（含孩子）',exact:true});
   await passport.check();
   await page.evaluate(() => window.finishReading());
   await expect(page.getByRole('checkbox', {name:'備用相機',exact:true})).toBeVisible();
@@ -212,7 +212,7 @@ test('More tools traps keyboard focus and shared viewers cannot add bookings', a
 
 test('checklist remains separate when the authenticated account changes', async ({ page }) => {
   await install(page); await planner(page, '清單');
-  await page.getByLabel('護照及旅遊證件', { exact: true }).check();
+  await page.getByLabel('全家護照（含孩子）', { exact: true }).check();
   await page.evaluate(() => {
     const id = '22222222-2222-4222-8222-222222222222';
     const snapshot = localStorage.getItem('boss-japan-tracker');
@@ -220,16 +220,16 @@ test('checklist remains separate when the authenticated account changes', async 
     localStorage.setItem('travel-expense:supabase-auth:v1', JSON.stringify({ access_token: 'fixture-access-token', refresh_token: 'fixture-refresh-token', token_type: 'bearer', expires_at: Math.floor(Date.now()/1000)+3600, user: { id, email: 'fixture@example.invalid', aud: 'authenticated', role: 'authenticated', app_metadata: { provider: 'email', providers: ['email'] }, user_metadata: {}, created_at: new Date().toISOString() } }));
   });
   await page.reload(); await planner(page, '清單');
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).not.toBeChecked();
   await page.getByLabel('新增清單項目').fill('帳號專屬項目');
   await page.getByRole('button', { name: '加入清單', exact: true }).click();
   const separation = await page.evaluate(() => {
     const keys = Object.keys(localStorage).filter(key => key.startsWith('travel-ledger:checklist:v1:'));
     return { local: JSON.parse(localStorage.getItem(keys.find(key => key.includes(':local:')))), account: JSON.parse(localStorage.getItem(keys.find(key => key.includes('supabase%3A')))) };
   });
-  expect(separation.local.items.find(i=>i.label === '護照及旅遊證件').done).toBe(true);
+  expect(separation.local.items.find(i=>i.label === '全家護照（含孩子）').done).toBe(true);
   expect(separation.local.items.some(i=>i.label === '帳號專屬項目')).toBe(false);
-  expect(separation.account.items.find(i=>i.label === '護照及旅遊證件').done).toBe(false);
+  expect(separation.account.items.find(i=>i.label === '全家護照（含孩子）').done).toBe(false);
   expect(separation.account.items.some(i=>i.label === '帳號專屬項目')).toBe(true);
 });
 
@@ -242,9 +242,9 @@ test('checklist storage failure stays visible and does not pretend the edit was 
       return original.call(this, key, value);
     };
   });
-  await page.getByLabel('護照及旅遊證件', { exact: true }).click();
+  await page.getByLabel('全家護照（含孩子）', { exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('剛才的修改未有儲存');
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).not.toBeChecked();
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).not.toBeChecked();
   await expect(page.getByRole('button', { name: '匯出清單', exact: true })).toBeEnabled();
 });
 
@@ -323,10 +323,10 @@ test('calendar shows activities immediately and handles overlaps and untimed pla
 
 test('checklist search and pending filter preserve saved items', async ({ page }) => {
   await install(page); await planner(page, '清單');
-  await page.getByLabel('護照及旅遊證件', { exact: true }).check();
+  await page.getByLabel('全家護照（含孩子）', { exact: true }).check();
   await page.getByLabel('只看未完成', { exact: true }).check();
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).toHaveCount(0);
-  await page.getByLabel('搜尋用品', { exact: true }).fill('充電器');
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).toHaveCount(0);
+  await page.getByLabel('搜尋用品', { exact: true }).fill('手機、充電器與充電線');
   await expect(page.locator('.journey-check-row')).toHaveCount(1);
   await expect(page.locator('.journey-check-group')).toHaveCount(1);
   await page.getByLabel('搜尋用品').fill('no such item');
@@ -334,7 +334,7 @@ test('checklist search and pending filter preserve saved items', async ({ page }
   await expect(page.getByLabel('只看未完成')).not.toBeChecked();
   await page.getByLabel('搜尋用品', { exact: true }).fill('');
   await page.getByLabel('只看未完成', { exact: true }).uncheck();
-  await expect(page.getByLabel('護照及旅遊證件', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('全家護照（含孩子）', { exact: true })).toBeChecked();
 });
 
 test('Scan retains capture inputs and reveals the selected mode with reduced motion', async ({ page }) => {

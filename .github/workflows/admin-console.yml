@@ -54,7 +54,7 @@ concurrency:
 jobs:
   admin:
     name: Admin frontend and BFF
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -113,7 +113,7 @@ jobs:
 
   compact:
     name: Compact shared-contract client
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -164,7 +164,7 @@ jobs:
 
   react-client:
     name: React shared-contract client
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -280,7 +280,7 @@ jobs:
 
   shared-contract:
     name: Cross-client contract and browser round trip
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -318,7 +318,7 @@ jobs:
     name: Protected Admin production promotion
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_production == true && github.ref == 'refs/heads/main'
     needs: [admin, edge, compact, react-client, database, broker, shared-contract]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment: admin-production
     env:

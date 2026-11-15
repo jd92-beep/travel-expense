@@ -42,6 +42,11 @@ assert.ok(records.find((record) => record.id === 'volcano/kimi-k3')
 for (const task of ['scan', 'voice', 'email', 'trip-update']) {
   const defaults = records.filter((record) => record.defaultFor.includes(task));
   assert.equal(defaults.length, 1, `one safe default required for ${task}`);
+  assert.equal(defaults[0].id, 'openrouter/deepseek/deepseek-v4.1-flash-1017');
+  for (const id of ['openrouter/qwen/qwen3.7-flash','openrouter/inclusionai/ling-3.2-flash:free']) {
+    const choice=records.find(record=>record.id===id);
+    assert.ok(choice.surfaces.includes('compact') && choice.tasks.includes(task));
+  }
 }
 
 console.log('provider catalog contract passed');

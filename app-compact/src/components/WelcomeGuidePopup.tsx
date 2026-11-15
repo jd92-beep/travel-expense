@@ -1,4 +1,5 @@
 import { itineraryQuestions, tripPacking } from '../lib/journeyActivities';
+import { aiChecklistItems } from '../lib/journeyTools';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Compass, Sparkles, Calendar, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
 import { hasUsefulTripItinerary, parseNewTripParagraph } from '../lib/ai';
@@ -741,7 +742,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
                   {(aiDraft.itinerary?.length ?? 0) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>行程景點</span>
-                      <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📍 {aiDraft.itinerary!.reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 個景點 / {aiDraft.itinerary!.filter(day => day.lodging?.name).length} 酒店 · {tripPacking(aiDraft.itinerary).length} 件用品 · {itineraryQuestions(aiDraft.itinerary).length} 道題目</span>
+                      <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📍 {aiDraft.itinerary!.reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 個景點 / {aiDraft.itinerary!.filter(day => day.lodging?.name).length} 酒店 · AI 額外用品建議 {aiChecklistItems(tripPacking(aiDraft.itinerary)).length} 項 · {itineraryQuestions(aiDraft.itinerary).length} 道題目</span>
                     </div>
                   )}
                 </div>

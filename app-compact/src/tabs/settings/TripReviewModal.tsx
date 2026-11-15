@@ -1,4 +1,5 @@
 import { itineraryQuestions, tripPacking } from '../../lib/journeyActivities';
+import { aiChecklistItems } from '../../lib/journeyTools';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -18,7 +19,7 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
   const tripReviewDraft = editableTripDraft;
   const tripReviewStats = tripReviewDraft ? tripDraftPreviewStats(tripReviewDraft) : null;
   const tripReviewDays = tripReviewDraft?.trip.itinerary || [];
-  const packing = tripPacking(tripReviewDays);
+  const packing = aiChecklistItems(tripPacking(tripReviewDays));
   const questions = itineraryQuestions(tripReviewDays);
   const tripReviewDay = tripReviewDays[Math.min(tripReviewDayIndex, Math.max(0, tripReviewDays.length - 1))];
   const tripReviewWarnings = tripReviewDraft ? tripReviewNotices(tripReviewDraft) : [];
@@ -124,8 +125,8 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
             <span>{tripReviewDraft.summary || '確認無誤後，行程、天氣和記帳預設會跟住呢份資料更新。'}</span>
           </div>
 
-          <details className="trip-review-notices trip-content-preview"><summary>套用到清單及小遊戲 · {packing.length} 件用品 · {questions.length} 道題目</summary>
-            <ul>{packing.map(item => <li key={item.label}>{item.label}{item.note && ' · ' + item.note}{item.suggested && '（建議）'}</li>)}</ul>
+          <details className="trip-review-notices trip-content-preview"><summary>固定用品清單保留 · AI 額外建議 {packing.length} 項 · {questions.length} 道行程題目</summary>
+            <ul>{packing.map(item => <li key={item.id}>{item.label}{item.note && ' · ' + item.note}</li>)}</ul>
             <ul>{questions.map((q, i) => <li key={i}>{q.question} · {q.answer}</li>)}</ul>
           </details>
 

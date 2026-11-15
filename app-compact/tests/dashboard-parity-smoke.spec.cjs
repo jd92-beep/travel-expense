@@ -306,7 +306,7 @@ Day 2 (2026-05-09): Jeju City.`,
 
   expect(tripIntelligenceCalls.length).toBe(1);
   expect(tripIntelligenceCalls[0].prompt).toContain('濟州');
-  expect(tripIntelligenceCalls[0].model).toBe('nvidia/nemotron-3-super-120b-a12b:free');
+  expect(tripIntelligenceCalls[0].model).toBe('deepseek/deepseek-v4.1-flash-1017');
 
   const created = await page.evaluate(() => {
     const raw = localStorage.getItem('boss-japan-tracker');
@@ -336,7 +336,7 @@ Day 2 (2026-05-09): Jeju City.`,
   await expect(page.getByText(/城山日出峰|濟州東部|Jeju/).first()).toBeVisible();
 });
 
-test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots', async ({ page }) => {
+test('Dashboard new trip wizard uses the selected Qwen model for itinerary generation', async ({ page }) => {
   const calls = [];
   await page.route('https://zh.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
   await page.route('https://en.wikivoyage.org/w/api.php**', async (route) => route.fulfill({ json: { query: { search: [] } } }));
@@ -344,9 +344,6 @@ test('Dashboard new trip wizard tries LLM fallbacks before default scenery spots
   await page.route('**/openrouter/json', async (route) => {
     const body = route.request().postDataJSON();
     calls.push({ path: 'openrouter', model: body.model });
-    if (body.model === 'nvidia/nemotron-3-super-120b-a12b:free') {
-      return route.fulfill({ status: 500, json: { ok: false, error: 'temporary model unavailable' } });
-    }
     const isStage1 = String(body.prompt || '').includes('stage 1 of a two-stage');
     if (isStage1) {
       await route.fulfill({
@@ -392,12 +389,12 @@ Day 2 (2026-05-09): Jeju City.`,
                 country: 'South Korea',
                 timezone: 'Asia/Seoul',
                 currency: 'KRW',
-                spots: [{ time: '10:00', name: 'Mimo Jeju Observatory', type: 'sightseeing', lat: 33.4996, lon: 126.5312, timezone: 'Asia/Seoul' }],
+                spots: [{ time: '10:00', name: 'Qwen Jeju Observatory', type: 'sightseeing', lat: 33.4996, lon: 126.5312, timezone: 'Asia/Seoul' }],
               }],
             },
-            summary: 'Mimo fallback created Jeju itinerary',
+            summary: 'Selected Qwen model created Jeju itinerary',
             warnings: [],
-            changes: ['Used fallback LLM after primary failure.'],
+            changes: ['Used the explicitly selected model.'],
           },
         }),
       });
@@ -405,8 +402,9 @@ Day 2 (2026-05-09): Jeju City.`,
   });
 
   await openDashboard(page, false, {
-    credentialSession: 'wizard-fallback-session',
+    credentialSession: 'wizard-selected-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
+    tripUpdateModel: 'openrouter/qwen/qwen3.7-flash',
   });
   await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
@@ -420,8 +418,8 @@ Day 2 (2026-05-09): Jeju City.`,
   await page.getByRole('button', { name: /完成創建/ }).click();
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
 
-  expect(calls.map((call) => call.path)).toEqual(['openrouter', 'openrouter']);
-  expect(calls.map((call) => call.model)).toEqual(['nvidia/nemotron-3-super-120b-a12b:free', 'cohere/north-mini-code:free']);
+  expect(calls.map((call) => call.path)).toEqual(['openrouter']);
+  expect(calls.map((call) => call.model)).toEqual(['qwen/qwen3.7-flash']);
   expect(calls.every((call) => call.model)).toBe(true);
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
@@ -433,7 +431,7 @@ Day 2 (2026-05-09): Jeju City.`,
     };
   });
   expect(created.tripCurrency).toBe('KRW');
-  expect(created.firstSpot).toBe('Mimo Jeju Observatory');
+  expect(created.firstSpot).toBe('Qwen Jeju Observatory');
   expect(created.syncQueued).toBe(true);
 });
 
@@ -461,7 +459,7 @@ test('Dashboard new trip wizard uses destination suggestions after non-quota mod
   await page.getByRole('button', { name: /完成創建/ }).click();
 
   await expect(page.getByText('Step 4 of 4')).toHaveCount(0);
-  expect(calls).toEqual(['nvidia/nemotron-3-super-120b-a12b:free', 'cohere/north-mini-code:free', 'apodex/apodex-1.1-mini:free', 'qwen/qwen3.7-flash']);
+  expect(calls).toEqual(['deepseek/deepseek-v4.1-flash-1017']);
   const created = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker') || '{}');
     const trip = state.trips?.find((item) => item.id === state.activeTripId);

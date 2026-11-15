@@ -39,9 +39,9 @@ export function JourneyPlanner({ pocket, days, calendarJump, state, setState, sc
   const postcard = useTripTheme().theme.id === 'alpine_postcard';
   const trip = activeTrip(state);
   const canEdit = trip.sharing?.role !== 'viewer';
+  const packing = view === 'checklist' ? tripPacking(days) : [];
   const [draft, setDraft] = useState<BookingDraft | null>(null);
   const [status, setStatus] = useState('');
-  const packing = view === 'checklist' ? tripPacking(days) : [];
   const selected = selectedDay || days[0];
 
   function createBooking(kind: 'flight' | 'lodging') {
@@ -124,7 +124,7 @@ export function JourneyPlanner({ pocket, days, calendarJump, state, setState, sc
       </article>)}</div>
       {(view === 'flights' ? !flights.length : !stays.length) && !bookingVisible && <div className="journey-empty">{view === 'flights' ? <Plane size={36} strokeWidth={1.3} /> : <Hotel size={36} strokeWidth={1.3} />}<h3>{view === 'flights' ? '未有航班' : '未有住宿'}</h3><p>匯入行程時會自動整理，亦可在這裡手動加入。</p>{canEdit && <button type="button" className="primary" onClick={() => createBooking(view === 'flights' ? 'flight' : 'lodging')}>加入第一個{view === 'flights' ? '航班' : '住宿'}</button>}</div>}
     </section>}
-    {view === 'checklist' && <JourneyChecklist packing={packing} pocket={pocket} key={JSON.stringify([scope, trip.id, pocket, packing])} scope={scope} tripId={trip.id} tripName={trip.name} />}
+    {view === 'checklist' && <JourneyChecklist key={JSON.stringify([scope, trip.id, packing])} scope={scope} tripId={trip.id} tripName={trip.name} packing={packing} />}
     {view === 'play' && <JourneyGame key={trip.id} days={days} />}
   </>;
 }

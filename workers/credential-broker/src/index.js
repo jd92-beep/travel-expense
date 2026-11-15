@@ -1,7 +1,7 @@
 import { PROVIDER_MODELS, aiModelRecord } from './provider-catalog.js';
 
 const SERVICE = 'travel-expense-credential-broker';
-const VERSION = '2026.11.15.1';
+const VERSION = '2026.11.15.2';
 const SESSION_HEADER = 'X-Travel-Session';
 const SUPABASE_AUTH_HEADER = 'X-Supabase-Auth';
 const SESSION_TTL_MS = 1000 * 60 * 60 * 8;
@@ -69,7 +69,7 @@ class HttpError extends Error {
 
 function aiOutputTokenLimit(kind) {
   if (kind === 'test') return 8;
-  if (kind === 'trip') return 10000;
+  if (kind === 'trip') return 24000;
   return 4000;
 }
 
@@ -1062,6 +1062,9 @@ async function compatibleJson(env, provider, prompt, kind, image, model, candida
     const message = data.choices[0].message;
     if (!String(message?.content || message?.reasoning || message?.reasoning_content || '').trim() && !(Number(data.usage?.completion_tokens) > 0)) throw new HttpError('Model test returned an empty response', 502);
     return { ok: true };
+  }
+  if (kind === 'trip' && data?.choices?.[0]?.finish_reason === 'length') {
+    throw new HttpError('行程回覆超過輸出上限，請分段輸入；未接受不完整的 AI 行程。', 502);
   }
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string' || !content.trim()) throw new HttpError('Model returned empty content', 502);

@@ -1,22 +1,21 @@
 import { useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Check, Download, Pencil, Plus, Trash2, Upload, Undo2, Luggage } from 'lucide-react';
-import { CHECKLIST_GROUPS, CHECKLIST_LIMIT, checklistStorageKey, reconcileChecklist, downloadJourneyFile, mergeChecklist, parseChecklist, type ChecklistGroup, type ChecklistItem } from '../../lib/journeyTools';
-
+import { AI_CHECKLIST_GROUP, CHECKLIST_GROUPS, CHECKLIST_LIMIT, checklistStorageKey, reconcileChecklist, downloadJourneyFile, mergeChecklist, parseChecklist, type ChecklistGroup, type ChecklistItem } from '../../lib/journeyTools';
 import type { PackingSuggestion } from '../../lib/types';
 
-function readChecklist(key: string, pocket: boolean, packing: PackingSuggestion[]) {
+function readChecklist(key: string, packing: PackingSuggestion[]) {
   try {
     const saved = localStorage.getItem(key);
-    const result = reconcileChecklist(saved ? JSON.parse(saved) : null, pocket, packing);
-    return { ...result, error: result.omitted ? `清單已滿，尚有 ${result.omitted} 項建議未加入。` : '', unreadable: false };
+    const result = reconcileChecklist(saved ? JSON.parse(saved) : null, packing);
+    return { ...result, error: result.omitted ? `清單已滿，尚有 ${result.omitted} 項用品未加入。` : '', unreadable: false };
   } catch {
     return { items: [] as ChecklistItem[], seen: [] as string[], unreadable: true, error: '未能讀取此裝置的清單。請重新載入並檢查已備份的清單。原有資料未被覆蓋。' };
   }
 }
 
-export function JourneyChecklist({ scope, tripId, tripName, pocket, packing }: { scope: string; tripId: string; tripName: string; pocket: boolean; packing: PackingSuggestion[] }) {
+export function JourneyChecklist({ scope, tripId, tripName, packing }: { scope: string; tripId: string; tripName: string; packing: PackingSuggestion[] }) {
   const storageKey = checklistStorageKey(scope, tripId);
-  const [initial] = useState(() => readChecklist(storageKey, pocket, packing));
+  const [initial] = useState(() => readChecklist(storageKey, packing));
   const [items, setItems] = useState(initial.items);
   const currentItems = useRef(items);
   const mounted = useRef(false);
@@ -31,7 +30,7 @@ export function JourneyChecklist({ scope, tripId, tripName, pocket, packing }: {
   const [query, setQuery] = useState('');
   const [onlyPending, setOnlyPending] = useState(false);
   const [label, setLabel] = useState('');
-  const [group, setGroup] = useState<ChecklistGroup>(pocket ? '證件與預訂' : '行前準備');
+  const [group, setGroup] = useState<ChecklistGroup>('證件與預訂');
   const fileRef = useRef<HTMLInputElement>(null);
   const done = items.filter(item => item.done).length;
 
@@ -76,13 +75,14 @@ export function JourneyChecklist({ scope, tripId, tripName, pocket, packing }: {
   }
 
   return <section className="journey-checklist" aria-label="旅程清單">
-    <header className="journey-section-heading"><div><h2>出發前，逐樣準備好</h2><p>{pocket ? '家庭冬遊清單 · 數量以兩位成人、一位幼兒、八日七夜為例，可按需要修改。' : '清單勾選及個人修改儲存在此裝置，按帳號及旅程分開。'}</p></div><Luggage size={32} strokeWidth={1.4} /></header>
+    <header className="journey-section-heading"><div><h2>出發前，逐樣準備好</h2><p>固定家庭旅行清單 · 數量以兩位成人、一位幼兒、八日七夜為例。AI 額外建議另列在最下方；勾選及個人修改按帳號、旅程儲存在此裝置。</p></div><Luggage size={32} strokeWidth={1.4} /></header>
     <div className="journey-check-progress"><span>已完成 <strong>{done} / {items.length}</strong></span><progress max={Math.max(1, items.length)} value={done} aria-label="清單完成進度" /></div>
     <div className="planner-check-filters"><label>搜尋用品<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="名稱、分類或備註" /></label><label><input type="checkbox" checked={onlyPending} onChange={event => setOnlyPending(event.target.checked)} />只看未完成</label></div>
     {CHECKLIST_GROUPS.map((category, categoryIndex) => {
       const rows = items.filter(item => item.group === category);
       const visible = visibleItems.filter(item => item.group === category);
-      if (!visible.length) return null;
+      if (!visible.length) return category === AI_CHECKLIST_GROUP && !rows.length && !search && !onlyPending
+        ? <section key={category} className="journey-check-group"><h3>{category}<span>0 / 0</span></h3><p className="muted">匯入行程後，額外用品建議會列在這裡；固定清單保持不變。</p></section> : null;
       return <section key={category} data-group={categoryIndex} className="journey-check-group"><h3>{category}<span>{rows.filter(row => row.done).length} / {rows.length}</span></h3>
         {visible.map(item => <div className={`journey-check-row${item.done ? ' is-done' : ''}`} key={item.id}>
           <label><input type="checkbox" aria-label={item.label} checked={item.done} onChange={() => save(items.map(row => row.id === item.id ? { ...row, done: !row.done } : row))} /><span><strong>{item.label}</strong>{item.note && <small>{item.note}</small>}</span></label>

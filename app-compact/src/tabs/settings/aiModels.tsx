@@ -78,7 +78,7 @@ export function AiModelField({
         <span className="ai-model-category-text">
           <strong>{label}</strong>
           <span className="ai-model-current">
-            <em>{isAuto ? '自動' : '已選'}</em>
+            <em>{isAuto ? '預設' : '已選'}</em>
             <span>{aiModelLabel(selectedId)}</span>
           </span>
         </span>
@@ -87,7 +87,7 @@ export function AiModelField({
       <div id={`${groupId}-body`} className="ai-model-body" hidden={!open}>
         <fieldset className="ai-model-picker">
           <legend className="sr-only">{label}</legend>
-          <label className={`ai-model-option is-auto${isAuto ? ' is-selected' : ''}`}><input type="radio" name={groupId} value="auto" checked={isAuto} onChange={() => choose('auto')} />自動（預設及後備）</label>
+          <label className={`ai-model-option is-auto${isAuto ? ' is-selected' : ''}`}><input type="radio" name={groupId} value="auto" checked={isAuto} onChange={() => choose('auto')} />預設（DeepSeek V4.1 Flash 1017）</label>
           {providers.map(provider => {
             const models = visibleModels.filter(model => model.providerId === provider);
             const providerOpen = expanded.includes(provider);

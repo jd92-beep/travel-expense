@@ -1,7 +1,7 @@
 {
   "name": "travel-expense-admin-kanban",
   "private": true,
-  "version": "1.5.3",
+  "version": "1.5.4",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"
@@ -30,7 +30,7 @@
     "react-dom": "^19.2.6",
     "react-router": "^8.3.0",
     "three": "^0.185.1",
-    "vite": "^8.0.11"
+    "vite": "^8.1.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.12.1",

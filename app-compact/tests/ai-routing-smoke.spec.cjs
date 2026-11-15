@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 const BASE = `${ORIGIN}/travel-expense/compact/`;
 const MUSE = 'openrouter/meta/muse-spark-1.3-contributor';
+const DEEPSEEK = 'deepseek/deepseek-v4.1-flash-1017';
 const NEM = 'openrouter/nvidia/nemotron-3-super-120b-a12b:free';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64');
 test.use({ viewport: { width: 390, height: 844 } });
@@ -19,6 +20,8 @@ async function setup(page, settings = {}, respond) {
   });
   await page.addInitScript(settings => {
     window.__disable_supabase_configured = true;
+    if(sessionStorage.getItem('model-routing-fixture'))return;
+    sessionStorage.setItem('model-routing-fixture','1');
     localStorage.clear();
     localStorage.setItem('travel-expense-react:device-trust:v1',JSON.stringify({ok:true,exp:Date.now()+3600000}));
     localStorage.setItem('boss-japan-tracker:credential-session:v1',JSON.stringify({credentialSession:'disposable-model-smoke',credentialSessionExpiresAt:Date.now()+3600000}));
@@ -147,7 +150,7 @@ test('provider groups start collapsed, filter image capability and persist a rea
   const category=picker.locator('.ai-model-category');
   await expect(category).toHaveAttribute('aria-expanded','false');
   await expect(category).toContainText('掃描 receipt 模型');
-  await expect(category).toContainText('Ling 3.2 Flash');
+  await expect(category).toContainText('DeepSeek: V4.1 Flash 1017');
   await expect(picker.locator('.ai-model-current > span')).toHaveCSS('white-space', 'normal');
   await category.click();
   const providerButton=(name)=>picker.locator('.ai-provider-toggle').filter({hasText:name});
@@ -197,17 +200,43 @@ test('voice, email and itinerary use the exact selected nested ID',async({page})
   ]);
   expect(calls[0].prompt).toContain('HANA8');expect(calls[1].prompt).toContain('HANA8');
 });
-test('automatic text policy tries Ling free then DeepSeek 1017',async({page})=>{
-  const calls=await setup(page,{},(body,n)=>n<2?{status:502,error:'Invalid JSON'}:{data:[{store:'Paid guard',total:1,date:'2026-10-20'}]});
-  const r=await library(page,{kind:'email',state:{emailModel:'auto'}});expect(r.error).toBeUndefined();
-  expect(calls.map(c=>c.model)).toEqual(['inclusionai/ling-3.2-flash:free','deepseek/deepseek-v4.1-flash-1017']);
+test('every default feature uses only DeepSeek 1017',async({page})=>{
+  const calls=await setup(page);
+  for(const kind of ['voice','email','trip']) expect((await library(page,{kind,state:{}})).error).toBeUndefined();
+  expect(calls.map(c=>c.model)).toEqual([DEEPSEEK,DEEPSEEK,DEEPSEEK]);
 });
-test('automatic receipt policy sends the image to Ling then DeepSeek on retryable failure',async({page})=>{
-  const calls=await setup(page,{},(body,n)=>n===1?{status:502,error:'Provider unavailable'}:{data:{store:'Cafe',total:1100,currency:'JPY',date:'2026-11-15'}});
+test('a default model failure never switches to a free or other paid model',async({page})=>{
+  const calls=await setup(page,{},()=>({status:502,error:'Provider unavailable'}));
+  expect((await library(page,{kind:'email',state:{emailModel:'auto'}})).error).toMatch(/Provider unavailable/);
+  expect(calls.map(c=>c.model)).toEqual([DEEPSEEK]);
+});
+test('default receipt model sends the image only to DeepSeek',async({page})=>{
+  const calls=await setup(page,{},()=>({data:{store:'Cafe',total:1100,currency:'JPY',date:'2026-11-15'}}));
   await page.locator('#scan-gallery-input').setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:PNG});
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('Cafe');
-  expect(calls.map(c=>c.model)).toEqual(['inclusionai/ling-3.2-flash:free','deepseek/deepseek-v4.1-flash-1017']);
-  expect(calls.every(c=>c.image?.mime==='image/png'&&c.image.base64)).toBe(true);
+  expect(calls.map(c=>c.model)).toEqual([DEEPSEEK]);
+  expect(calls[0].image).toMatchObject({mime:'image/png'});expect(calls[0].image.base64).toBeTruthy();
+});
+test('all Settings categories keep Qwen3.7 and Ling free selectable and persist the choice',async({page})=>{
+  await setup(page,{lastTab:'settings'});
+  const section=page.locator('.accordion-card').filter({has:page.getByRole('button',{name:/AI 模型選擇/})});
+  await section.getByRole('button',{name:/AI 模型選擇/}).click();
+  for(let i=0;i<4;i++){
+    const field=section.locator('.ai-model-field').nth(i);
+    await expect(field.locator('.ai-model-category')).toContainText('DeepSeek: V4.1 Flash 1017');
+    await field.locator('.ai-model-category').click();
+    await field.locator('.ai-provider-toggle').filter({hasText:'OpenRouter'}).click();
+    await expect(field.getByRole('radio',{name:/Qwen3.7 Flash/})).toBeVisible();
+    await expect(field.getByRole('radio',{name:/Ling 3.2 Flash.*free/})).toBeVisible();
+    await field.getByRole('radio',{name:i%2?/Ling 3.2 Flash.*free/:/Qwen3.7 Flash/}).check();
+  }
+  const expected=['openrouter/qwen/qwen3.7-flash','openrouter/inclusionai/ling-3.2-flash:free','openrouter/qwen/qwen3.7-flash','openrouter/inclusionai/ling-3.2-flash:free'];
+  await expect.poll(()=>page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('boss-japan-tracker'));return [s.scanModel,s.voiceModel,s.emailModel,s.tripUpdateModel]})).toEqual(expected);
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.reload();
+  const restored=page.locator('.accordion-card').filter({has:page.getByRole('button',{name:/AI 模型選擇/})});
+  await restored.getByRole('button',{name:/AI 模型選擇/}).click();
+  for(let i=0;i<4;i++)await expect(restored.locator('.ai-model-category').nth(i)).toContainText(i%2?'Ling 3.2 Flash':'Qwen3.7 Flash');
 });
 test('429 stops automatic policy; a selected failure never switches model or makes a local trip',async({page})=>{
   const calls=await setup(page,{},()=>({status:429,error:'Daily quota exceeded'}));

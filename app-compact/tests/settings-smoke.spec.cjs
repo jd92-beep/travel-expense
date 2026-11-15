@@ -1499,7 +1499,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
-  await expect(page.locator('#settings-trip-update-panel')).toContainText('使用 inclusionAI: Ling 3.2 Flash');
+  await expect(page.locator('#settings-trip-update-panel')).toContainText('使用 DeepSeek: V4.1 Flash 1017');
   await page.getByPlaceholder(/下次/).fill(longJeju);
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
 

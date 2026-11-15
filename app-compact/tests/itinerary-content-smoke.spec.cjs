@@ -7,7 +7,7 @@ const day = { date, day: 1, region: '東京', city: '東京', country: '日本',
   spots: [{ time: '08:45', timeEnd: '13:45', timezone: 'Asia/Hong_Kong', endTimezone: 'Asia/Tokyo', endDate: date, type: 'flight', name: 'CX500 香港飛東京' },
     { time: '14:15', name: '上野公園', type: 'sightseeing' }, { time: '15:30', name: '雷門', type: 'sightseeing' }, { time: '', name: '自由活動', type: 'other' }],
   lodging: { name: '山湖旅館', checkIn: '16:30', address: '東京站前' },
-  packing: [{ label: '觀鳥望遠鏡', note: '放隨身袋', suggested: false }],
+  packing: [{ label: '觀鳥望遠鏡', note: '1 副 · 隨身；公園觀鳥用。', suggested: true }, {label:'全家護照（含孩子）',note:'不可重覆固定用品',suggested:true}],
   quiz: [{ question: '行程安排在哪個公園觀鳥？', options: ['上野公園','大阪城'], answer: '上野公園', evidence: '上野公園' }],
 };
 
@@ -44,7 +44,7 @@ for (const theme of ['pocket_planner','alpine_postcard','night_ledger']) {
     await page.getByPlaceholder(/下次/).fill(text);
     await page.getByRole('button',{name:'用已選模型分析'}).click();
     const review = page.getByRole('dialog',{name:'確認 AI 行程更新'});
-    await expect(review).toContainText('1 件用品 · 1 道題目');
+    await expect(review).toContainText('固定用品清單保留 · AI 額外建議 1 項 · 1 道行程題目');
     await review.getByRole('button',{name:'確認並更新行程'}).click();
     expect(prompts).toHaveLength(1);
     for (const field of ['packing','quiz','evidence','endTimezone','checkIn','budget','觀鳥望遠鏡']) expect(prompts[0]).toContain(field);
@@ -71,8 +71,13 @@ for (const theme of ['pocket_planner','alpine_postcard','night_ledger']) {
     }
     await tool(page,'住宿'); await expect(page.locator('.journey-stay-card')).toContainText('山湖旅館');
     await tool(page,'清單'); await expect(page.getByLabel('觀鳥望遠鏡',{exact:true})).toBeVisible();
-    if (theme === 'pocket_planner') await expect(page.locator('.journey-check-row')).toHaveCount(53);
+    await expect(page.locator('.journey-check-row')).toHaveCount(53);
+    await expect(page.locator('.journey-check-group').last()).toContainText('AI 推薦額外用品');
+    await expect(page.locator('.journey-check-group').last()).toContainText('1 副 · 隨身；公園觀鳥用。');
+    await expect(page.getByLabel('全家護照（含孩子）',{exact:true})).toHaveCount(1);
+    await page.getByLabel('全家護照（含孩子）',{exact:true}).check();
     await page.getByLabel('觀鳥望遠鏡',{exact:true}).check();
+    expect(prompts).toHaveLength(1);
     await tool(page,'小遊戲');
     await page.getByRole('button',{name:'上野公園',exact:true}).click();
     await expect(page.locator('.game-answer')).toContainText('答啱');
@@ -94,7 +99,9 @@ for (const theme of ['pocket_planner','alpine_postcard','night_ledger']) {
     await openTab(page,'天氣'); await expect(page.locator('.wx-trip-label')).toContainText('東京觀鳥旅程');
     await page.getByRole('button',{name:'Day 1 '+date}).click(); await expect(page.locator('.wx-places')).toContainText(/東京|上野/);
     await page.reload(); await openTab(page,'行程'); await tool(page,'清單');
+    await expect(page.getByLabel('全家護照（含孩子）',{exact:true})).toBeChecked();
     await expect(page.getByLabel('觀鳥望遠鏡',{exact:true})).toBeChecked();
+    await expect(page.locator('.journey-check-row')).toHaveCount(53);
     expect(errors).toEqual([]);
   });
 }
