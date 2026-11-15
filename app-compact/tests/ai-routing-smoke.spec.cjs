@@ -147,7 +147,7 @@ test('provider groups start collapsed, filter image capability and persist a rea
   const category=picker.locator('.ai-model-category');
   await expect(category).toHaveAttribute('aria-expanded','false');
   await expect(category).toContainText('掃描 receipt 模型');
-  await expect(category).toContainText('Muse Spark');
+  await expect(category).toContainText('Ling 3.2 Flash');
   await expect(picker.locator('.ai-model-current > span')).toHaveCSS('white-space', 'normal');
   await category.click();
   const providerButton=(name)=>picker.locator('.ai-provider-toggle').filter({hasText:name});
@@ -197,10 +197,17 @@ test('voice, email and itinerary use the exact selected nested ID',async({page})
   ]);
   expect(calls[0].prompt).toContain('HANA8');expect(calls[1].prompt).toContain('HANA8');
 });
-test('automatic text policy tries exactly three free models then the paid guard',async({page})=>{
-  const calls=await setup(page,{},(body,n)=>n<4?{status:502,error:'Invalid JSON'}:{data:[{store:'Paid guard',total:1,date:'2026-10-20'}]});
+test('automatic text policy tries Ling free then DeepSeek 1017',async({page})=>{
+  const calls=await setup(page,{},(body,n)=>n<2?{status:502,error:'Invalid JSON'}:{data:[{store:'Paid guard',total:1,date:'2026-10-20'}]});
   const r=await library(page,{kind:'email',state:{emailModel:'auto'}});expect(r.error).toBeUndefined();
-  expect(calls.map(c=>c.model)).toEqual(['nvidia/nemotron-3-super-120b-a12b:free','cohere/north-mini-code:free','apodex/apodex-1.1-mini:free','qwen/qwen3.7-flash']);
+  expect(calls.map(c=>c.model)).toEqual(['inclusionai/ling-3.2-flash:free','deepseek/deepseek-v4.1-flash-1017']);
+});
+test('automatic receipt policy sends the image to Ling then DeepSeek on retryable failure',async({page})=>{
+  const calls=await setup(page,{},(body,n)=>n===1?{status:502,error:'Provider unavailable'}:{data:{store:'Cafe',total:1100,currency:'JPY',date:'2026-11-15'}});
+  await page.locator('#scan-gallery-input').setInputFiles({name:'synthetic.png',mimeType:'image/png',buffer:PNG});
+  await expect(page.getByLabel('店名 / 項目')).toHaveValue('Cafe');
+  expect(calls.map(c=>c.model)).toEqual(['inclusionai/ling-3.2-flash:free','deepseek/deepseek-v4.1-flash-1017']);
+  expect(calls.every(c=>c.image?.mime==='image/png'&&c.image.base64)).toBe(true);
 });
 test('429 stops automatic policy; a selected failure never switches model or makes a local trip',async({page})=>{
   const calls=await setup(page,{},()=>({status:429,error:'Daily quota exceeded'}));

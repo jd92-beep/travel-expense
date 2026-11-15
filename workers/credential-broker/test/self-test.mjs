@@ -919,7 +919,7 @@ async function run() {
       return Response.json({ choices: [{ message: { content: body.max_tokens === 8 ? '' : '{"store":"Fixture","total":1}' } }], usage: { prompt_tokens: 10, completion_tokens: 8 } });
     };
     try {
-      for (const [provider, model] of [['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free'], ['openrouter','meta/muse-spark-1.3-contributor'], ['openrouter','xiaomi/mimo-v2.6-flash'], ['openrouter','qwen/qwen3.7-flash'], ['openrouter','z-ai/glm-5.3-flash']]) {
+      for (const [provider, model] of [['openrouter','inclusionai/ling-3.2-flash:free'], ['openrouter','deepseek/deepseek-v4.1-flash-1017'], ['openrouter','nvidia/nemotron-3-super-120b-a12b:free'], ['opencode','space-bunny-free'], ['openrouter','meta/muse-spark-1.3-contributor'], ['openrouter','xiaomi/mimo-v2.6-flash'], ['openrouter','qwen/qwen3.7-flash'], ['openrouter','z-ai/glm-5.3-flash']]) {
         const result = await jsonFetch(env, `/${provider}/json`, { method: 'POST', session, body: { prompt: 'Reply OK.', kind: 'test', model } });
         assert.equal(result.response.status, 200);
         assert.equal(result.data.data.ok, true);

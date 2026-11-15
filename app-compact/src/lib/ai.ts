@@ -1075,14 +1075,9 @@ export function modelAttemptsForKind(state: AppState, kind: 'scan' | 'voice' | '
     if (!record?.tasks.includes(kind === 'trip' ? 'trip-update' : kind)) throw new Error('所選模型唔支援呢個功能，請重新選擇。');
     return [selectedModelAttempt(chosen)];
   }
-  const models = kind === 'scan' ? [
-    'openrouter/meta/muse-spark-1.3-contributor',
-    'openrouter/xiaomi/mimo-v2.6-flash',
-  ] : [
-    'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
-    'openrouter/cohere/north-mini-code:free',
-    'openrouter/apodex/apodex-1.1-mini:free',
-    'openrouter/qwen/qwen3.7-flash',
+  const models = [
+    'openrouter/inclusionai/ling-3.2-flash:free',
+    'openrouter/deepseek/deepseek-v4.1-flash-1017',
   ];
   return models.map(selectedModelAttempt);
 }

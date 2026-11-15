@@ -6,7 +6,7 @@ import { COMPACT_AI_MODELS, resolveCatalogAiModelId } from './providerCatalog.ts
 // App build version — single source of truth, shown in the Settings build label.
 // RULE: bump this on every code change (patch for fixes, minor for features) and
 // keep package.json "version" in sync. See HANDOVER.md "Build Versioning Rule".
-export const APP_VERSION = '0.36.1';
+export const APP_VERSION = '0.36.2';
 export const MAX_SYNC_RETRY_ATTEMPTS = 3;
 
 export const STORAGE_KEY = 'boss-japan-tracker';
@@ -15,10 +15,10 @@ export const DEFAULT_CREDENTIAL_BROKER_URL = 'https://travel-expense-credential-
 export const ALLOWED_CREDENTIAL_BROKER_URLS = [DEFAULT_CREDENTIAL_BROKER_URL] as const;
 export const APP_SCHEMA_VERSION = 4;
 export const DEFAULT_GOOGLE_BACKUP_MODEL = 'gemma-4-31b-it';
-export const DEFAULT_SCAN_VOICE_MODEL_ID = 'openrouter/meta/muse-spark-1.3-contributor';
-export const DEFAULT_VOICE_MODEL_ID = 'openrouter/nvidia/nemotron-3-super-120b-a12b:free';
+export const DEFAULT_SCAN_VOICE_MODEL_ID = 'openrouter/inclusionai/ling-3.2-flash:free';
+export const DEFAULT_VOICE_MODEL_ID = 'openrouter/inclusionai/ling-3.2-flash:free';
 export const AUTOMATIC_AI_MODEL = 'auto';
-export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'openrouter/nvidia/nemotron-3-super-120b-a12b:free';
+export const DEFAULT_TRIP_UPDATE_MODEL_ID = 'openrouter/inclusionai/ling-3.2-flash:free';
 
 const STALE_GOOGLE_BACKUP_MODELS = new Set(['gemma-3-27b-it', 'gemma-4-31b', 'gemma-4-26b-a4b-it']);
 
