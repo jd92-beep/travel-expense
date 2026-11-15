@@ -98,13 +98,20 @@ export interface CurrencySnapshot {
   rates: Record<string, number>;
   fetchedAt: number;
   source: string;
+  // Provider publication time is distinct from the local retrieval time. Older caches omit it.
+  updatedAt?: number;
+  nextUpdateAt?: number;
 }
 
 const CACHE_KEY = 'boss-japan-tracker:react-currency';
 const MAX_AGE = 60 * 60 * 1000; // 1 hour cache
+const MAX_PUBLICATION_AGE = 3 * 24 * MAX_AGE;
+const REQUEST_TIMEOUT = 8_000;
+let pendingSnapshot: Promise<CurrencySnapshot> | undefined;
 
 function jpyPerHkd(state: AppState): number {
-  return Math.max(0.01, Number(state.rate) || 20.36);
+  const rate = Number(state.rate);
+  return Number.isFinite(rate) && rate > 0 ? rate : 20.36;
 }
 
 export function perHkdForCurrency(state: AppState, currency = 'JPY'): number {
@@ -120,14 +127,14 @@ export function amountToHkd(amount: number, currency: string, state: AppState): 
   const code = String(currency || 'JPY').toUpperCase();
   const value = Number(amount) || 0;
   if (code === 'HKD') return value;
-  return value / Math.max(0.01, perHkdForCurrency(state, code));
+  return value / perHkdForCurrency(state, code);
 }
 
 export function hkdToCurrency(amountHkd: number, currency: string, state: AppState): number {
   const code = String(currency || 'JPY').toUpperCase();
   const value = Number(amountHkd) || 0;
   if (code === 'HKD') return value;
-  return value * Math.max(0.01, perHkdForCurrency(state, code));
+  return value * perHkdForCurrency(state, code);
 }
 
 export function rateTableFromSnapshot(snapshot: CurrencySnapshot): Record<string, ExchangeRateEntry> {
@@ -160,15 +167,22 @@ export function currencyPrefix(currency: string): string {
   return CURRENCY_PREFIX[code] || `${code} `;
 }
 
-// Currencies with no minor unit (whole-number only). Everything else shows 2 decimals.
-const ZERO_DECIMAL_CURRENCIES = new Set(['JPY', 'KRW', 'VND', 'TWD', 'HKD', 'HUF', 'CLP', 'IDR', 'ISK']);
+// Reuse per-currency formatters for receipt lists; ISO 4217 minor units preserve HKD cents.
+const amountFormatters = new Map<string, Intl.NumberFormat>();
 
 export function formatCurrencyAmount(amount: number, currency: string): string {
   const code = String(currency || '').toUpperCase();
   const prefix = currencyPrefix(code);
   const value = Number(amount) || 0;
-  const decimals = ZERO_DECIMAL_CURRENCIES.has(code) ? 0 : 2;
-  const formatted = value.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  let formatter = amountFormatters.get(code);
+  if (!formatter) {
+    const decimals = /^[A-Z]{3}$/.test(code)
+      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits
+      : 2;
+    formatter = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+    amountFormatters.set(code, formatter);
+  }
+  const formatted = formatter.format(value);
   return prefix.endsWith(' ') ? `${prefix}${formatted}` : `${prefix} ${formatted}`;
 }
 
@@ -181,7 +195,12 @@ export function loadCurrencySnapshot(): CurrencySnapshot | null {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as CurrencySnapshot;
-    if (!parsed || parsed.base !== 'HKD' || !parsed.rates || typeof parsed.fetchedAt !== 'number') return null;
+    if (!parsed || parsed.base !== 'HKD' || !parsed.rates || !Number.isFinite(parsed.fetchedAt)
+      || !Number.isFinite(new Date(parsed.fetchedAt).getTime())
+      || parsed.rates.HKD !== 1 || !Number.isFinite(parsed.rates.JPY) || parsed.rates.JPY <= 0) return null;
+    for (const time of [parsed.updatedAt, parsed.nextUpdateAt]) {
+      if (time != null && (!Number.isFinite(time) || time <= 0 || !Number.isFinite(new Date(time).getTime()))) return null;
+    }
     return parsed;
   } catch {
     return null;
@@ -206,28 +225,49 @@ function persistCurrencySnapshot(snapshot: CurrencySnapshot): CurrencySnapshot {
 }
 
 async function fetchExchangeRateSnapshot(): Promise<CurrencySnapshot> {
-  const response = await fetch('https://open.er-api.com/v6/latest/HKD');
-  if (!response.ok) throw new Error(`FX ${response.status}: ${(await response.text()).slice(0, 160)}`);
-  const data = await response.json();
-  const rates = data?.rates || {};
-  if (data?.result !== 'success' || !Number.isFinite(rates.JPY)) throw new Error('FX 回覆缺少有效 JPY rate');
-  return persistCurrencySnapshot({
-    base: 'HKD',
-    rates: { ...rates, HKD: 1 },
-    fetchedAt: Date.now(),
-    source: data?.provider || 'open.er-api.com',
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const response = await fetch('https://open.er-api.com/v6/latest/HKD', { signal: controller.signal });
+    if (!response.ok) throw new Error(`FX ${response.status}`);
+    const data = await response.json();
+    const rawRates = data?.rates || {};
+    if (data?.result !== 'success' || (data.base_code && data.base_code !== 'HKD')
+      || !Number.isFinite(rawRates.JPY) || rawRates.JPY <= 0 || rawRates.HKD !== 1) {
+      throw new Error('FX 回覆缺少有效 HKD 基準匯率');
+    }
+    const rates = Object.fromEntries(Object.entries(rawRates)
+      .filter(([code, rate]) => /^[A-Z]{3}$/.test(code) && typeof rate === 'number' && Number.isFinite(rate) && rate > 0)) as Record<string, number>;
+    const timestamp = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value > 0 ? value * 1000 : undefined;
+    const snapshot: CurrencySnapshot = {
+      base: 'HKD', rates, fetchedAt: Date.now(), source: 'https://www.exchangerate-api.com',
+      updatedAt: timestamp(data.time_last_update_unix), nextUpdateAt: timestamp(data.time_next_update_unix),
+    };
+    if (!usableSnapshot(snapshot)) throw new Error('匯率資料已過期或發布時間無效，請稍後再試。');
+    return persistCurrencySnapshot(snapshot);
+  } catch (error) {
+    if (controller.signal.aborted) throw new Error('匯率請求逾時，請重試。');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
-// Live rates come from open.er-api.com only (free, no key, CORS-friendly). The old Visa
-// official-rate path went through a public CORS proxy that reliably 403s, so it was removed.
-export async function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
-  return fetchExchangeRateSnapshot();
+// One shared request for overlapping boot, Settings and calculator refreshes. Explicit refreshes
+// still contact the provider; a completed response is not silently reused as a new fetch.
+export function fetchLiveCurrencySnapshot(): Promise<CurrencySnapshot> {
+  pendingSnapshot ||= fetchExchangeRateSnapshot().finally(() => { pendingSnapshot = undefined; });
+  return pendingSnapshot;
 }
 
 export function usableSnapshot(snapshot: CurrencySnapshot | null): CurrencySnapshot | null {
   if (!snapshot) return null;
-  return Date.now() - snapshot.fetchedAt < MAX_AGE ? snapshot : null;
+  const now = Date.now();
+  const age = now - snapshot.fetchedAt;
+  if (!Number.isFinite(age) || age < 0 || age >= MAX_AGE) return null;
+  if (snapshot.updatedAt != null && (!Number.isFinite(snapshot.updatedAt)
+    || snapshot.updatedAt > now + 5 * 60 * 1000 || now - snapshot.updatedAt > MAX_PUBLICATION_AGE)) return null;
+  return snapshot;
 }
 
 export function convertAmount(amount: number, from: string, to: string, state: AppState, snapshot: CurrencySnapshot | null): number {

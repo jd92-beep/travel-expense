@@ -1,3 +1,5 @@
+import { dayAxisMinute } from './plannerLayout';
+import { packingSuggestions, dayQuestions } from './journeyActivities';
 import { CATEGORIES, ITINERARY, PAYMENTS } from './constants';
 import { hkdToCurrency, perHkdForCurrency } from './currency';
 import { activeTrip, normalizeItinerary, normalizeZone, scopedReceiptsForTrip } from '../domain/trip/normalize';
@@ -87,6 +89,9 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
       timezone: d.timezone ? normalizeZone(d.timezone) : '',
       currency: d.currency ? String(d.currency) : '',
       highlight: d.highlight ? String(d.highlight) : '',
+      note: typeof d.note === 'string' ? d.note : '',
+      ...(d.packing && { packing: packingSuggestions(d.packing) }),
+      ...(d.quiz && { quiz: dayQuestions({ ...d, spots: d.spots.filter(s => s && typeof s === 'object') } as ItineraryDay) }),
       lodging: d.lodging && typeof d.lodging === 'object' ? {
         name: String(d.lodging.name || ''),
         address: d.lodging.address ? String(d.lodging.address) : '',
@@ -102,7 +107,9 @@ export function validateItinerary(input: unknown): { ok: true; itinerary: Itiner
       spots: d.spots.map((spot, spotIdx) => {
         const s = spot && typeof spot === 'object' ? spot as Partial<ItinerarySpot> : {};
         return {
-          time: String(s.time || '00:00'),
+          time: String(s.time || ''),
+          endDate: typeof s.endDate === 'string' ? s.endDate : undefined,
+          endTimezone: s.endTimezone ? normalizeZone(s.endTimezone) : undefined,
           timeEnd: s.timeEnd ? String(s.timeEnd) : '',
           name: String(s.name || `Spot ${spotIdx + 1}`),
           type: (s.type || 'other') as ItinerarySpot['type'],
@@ -226,10 +233,9 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   }
 
   // 鎖定匯率：用户手動釘死嘅匯率永遠優先，唔做自我修復、唔用而家嘅匯率覆蓋。
-  // Floor 0.01 (not 0.1) so pinned rates under 0.1 (GBP-class) convert correctly.
   const pinnedRate = r.exchangeRatePinned ? Number(r.exchangeRate) : 0;
   if (pinnedRate > 0 && Number.isFinite(pinnedRate)) {
-    return Math.round((Number(r.total) || 0) / Math.max(0.01, pinnedRate));
+    return Math.round(total / pinnedRate);
   }
 
   const storedRate = Number(r.exchangeRate);
@@ -241,13 +247,13 @@ export function getReceiptHkdAmount(r: Receipt, state: AppState): number {
   // 金額 —— 市場波動唔等於舊數據被污染。
   if (storedHkd !== 0 && Math.sign(storedHkd) === Math.sign(total)) {
     if (!hasStoredRate) return storedHkd;
-    const rate = Math.max(0.01, storedRate);
+    const rate = storedRate;
     const ratio = (Number(r.total) || 0) / storedHkd;
     const percentDiff = Math.abs(ratio - rate) / rate;
     return percentDiff < 0.10 ? storedHkd : Math.round((Number(r.total) || 0) / rate);
   }
 
-  const rate = Math.max(0.01, hasStoredRate ? storedRate : perHkdForCurrency(state, cur));
+  const rate = hasStoredRate ? storedRate : perHkdForCurrency(state, cur);
   return Math.round((Number(r.total) || 0) / rate);
 }
 
@@ -388,10 +394,16 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay, precomputed
   }));
   const spots: Array<ItinerarySpot & { _spotIdx: number; receiptId?: string }> = [...base];
 
+  if (day.lodging?.name && day.lodging.checkIn && !spots.some(s => s.type === 'lodging' && s.name.includes(day.lodging!.name))) {
+    const stay = day.lodging;
+    spots.push({ name: stay.name, type: 'lodging', time: stay.checkIn || '', address: stay.address,
+      mapUrl: stay.mapUrl, bookingRef: stay.bookingRef, timezone: day.timezone, _spotIdx: -1 });
+  }
+
   const lodgingReceipt = tripReceipts.find((r) => r.date === day.date && r.category === 'lodging');
   if (lodgingReceipt) {
     const hotelSpot = {
-      time: lodgingReceipt.time || '23:00',
+      time: lodgingReceipt.time || spots.find(s => s.type === 'lodging')?.time || '',
       name: displayStore(lodgingReceipt),
       type: 'lodging' as const,
       note: lodgingReceipt.note || lodgingReceipt.bookingRef || '',
@@ -406,14 +418,15 @@ export function getScheduleSpots(state: AppState, day: ItineraryDay, precomputed
 
   for (const r of tripReceipts.filter((item) => item.date === day.date && item.category === 'transport')) {
     if (r.bookingRef && spots.some((s) => s.receiptId === r.id)) continue;
-    const time = r.time || '00:00';
+    const time = r.time || '';
     const idx = spots.findIndex((s) => s.type === 'transport' && s.time === time);
     const flightSpot = { time, name: displayStore(r), type: 'transport' as const, note: r.note || r.bookingRef || '', address: r.address || '', _spotIdx: -1, receiptId: r.id };
     if (idx >= 0) spots[idx] = { ...spots[idx], ...flightSpot, timezone: spots[idx].timezone };
     else spots.push(flightSpot);
   }
 
-  return spots.sort(compareSpotsByTime);
+  const minute = new Map(spots.map(spot => [spot, dayAxisMinute(spot, day) ?? Infinity]));
+  return spots.sort((a, b) => minute.get(a)! - minute.get(b)! || compareSpotsByTime(a, b));
 }
 
 export function dayLooseReceipts(

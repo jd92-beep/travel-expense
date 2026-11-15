@@ -33,9 +33,9 @@ Mobile Chrome URL
 ## Timeline Orientation
 
 - The Compact Itinerary tab is schedule-first: it renders planned spots, loose receipts, edit/reset actions, and safe map links without turning receipt events into timeline stops.
-- The animated rail progress is based on the current itinerary spot index, not the whole 24-hour clock percentage.
-- If the current date is outside the itinerary date window, rails use `.is-outside-trip`: the same red/gold/green palette is dimmed, live marker is hidden, and the bright sweep is paused.
-- Mobile layout keeps the rail in its own gutter and uses compact card columns so the beam does not cover event text.
+- `JourneyPlanner` places day, calendar, route, flight, stay, checklist and play views above the existing itinerary editors. The date rail scrolls within itself and preserves reduced-motion preferences.
+- The selected-day view and optional all-days view keep date identity, spot editing, moves and swaps in the existing trip update path.
+- Route diagrams show stop order, with deliberate external map links; they do not claim geographic accuracy or live travel status.
 
 ## Exchange Rate Settings
 
@@ -45,6 +45,9 @@ Mobile Chrome URL
 
 - Scan shares the rate helpers in `lib/rateMode.ts`. Its fixed-rate input needs an explicit apply; live confirmation rejects responses after a newer choice, trip/currency change or unmount.
 - `CurrencyTools` renders its calculator in a body portal to avoid transformed tab wrappers. Its rate choice is local to the calculator, arithmetic preserves signed results, and keyboard focus stays within the dialog.
+- Currency requests share one in-flight fetch with an eight-second timeout. Cached quotes expire after one hour; provider publication times older than three days or in the future are rejected. A failed refresh leaves confirmed fixed rates and receipt snapshots unchanged.
+- `RateReference` labels the feed as daily indicative data and distinguishes publication from retrieval time. Visa, Mastercard and ECB comparisons are ordinary external links, never automatic rate replacements. Currency displays use ISO minor units; stored receipt HKD snapshots retain the existing whole-dollar contract.
+- New manual/OCR editor drafts bind explicitly to the selected trip, including a known default trip. Existing unbound legacy receipts retain date-based fallback. Locked rate input remains raw until validation; blank, malformed or overflowing conversions cannot silently save a substitute rate.
 
 ## AI Flow
 
@@ -76,11 +79,15 @@ Mobile Chrome URL
 
 - Tailwind CSS v4 is present only as an additive theme/utility layer. The app avoids Tailwind preflight so existing custom Liquid Glass CSS remains the source of truth.
 - `ui.tsx` owns local primitives such as `GlassCard`, `LiquidGlassSurface`, `BottomDock`, `ProgressRing`, `AnimatedNumber`, `SegmentedControl`, and receipt/timeline rows.
-- The app shell uses a warm parchment background, subtle animated light, scroll-linked paper/parallax motion, a short windmill tab transition, Liquid Glass surfaces, and reduced-motion fallbacks.
+- `styles/journey.css` owns the 沿途 visual system, loaded after legacy styles. Home leads with local landscape artwork, the active trip and planned stops. Automatic mode uses mineral teal; manual theme palettes remain compatible. Mobile exposes five equal navigation targets and a keyboard-accessible More sheet; desktop exposes all seven existing routes. Glass is confined to navigation, with opaque content surfaces and reduced-motion support.
 - Visual emoji are progressively replaced in UI by code-native generated SVG icons and non-realistic illustrated avatars. The legacy `emoji` data field remains for compatibility and Notion text snapshots.
 - Scan camera/gallery/email screenshot inputs use accessible native labels connected to visually hidden file inputs. This keeps mobile Chrome picker activation inside the browser's trusted input path.
 - Weather uses one report service for the tab and Dashboard. `weather/providers.ts` separates official observations/daily bulletins/native hourly feeds from labelled model hours; `locations.ts` resolves itinerary coordinates; `currentLocation.ts` owns explicit device permission and location metadata; `http.ts` owns bounded requests/memoization; `useWeatherReport.ts` rejects stale UI responses. Native provider times are retained, with no synthetic fixed slots. The responsive screen styles live in `styles/weather.css`.
 - Settings parity additions remain broker-safe: split settlement details, equal split reset, local settings save, server-side settings push, and pending-email pull never store raw provider credentials in Compact state.
+- Theme selection offers 12 regional themes and 11 manual styles. Night Ledger, Harbor Blueprint and Sunset Terrace use static surfaces and system fonts. The pre-React theme bootstrap and CSS palettes match runtime tokens; preview fonts load only when the theme accordion opens.
+- Tab wrappers stay mounted across effects-tier changes so drafts survive an OS motion-preference change. Tab navigation resets scroll; reduced-motion cards render without reveal delay or visibility-observer dependency. Deployment discovery coalesces boot/focus/visibility checks into a five-minute budget, skipping hidden and offline states; it never forces a reload.
+- Receipt extraction captures its initiating trip. Completion callbacks reject results after leaving that trip, while same-trip background work can finish after tab navigation. Partial batch saves retain selected incomplete rows for correction.
+- Timeline sheets give only the active modal keyboard ownership; nested spot editing preserves the underlying day draft. Trip-review dismissal guards dirty edits and its body portal keeps the sheet outside transformed tab clipping.
 
 ## Deployment Targets
 
@@ -128,6 +135,13 @@ Portable backups omit credentials, cloud identities, deletion state and sharing
 metadata; per-trip maps stay within the exported trip set. Storage keys and the
 cross-client persisted schema remain compatible.
 
+Compact 0.32.1 also restores signed refund amounts and legacy trips without timezone lists.
+Hydration resolves saved settings by their own timestamp, independently of receipt freshness.
+A successful configured cloud pull is authoritative even when empty; failed or unconfigured
+pulls cannot purge cached trips or clear uploaded-photo flags. Cloud receipts are stamped
+against their resolved trip before the local trip cache exists; unknown-trip receipts and
+tombstones are ignored, not attached to the selected trip.
+
 ### Current-trip downloadable exports (Compact 0.30.0)
 
 `tripExport.ts` assembles a version-1 ZIP manifest, offline escaped HTML report, UTF-8 BOM CSVs
@@ -143,3 +157,19 @@ URLs through the initiating session-bound client, validates image bytes, limits 
 failed/oversized images stay visible in the manifest and `photos.csv`, while data remains intact.
 Trip/account changes and unmount cancel an in-flight export. Only cached thumbnails may substitute
 for unavailable originals; they are labelled. No bucket policy or database changes are involved.
+
+## Journey planning additions (0.33.0)
+
+- `components/journey/` contains the shared date rail, trip cover/mark, overview, planner, booking summaries, local checklist and offline matching game. Existing receipt, weather, settlement and settings data services remain the owners of their data.
+- Flights and stays use existing itinerary spots and lodging fields. Create/edit actions use the existing itinerary editor; shared viewers cannot write bookings. No booking-provider API or live status is added.
+- `lib/journeyTools.ts` validates checklist imports and creates RFC 5545 calendar downloads with UTF-8 line folding. Valid per-spot IANA time zones are converted to UTC; absent zones retain floating local time. Invalid zones and nonexistent daylight-saving times produce a visible export error.
+- Checklist storage keys encode both authenticated account and active trip. Save failures remain visible; importing merges only whitelisted checklist fields, and export/import is separate from the existing trip backup contract. Checklists do not sync to the shared cloud database.
+- The game is local UI state and performs no network request. New features require no migration, provider credential or new dependency.
+
+## Connected planner (0.34.0)
+
+- `JourneyTimetable` and `lib/plannerLayout.ts` lay out entered start/end times, overnight durations, overlapping lanes and untimed stops. Short blocks keep a minimum hit area; missing end times are labelled, never treated as an inferred travel duration.
+- Timeline owns the shared selected date/place for Day, Multi-day and Map. `JourneyMap` loads its external preview only on explicit activation, keeps loading/fallback copy visible, and provides selected-place navigation plus bounded whole-day routes.
+- `TripTools` is a body portal with focus containment, Escape/restore, scroll lock and reduced-motion-aware entry/exit. Downloads reuse `itineraryCalendar` and `portableTripBackup`; import opens the existing Settings review flow. Sync text comes from actual engine state.
+- The day rail animates its marker; day content uses a short directional transition. The checklist supports grouped counts, search and pending filtering. Quantity/bag details remain plain notes.
+- Scan remains a primary destination, with themed camera/gallery/voice/email/manual capture and calculator access. Revealed inputs scroll into view and receive focus without losing their draft.

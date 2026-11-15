@@ -42,7 +42,12 @@ export type StyleThemeKey =
   | 'cyberpunk_hud'
   | 'pixel_quest'
   | 'japan_ukiyoe'
-  | 'korea_dancheong';
+  | 'korea_dancheong'
+  | 'night_ledger'
+  | 'harbor_blueprint'
+  | 'sunset_terrace'
+  | 'pocket_planner'
+  | 'alpine_postcard';
 export type AppThemeKey = TripThemeKey | StyleThemeKey;
 export type ThemePreference = 'auto' | AppThemeKey;
 
@@ -178,6 +183,8 @@ export interface ItinerarySpot {
   spotId?: string;
   time: string;
   timeEnd?: string;
+  endDate?: string;
+  endTimezone?: string;
   name: string;
   type: CategoryId | 'sightseeing';
   note?: string;
@@ -191,7 +198,22 @@ export interface ItinerarySpot {
   confidence?: 'low' | 'medium' | 'high';
 }
 
+export interface PackingSuggestion {
+  label: string;
+  note?: string;
+  suggested?: boolean;
+}
+
+export interface JourneyQuestion {
+  question: string;
+  options: string[];
+  answer: string;
+  evidence: string;
+}
+
 export interface ItineraryDay {
+  packing?: PackingSuggestion[];
+  quiz?: JourneyQuestion[];
   id?: string;
   dayId?: string;
   date: string;

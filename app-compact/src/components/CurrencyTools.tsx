@@ -2,7 +2,8 @@ import { ArrowUpDown, CheckCircle2, Delete, LoaderCircle, RefreshCw, X } from 'l
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SegmentedControl } from './ui';
-import { currencyPrefix, fetchLiveCurrencySnapshot } from '../lib/currency';
+import { RateReference } from './RateReference';
+import { currencyPrefix, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, usableSnapshot, type CurrencySnapshot } from '../lib/currency';
 import { confirmLiveRate, fixedRatePatch, formatRate, isValidFixedRate, knownLiveRate, rateCurrency, settingsFixedRate } from '../lib/rateMode';
 import { redactedError } from '../lib/credentialBroker';
 import type { AppState } from '../lib/types';
@@ -59,9 +60,9 @@ export function RateModeSwitch({ state, updateState }: { state: AppState; update
   }
 
   function saveFixed() {
-    const rate = Number(draftRate.replace(/,/g, ''));
+    const rate = parseRateInput(draftRate);
     if (!isValidFixedRate(rate)) {
-      setMessage({ tone: 'error', text: '固定匯率必須係 0.01 至 1,000,000 之間嘅數值。' });
+      setMessage({ tone: 'error', text: '固定匯率必須大於 0，並且不超過 1,000,000。' });
       return;
     }
     requestRef.current += 1;
@@ -79,20 +80,25 @@ export function RateModeSwitch({ state, updateState }: { state: AppState; update
         <div className="rate-mode-fixed">
           <label>
             <span>1 HKD =</span>
-            <input aria-label={`固定匯率（1 HKD = ${code}）`} type="text" inputMode="decimal" value={draftRate} onChange={(e) => { setDraftRate(e.target.value); setMessage(null); }} />
+            <input aria-label={`固定匯率（1 HKD = ${code}）`} type="text" inputMode="decimal" readOnly={code === 'HKD'} value={draftRate} onChange={(e) => { setDraftRate(e.target.value); setMessage(null); }} />
             <b>{code}</b>
           </label>
           <button className="primary" type="button" onClick={saveFixed}><CheckCircle2 size={16} aria-hidden="true" />{confirmedMode === 'fixed' ? '更新' : '採用'}</button>
         </div>
       ) : (
-        <p className="rate-mode-live">{busy ? <><LoaderCircle size={14} className="spin" aria-hidden="true" /> 取得即時匯率…</> : <>1 HKD = <b>{formatRate(knownLiveRate(state, code))}</b> {code} · 自動更新</>}</p>
+        <p className="rate-mode-live" role={busy ? 'status' : undefined}>{busy ? <><LoaderCircle size={14} className="spin" aria-hidden="true" /> 取得即時匯率…</> : <>1 HKD = <b>{formatRate(perHkdForCurrency(state, code))}</b> {code} · 已確認記帳匯率</>}</p>
       )}
       {message && <p className={`rate-mode-message is-${message.tone}`} role={message.tone === 'error' ? 'alert' : 'status'}>{message.text}</p>}
     </div>
   );
 }
 
-const rateInputValue = (rate: number | undefined) => (rate && Number.isFinite(rate) ? String(Number(rate.toFixed(4))) : '');
+function parseRateInput(value: string): number {
+  const raw = value.trim();
+  return /^(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/.test(raw) ? Number(raw.replace(/,/g, '')) : Number.NaN;
+}
+
+const rateInputValue = (rate: number | undefined) => (rate && Number.isFinite(rate) ? String(rate) : '');
 
 const OPERATORS = ['+', '−', '×', '÷'] as const;
 type Operator = typeof OPERATORS[number];
@@ -132,15 +138,18 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
   const settingsFixed = settingsFixedRate(state, code);
   const [basis, setBasis] = useState<RateBasis>(state.rateMode === 'fixed' ? 'fixed' : 'live');
   const [liveRate, setLiveRate] = useState(() => knownLiveRate(state, code));
+  const [liveSnapshot, setLiveSnapshot] = useState<CurrencySnapshot | null>(() => usableSnapshot(loadCurrencySnapshot()));
   const [customFixed, setCustomFixed] = useState(() => rateInputValue(settingsFixed ?? knownLiveRate(state, code)));
   const [expression, setExpression] = useState('');
   const [toHkd, setToHkd] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState('');
   const dialogRef = useRef<HTMLDivElement>(null);
+  const liveRequestRef = useRef(0);
+  useEffect(() => () => { liveRequestRef.current += 1; }, []);
   useModalOpenClass(true);
 
-  const fixedRate = settingsFixed ?? Number(customFixed.replace(/,/g, ''));
+  const fixedRate = settingsFixed ?? parseRateInput(customFixed);
   const rate = basis === 'live' ? liveRate : (isValidFixedRate(fixedRate) ? fixedRate : undefined);
   const input = useMemo(() => evaluateExpression(expression), [expression]);
   const result = rate && Number.isFinite(input) ? (toHkd ? input / rate : input * rate) : Number.NaN;
@@ -148,17 +157,20 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
   const resultCode = toHkd ? 'HKD' : code;
 
   async function refreshLive() {
+    const request = ++liveRequestRef.current;
     setRefreshing(true);
     setRefreshError('');
     try {
       const snapshot = await fetchLiveCurrencySnapshot();
+      if (request !== liveRequestRef.current) return;
       const next = Number(snapshot.rates[code]);
       if (!Number.isFinite(next) || next <= 0) throw new Error(`未取得有效嘅 ${code} 即時匯率`);
       setLiveRate(next);
+      setLiveSnapshot(snapshot);
     } catch (error) {
-      setRefreshError(`更新失敗：${redactedError(error)}`);
+      if (request === liveRequestRef.current) setRefreshError(`更新失敗：${redactedError(error)} 你嘅記帳設定冇變。`);
     } finally {
-      setRefreshing(false);
+      if (request === liveRequestRef.current) setRefreshing(false);
     }
   }
 
@@ -194,8 +206,9 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
       if (event.key === 'Tab') {
-        const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [href], [tabindex="0"]') || [])]
-          .filter((element) => element.getClientRects().length > 0);
+        const focusable = [...(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), summary, [href], [tabindex="0"]') || [])]
+          .filter((element) => element.getClientRects().length > 0
+            && (element.tagName === 'SUMMARY' || !element.closest('details:not([open])')));
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
         if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
@@ -232,12 +245,12 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
         <SegmentedControl ariaLabel="計算用匯率" value={basis}
           options={[{ value: 'live', label: '即時匯率' }, { value: 'fixed', label: '固定匯率' }]}
           onChange={setBasis} />
-        <div className="calc-rate">
+        <div className="calc-rate" aria-busy={refreshing}>
           {basis === 'live' ? (
             <>
               <span>1 HKD = <b>{formatRate(liveRate)}</b> {code}</span>
               <button type="button" className="calc-rate-refresh" onClick={() => void refreshLive()} disabled={refreshing} aria-label="更新即時匯率">
-                <RefreshCw size={15} className={refreshing ? 'spin' : ''} aria-hidden="true" />更新
+                <RefreshCw size={15} className={refreshing ? 'spin' : ''} aria-hidden="true" />{refreshing ? '更新中…' : '更新'}
               </button>
             </>
           ) : settingsFixed ? (
@@ -250,6 +263,7 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
             </label>
           )}
         </div>
+        {refreshing && <p className="muted" role="status">取得參考匯率…</p>}
         {refreshError && <p className="calc-error" role="alert">{refreshError}</p>}
 
         <div className="calc-display" aria-live="polite">
@@ -273,6 +287,7 @@ export function CurrencyCalculator({ state, onClose }: { state: AppState; onClos
             </button>
           ))}
         </div>
+        <RateReference state={state} currency={code} fixed={basis === 'fixed'} snapshot={liveSnapshot} />
       </div>
     </div>,
     document.body,

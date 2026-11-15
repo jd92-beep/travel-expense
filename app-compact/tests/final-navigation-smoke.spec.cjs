@@ -1,11 +1,12 @@
 const { test, expect } = require('@playwright/test');
+const { openTab, expectCurrentTab } = require('./helpers/journey-navigation.cjs');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 const tabs = [
   ['主頁', '預算總覽'],
   ['記帳', '掃描收據'],
-  ['行程', '行程時間線'],
+  ['行程', '每日行程'],
   ['紀錄', '紀錄中心'],
   ['天氣', '旅程氣象站'],
   ['統計', '預算使用分析'],
@@ -53,16 +54,16 @@ for (const [name, viewport] of [
     await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
     await expect(page.getByText('掃描收據').first()).toBeVisible();
     if (viewport.width <= 390) {
-      await expect(page.locator('.hyperframe-layer')).toHaveCount(2);
+      await expect(page.locator('.hyperframe-layer:visible')).toHaveCount(0);
       await expect(page.locator('canvas')).toHaveCount(0);
     }
     const nav = page.getByLabel('主要分頁');
     for (const [tabLabel, expectedText] of tabs) {
-      await nav.getByRole('button', { name: tabLabel, exact: true }).click();
-      if (viewport.width <= 390 && expectedText === '紀錄中心') {
-        await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-      } else if (viewport.width <= 390 && expectedText === '設定控制中心') {
-        await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+      await openTab(page, tabLabel);
+      if (expectedText === '紀錄中心') {
+        await expectCurrentTab(page, 'history');
+      } else if (expectedText === '設定控制中心') {
+        await expectCurrentTab(page, 'settings');
         await expect(page.locator('.settings-preview-controls')).toBeVisible();
       } else {
         await expect(page.locator('body')).toContainText(expectedText);
@@ -238,7 +239,7 @@ test('Console surfaces failed queue items before another backend retry', async (
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expect(page.getByRole('button', { name: /Sync error.*1 failed/ })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByLabel('Compact travel readiness')).toContainText('Queue · 1 failed');
+  await expect(page.getByLabel('Compact travel readiness')).toContainText('同步佇列 · 1 failed');
   const queueInspector = page.getByRole('region', { name: 'Sync Queue Inspector' });
   await expect(queueInspector).toContainText('1 active');
   await expect(queueInspector).toContainText('receipt · create · error');
@@ -339,8 +340,8 @@ test('Duplicate person ids do not create React key warnings', async ({ page }) =
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
   await expect(page.getByText('預算使用分析').first()).toBeVisible();
-  await page.getByLabel('主要分頁').getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await openTab(page, '設定');
+  await expectCurrentTab(page, 'settings');
   await expect.poll(() => consoleErrors.filter((text) => text.includes('same key') || text.includes('Encountered two children')).length).toBe(0);
 });
 
@@ -389,11 +390,11 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByLabel('Compact travel readiness')).toHaveCount(0);
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
-  await nav.getByRole('button', { name: '設定', exact: true }).click();
+  await openTab(page, '設定');
   const readiness = page.getByLabel('Compact travel readiness');
   await expect(readiness).toBeVisible();
-  await expect(readiness).toContainText('Network · online');
-  await expect(readiness).toContainText('Queue · 1 pending');
+  await expect(readiness).toContainText('已連線');
+  await expect(readiness).toContainText('同步佇列 · 1 pending');
 
   await page.evaluate(() => {
     const event = new Event('beforeinstallprompt');
@@ -405,27 +406,28 @@ test('Compact PWA readiness strip surfaces queue, install, update, cache, and mo
     });
     window.dispatchEvent(event);
   });
-  await expect(readiness.getByRole('button', { name: /Install/ })).toBeVisible();
-  await readiness.getByRole('button', { name: /Install/ }).click();
+  await expect(readiness.getByRole('button', { name: '安裝到主畫面' })).toBeVisible();
+  await readiness.getByRole('button', { name: '安裝到主畫面' }).click();
   await expect.poll(() => page.evaluate(() => window.__compactInstallPrompted === true)).toBe(true);
 
   await page.evaluate(() => navigator.serviceWorker?.dispatchEvent(new Event('controllerchange')));
   const releaseNotes = page.getByLabel('Compact release notes');
   await expect(releaseNotes).toBeVisible();
-  await expect(releaseNotes).toContainText('Compact release notes');
-  await expect(releaseNotes).toContainText('Now vs previous');
-  await expect(releaseNotes).toContainText('Compact Home and Timeline');
-  await expect(releaseNotes).toContainText('Attachment checks');
-  await expect(releaseNotes).toContainText('No external calls');
+  await expect(releaseNotes).toContainText('這次更新');
+  await expect(releaseNotes).toContainText('沿途新面貌');
+  await expect(releaseNotes).toContainText('行程工具');
+  await expect(releaseNotes).toContainText('出發準備');
+  await expect(releaseNotes).toContainText('旅途翻翻卡');
   expect(releaseNoteRequests, releaseNoteRequests.join('\n')).toHaveLength(0);
 
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
-  await expect(readiness).toContainText('Network · offline');
+  await expect(readiness).toContainText('離線');
 
   const metrics = await readiness.evaluate((node) => ({
     scrollWidth: document.documentElement.scrollWidth,
     chipCount: node.querySelectorAll('.pwa-chip').length,
+    overflow: [...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > innerWidth + 1 && getComputedStyle(e).display !== 'none').slice(0,8).map(e=>({tag:e.tagName,cls:e.className,right:e.getBoundingClientRect().right})),
   }));
   expect(metrics.scrollWidth, JSON.stringify(metrics, null, 2)).toBeLessThanOrEqual(390);
   expect(metrics.chipCount).toBeGreaterThanOrEqual(2);

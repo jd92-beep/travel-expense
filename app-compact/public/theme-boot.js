@@ -10,9 +10,9 @@
   // Style themes also switch component shapes via data-app-style (styles/style-themes.css).
   const styleThemes = [
     'sketch_notebook', 'marshmallow_cloud', 'kids_blocks', 'kawaii_sticker', 'cyberpunk_hud', 'pixel_quest',
-    'japan_ukiyoe', 'korea_dancheong',
+    'japan_ukiyoe', 'korea_dancheong', 'night_ledger', 'harbor_blueprint', 'sunset_terrace', 'pocket_planner', 'alpine_postcard',
   ];
-  const darkThemes = new Set(['taiwan_nightmarket', 'tokyo_neon', 'nordic_aurora', 'brazil_carnival', 'cyberpunk_hud', 'pixel_quest']);
+  const darkThemes = new Set(['taiwan_nightmarket', 'tokyo_neon', 'nordic_aurora', 'brazil_carnival', 'cyberpunk_hud', 'pixel_quest', 'night_ledger']);
   const colors = {
     japan_washi: '#f7f2ea',
     korea_editorial: '#f7f4f0',
@@ -34,6 +34,11 @@
     pixel_quest: '#141432',
     japan_ukiyoe: '#1f3a5f',
     korea_dancheong: '#f6f1e6',
+    night_ledger: '#0e1823',
+    harbor_blueprint: '#edf4f8',
+    pocket_planner: '#fcf9f4',
+    alpine_postcard: '#f7fafa',
+    sunset_terrace: '#f8ede2',
   };
   let theme = 'japan_washi';
   try {

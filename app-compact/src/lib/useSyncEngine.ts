@@ -611,9 +611,9 @@ export function useSyncEngine(
       // it (and its receipts) so a removed member doesn't keep stale shared data. Never purge on a
       // failed pull or in Notion-only mode (guarded by cloudPullOk).
       const cloudPullOk = !!cloudSession && supabaseResult.status === 'fulfilled';
-      // An empty trip list from a successful pull is ambiguous (cold start / RLS glitch).
-      // Only treat the pull as authoritative when the server actually returned trips.
-      const cloudPullAuthoritative = cloudPullOk && (supabaseData.trips?.length || 0) > 0;
+      // A successful configured pull can legitimately be empty after revocation/deletion.
+      // The unconfigured client also returns empty arrays, but has no server authority.
+      const cloudPullAuthoritative = cloudPullOk && isSupabaseConfigured();
       const authorizedSupabaseIds = new Set(
         supabaseData.trips.map((trip) => trip.supabaseId).filter((id): id is string => !!id),
       );
@@ -739,8 +739,7 @@ export function useSyncEngine(
           // Server truth beats the local flag: if this pull shows no storage photo for a
           // receipt we thought was uploaded, the object was deleted server-side (storage wipe,
           // account migration). Clear the flag so the sweep re-uploads from photoThumb.
-          // Empty pulls are ambiguous (cold start / RLS glitch) — same guard as purge.
-          if (cloudPullAuthoritative && (supabaseData.receipts?.length || 0) > 0) {
+          if (cloudPullAuthoritative) {
             const serverPhotoSupabaseIds = new Set(
               supabaseData.receipts
                 .filter((receipt) => receipt.supabasePhotoPath && receipt.supabaseId)

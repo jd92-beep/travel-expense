@@ -1,11 +1,14 @@
 import { Calculator, Camera, Check, ChevronRight, ImageIcon, LoaderCircle, Mail, Mic, PenLine, RefreshCw, Repeat2, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useId, type ChangeEvent, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { StatefulActionButton, Toast } from '../components/ui';
+import { JourneyCover } from '../components/journey/JourneyCover';
+import { RateReference } from '../components/RateReference';
 import { CurrencyCalculator, RateModeSwitch } from '../components/CurrencyTools';
 import { heuristicReceiptFromText, parseTextWithAi, scanReceiptImage } from '../lib/ai';
-import { convertAmount, currencyPrefix, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
+import { convertAmount, currencyPrefix, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, usableSnapshot, SUPPORTED_CURRENCIES, type CurrencySnapshot } from '../lib/currency';
 import { categoryById, compressPhoto, displayStore, getReceiptTripAmount, getResolvedTripCurrency, isPendingReceipt, todayForReceipts } from '../lib/domain';
+import { formatRate } from '../lib/rateMode';
 import { redactedError } from '../lib/credentialBroker';
 import type { AppState, Receipt } from '../lib/types';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
@@ -122,6 +125,15 @@ export function Scan({
 
   const [savingBatch, setSavingBatch] = useState(false);
   const [mode, setMode] = useState<ScanMode>('scan');
+  const modePanelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (mode === 'scan') return;
+    const frame = requestAnimationFrame(() => {
+      modePanelRef.current?.querySelector('textarea')?.focus({ preventScroll: true });
+      modePanelRef.current?.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mode]);
   const [fxOpen, setFxOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [inputKey, setInputKey] = useState(0);
@@ -133,7 +145,10 @@ export function Scan({
   const [to, setTo] = useState('HKD');
   const [amount, setAmount] = useState('1000');
   const [fx, setFx] = useState<CurrencySnapshot | null>(() => loadCurrencySnapshot());
-  const fxAutoRefreshRef = useRef(false);
+  const fxRequestRef = useRef(0);
+  const [fxError, setFxError] = useState('');
+  const [fxRefreshing, setFxRefreshing] = useState(false);
+  const fxAmountErrorId = useId();
   const stateRef = useRef(state);
   stateRef.current = state;
   const [reading, setReading] = useState<{ preview: string; phase: ReadingPhase } | null>(null);
@@ -159,7 +174,7 @@ export function Scan({
   }, []);
 
   useEffect(() => {
-    setFrom((current) => current || tripCurrency);
+    setFrom(tripCurrency);
   }, [tripCurrency]);
   useEffect(() => {
     mountedRef.current = true;
@@ -176,10 +191,11 @@ export function Scan({
 
   useModalOpenClass(batch.length > 0 || fxOpen);
 
-  const converted = useMemo(() => {
-    const n = Number(amount) || 0;
-    return convertAmount(n, from, to, state, fx);
-  }, [amount, from, to, state, fx]);
+  const rawFxAmount = amount.trim();
+  const fxAmount = /^[+-]?(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/.test(rawFxAmount)
+    ? Number(rawFxAmount.replace(/,/g, '')) : Number.NaN;
+  const fxAmountInvalid = rawFxAmount !== '' && !Number.isFinite(fxAmount);
+  const converted = useMemo(() => convertAmount(fxAmount, from, to, state, fx), [fxAmount, from, to, state, fx]);
   const fxFixed = state.rateMode === 'fixed';
   // A live confirmation writes a new snapshot; do not keep converting with the sheet's older cache.
   useEffect(() => {
@@ -187,16 +203,14 @@ export function Scan({
   }, [state.rateMode, state.rateTable]);
 
   useEffect(() => {
-    if (!fxOpen) {
-      // Reset on close so reopening the modal after the 1-hour cache window can refresh again.
-      fxAutoRefreshRef.current = false;
-      return;
-    }
-    // 固定匯率模式：唔好自動 fetch — 用返用户鎖定咗嘅匯率。
-    if (fxAutoRefreshRef.current || stateRef.current.rateMode === 'fixed') return;
-    fxAutoRefreshRef.current = true;
+    fxRequestRef.current += 1;
+    setFxRefreshing(false);
+    setFxError('');
+    if (!fxOpen || stateRef.current.rateMode === 'fixed') return;
+    const cached = usableSnapshot(loadCurrencySnapshot());
+    if (cached) { setFx(cached); return; }
     void handleFxRefresh();
-  }, [fxOpen]);
+  }, [fxOpen, state.activeTripId, tripCurrency, state.rateMode]);
 
   const batchQuality = useMemo(() => {
     const selected = batch.filter((row) => row.selected !== false).length;
@@ -232,6 +246,7 @@ export function Scan({
       setStatus('未收到圖片。相機無彈出時，請試相簿或手動記一筆。');
       return;
     }
+    const scanState = stateRef.current;
     if (!retry) setLastScanFile(file);
     setBusyWithGlobal('ocr');
     setStatus('讀取收據圖片…');
@@ -253,12 +268,14 @@ export function Scan({
 
     if (mountedRef.current) setReading((current) => (current ? { ...current, phase: 'read' } : current));
     try {
-      const receipt = await scanReceiptImage(file, stateRef.current);
-      openDraft(receipt);
+      const receipt = await scanReceiptImage(file, scanState);
+      openDraft({ ...receipt, tripId: activeTrip(scanState).id, tripLinkSource: 'explicit' });
       if (mountedRef.current) setStatus('OCR 完成，請確認欄位。');
     } catch (error) {
       const draft = {
-        ...heuristicReceiptFromText('', stateRef.current),
+        ...heuristicReceiptFromText('', scanState),
+        tripId: activeTrip(scanState).id,
+        tripLinkSource: 'explicit' as const,
         store: '',
         date: '',
         payment: '' as const,
@@ -312,7 +329,7 @@ export function Scan({
         if (mountedRef.current) setStatus('解析不到任何收據');
         return;
       }
-      openDraft(receipts[0]);
+      openDraft({ ...receipts[0], tripId: activeTrip(state).id, tripLinkSource: 'explicit' });
       if (mountedRef.current) { setVoiceText(''); setStatus('語音文字已解析，請確認欄位。'); }
     } catch (error) {
       if (mountedRef.current) setStatus(`語音解析失敗：${redactedError(error)}`);
@@ -364,7 +381,7 @@ export function Scan({
         if (mountedRef.current) setStatus('解析不到任何收據');
         return;
       }
-      setBatch(receipts.map((r) => ({ ...r, store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
+      setBatch(receipts.map((r) => ({ ...r, tripId: activeTrip(state).id, tripLinkSource: 'explicit', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       if (mountedRef.current) { setEmailText(''); setStatus(`已解析 ${receipts.length} 筆，請喺 batch confirm 核對。`); }
     } catch (error) {
       if (mountedRef.current) setStatus(`Email 解析失敗：${redactedError(error)}`);
@@ -416,7 +433,7 @@ export function Scan({
           } as Receipt);
         }
       }
-      setBatch(receipts.map((r) => ({ ...r, source: 'react-email-image', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
+      setBatch(receipts.map((r) => ({ ...r, tripId: activeTrip(state).id, tripLinkSource: 'explicit', source: 'react-email-image', store: r.store.startsWith('⏳ ') ? r.store : `⏳ ${r.store}`, selected: true })));
       if (mountedRef.current) setStatus(`已解析 ${receipts.length} 筆截圖，請核對後保存。`);
     } catch (error) {
       if (mountedRef.current) setStatus(`截圖解析失敗：${redactedError(error)}`);
@@ -488,10 +505,10 @@ export function Scan({
     }
     setSavingBatch(true);
     onImport(valid);
-    setBatch([]);
+    setBatch(withDrafts.filter((row) => row.selected !== false && receiptNeedsReview(row)));
     setEmailText('');
     setStatus(skipped
-      ? `已儲存 ${valid.length} 筆；略過 ${skipped} 筆缺資料紀錄`
+      ? `已儲存 ${valid.length} 筆；保留 ${skipped} 筆缺資料紀錄，請補齊後再儲存`
       : `已儲存 ${valid.length} 筆 email 待確認紀錄。`);
     setSavingBatch(false);
   }
@@ -533,19 +550,21 @@ export function Scan({
 
   async function handleFxRefresh() {
     if (stateRef.current.rateMode === 'fixed') return;
-    setBusy('fx');
+    const request = ++fxRequestRef.current;
+    const tripId = stateRef.current.activeTripId;
+    const isCurrent = () => mountedRef.current && request === fxRequestRef.current
+      && stateRef.current.activeTripId === tripId && stateRef.current.rateMode !== 'fixed';
+    setFxRefreshing(true);
+    setFxError('');
     try {
       const snapshot = await fetchLiveCurrencySnapshot();
-      if (!mountedRef.current) return;
+      if (!isCurrent()) return;
       setFx(snapshot);
-      const toastCode = Number.isFinite(snapshot.rates[from]) ? from : tripCurrency;
-      const destinationRate = snapshot.rates[toastCode];
-      setStatus(destinationRate ? `已更新匯率：1 HKD = ${destinationRate.toFixed(2)} ${toastCode}（${snapshot.source}）` : `已更新匯率（${snapshot.source}）`);
+      setStatus('參考匯率已更新；記帳設定及已存收據不變。');
     } catch (error) {
-      if (!mountedRef.current) return;
-      setStatus(`匯率更新失敗：${redactedError(error)}`);
+      if (isCurrent()) setFxError(`未能更新參考匯率：${redactedError(error)} 保留原有記帳設定。`);
     } finally {
-      if (mountedRef.current) setBusy('');
+      if (isCurrent()) setFxRefreshing(false);
     }
   }
 
@@ -576,7 +595,9 @@ export function Scan({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); setFxOpen(false); }
       if (e.key === 'Tab' && fxContainerRef.current) {
-        const focusable = fxContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const focusable = [...fxContainerRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), summary, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+          .filter((element) => element.getClientRects().length > 0
+            && (element.tagName === 'SUMMARY' || !element.closest('details:not([open])')));
         if (!focusable.length) return;
         const first = focusable[0]; const last = focusable[focusable.length - 1];
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -593,6 +614,7 @@ export function Scan({
       <input key={`gallery-${inputKey}`} id={GALLERY_INPUT_ID} ref={galleryRef} className="visually-hidden-file" type="file" accept="image/*" onChange={handleGalleryChange} />
       <input key={`email-${inputKey}`} id={EMAIL_IMAGE_INPUT_ID} ref={emailImageRef} className="visually-hidden-file" type="file" accept="image/*" multiple onChange={handleEmailImagesChange} />
 
+      <header className="planner-scan-heading"><div><h2>沿途記帳</h2><p>拍下、確認，收好每一筆旅程開支。</p></div><Camera size={26} strokeWidth={1.5} /></header>
       <div className="scan-layout">
         <div className="scan-desk">
           <header className="scan-visa">
@@ -600,7 +622,7 @@ export function Scan({
               <h2>{trip.name || state.tripName || '目前旅程'}</h2>
               <button type="button" className="scan-rate" aria-label="匯率 Exchange Rate" onClick={() => setFxOpen(true)}>
                 <small>1 HKD</small>
-                <strong>{tripCurrency === 'HKD' ? 'HKD' : `${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(2)} ${tripCurrency}`}</strong>
+                <strong>{tripCurrency === 'HKD' ? 'HKD' : `${formatRate(rate)} ${tripCurrency}`}</strong>
                 <span>匯率</span>
               </button>
             </div>
@@ -610,6 +632,8 @@ export function Scan({
             </p>
           </header>
 
+          <div className="planner-capture-panel"><div className="planner-panel-heading"><div><Camera size={18} /><h3>收據掃描</h3></div><span>AI 讀取 · 你來確認</span></div>
+          <JourneyCover trip={trip} className="planner-scan-cover" />
           <div className="scan-press" aria-live="polite">
             {reading ? (
               <div className="scan-reading" role="status">
@@ -633,40 +657,32 @@ export function Scan({
               </div>
             ) : (
               <button type="button" className="scan-stamp-shutter" aria-label="相機：掃描收據" disabled={busy === 'ocr'} onClick={triggerCamera}>
-                <svg className="scan-stamp-ring" viewBox="0 0 200 200" aria-hidden="true">
-                  <defs>
-                    <path id="scan-stamp-arc" d="M100,100 m-78,0 a78,78 0 1,1 156,0 a78,78 0 1,1 -156,0" />
-                  </defs>
-                  <circle cx="100" cy="100" r="95" />
-                  <circle cx="100" cy="100" r="88" />
-                  <circle cx="100" cy="100" r="64" />
-                  <text><textPath href="#scan-stamp-arc" startOffset="0" textLength={488} lengthAdjust="spacing">收據 · RECEIPT · 入帳 · ENTRY · 收據 · RECEIPT · 入帳 · ENTRY ·</textPath></text>
-                </svg>
                 <span className="scan-stamp-face">
                   <Camera size={30} aria-hidden="true" />
                   <strong>掃描收據</strong>
-                  <small>{today.replace(/-/g, '·')}</small>
+                  <small>拍下收據，確認後記入旅程</small>
                 </span>
               </button>
             )}
           </div>
 
+          </div>
           <nav className="scan-routes" aria-label="其他記帳方式">
-            <button type="button" className="scan-route" disabled={busy === 'ocr'} onClick={triggerGallery}>
+            <button type="button" className="scan-route" aria-label="相簿" disabled={busy === 'ocr'} onClick={triggerGallery}>
               <i className="scan-route-ring" aria-hidden="true"><ImageIcon size={22} /></i>
-              <span>相簿</span>
+              <span>相簿</span><small>選取收據相片</small>
             </button>
-            <button type="button" className="scan-route" aria-pressed={mode === 'voice'} onClick={() => toggleMode('voice')}>
+            <button type="button" className="scan-route" aria-label="語音" aria-pressed={mode === 'voice'} onClick={() => toggleMode('voice')}>
               <i className="scan-route-ring" aria-hidden="true"><Mic size={22} /></i>
-              <span>語音</span>
+              <span>語音</span><small>講低剛才消費</small>
             </button>
-            <button type="button" className="scan-route" aria-pressed={mode === 'email'} onClick={() => toggleMode('email')}>
+            <button type="button" className="scan-route" aria-label="Email" aria-pressed={mode === 'email'} onClick={() => toggleMode('email')}>
               <i className="scan-route-ring" aria-hidden="true"><Mail size={22} /></i>
-              <span>Email</span>
+              <span>Email</span><small>預訂及截圖</small>
             </button>
-            <button type="button" className="scan-route" onClick={onManual}>
+            <button type="button" className="scan-route" aria-label="手動" onClick={onManual}>
               <i className="scan-route-ring" aria-hidden="true"><PenLine size={22} /></i>
-              <span>手動</span>
+              <span>手動</span><small>自行填寫紀錄</small>
             </button>
           </nav>
 
@@ -674,13 +690,13 @@ export function Scan({
             <i aria-hidden="true"><Calculator size={22} /></i>
             <span>
               <strong>貨幣計數機</strong>
-              <small>{tripCurrency === 'HKD' ? '港幣計算' : `${tripCurrency} ⇄ HKD · ${fxFixed ? '固定' : '即時'} ${rate >= 100 ? Math.round(rate).toLocaleString() : rate.toFixed(2)}`}</small>
+              <small>{tripCurrency === 'HKD' ? '港幣計算' : `${tripCurrency} ⇄ HKD · ${fxFixed ? '固定' : '即時'} ${formatRate(rate)}`}</small>
             </span>
             <ChevronRight size={18} aria-hidden="true" />
           </button>
 
           {mode === 'voice' && (
-            <div className="scan-sheet">
+            <div ref={modePanelRef} className="scan-sheet" role="region" aria-label="語音記帳">
               <div className="scan-sheet-actions">
                 <button className="secondary" type="button" onClick={startSpeech} disabled={isListening}>
                   <Mic size={18} className={isListening ? 'scan-listening' : ''} aria-hidden="true" /> {isListening ? '聆聽中…' : '開始聽'}
@@ -697,7 +713,7 @@ export function Scan({
           )}
 
           {mode === 'email' && (
-            <div className="scan-sheet">
+            <div ref={modePanelRef} className="scan-sheet" role="region" aria-label="Email 記帳">
               <div className="scan-sheet-actions">
                 <button className="secondary" type="button" disabled={busy === 'notion' || busy === 'cloud'} onClick={handlePullPending}>
                   <RefreshCw size={18} className={busy === 'notion' || busy === 'cloud' ? 'spin' : ''} aria-hidden="true" /> 即時同步
@@ -766,7 +782,7 @@ export function Scan({
           ) : (
             <div className="scan-stamps-empty">
               <span aria-hidden="true" />
-              <p><strong>今日未有入帳</strong>影第一張收據，就會喺呢頁蓋印。</p>
+              <p><strong>今日未有入帳</strong>影下收據，或用手動方式記低第一筆花費。</p>
             </div>
           )}
           {todayStamps.length > STAMP_LIMIT && <p className="scan-stamps-more">仲有 {todayStamps.length - STAMP_LIMIT} 筆，喺「紀錄」睇晒。</p>}
@@ -781,19 +797,19 @@ export function Scan({
             <div className="modal-head">
               <div>
                 <h2>{fxFixed ? '固定匯率' : '即時匯率'}</h2>
-                <p className="muted">{fxFixed ? '用緊你鎖定嘅匯率，唔會自動更新。' : '新記錄會用最新市場匯率。'}</p>
+                <p className="muted">{fxFixed ? '用緊你鎖定嘅匯率，唔會自動更新。' : '每日參考行情，唔等於銀行實際扣款匯率。'}</p>
               </div>
               <button className="icon-btn" type="button" aria-label="關閉" onClick={() => setFxOpen(false)}><X size={18} /></button>
             </div>
             <RateModeSwitch state={state} updateState={updateState} />
             <div className="scan-fx-result" aria-live="polite">
-              <span>{Number(amount) || 0} {from}</span>
-              <strong>{(Number(amount) || 0) === 0 ? '輸入金額以計算' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
+              <span>{Number.isFinite(fxAmount) ? fxAmount.toLocaleString('en-US') : '—'} {from}</span>
+              <strong>{!rawFxAmount ? '輸入金額以計算' : fxAmountInvalid ? '請修正金額' : `${converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${to}`}</strong>
             </div>
             <div className="scan-fx-panel">
               <label>
                 <span>金額</span>
-                <input type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input type="text" inputMode="decimal" value={amount} aria-invalid={fxAmountInvalid || undefined} aria-describedby={fxAmountInvalid ? fxAmountErrorId : undefined} onChange={(e) => setAmount(e.target.value)} />
               </label>
               <label>
                 <span>From</span>
@@ -811,19 +827,22 @@ export function Scan({
                 </select>
               </label>
             </div>
+            {fxAmountInvalid && <p id={fxAmountErrorId} role="alert">請輸入完整數值，例如 2,480 或 24.80。</p>}
+            {fxError && <p role="alert">{fxError}</p>}
             <div className="scan-fx-actions">
               <button className="secondary" type="button" onClick={() => { setFrom(tripCurrency); setTo('HKD'); }}>使用旅程貨幣</button>
               {!fxFixed && (
-                <button className="primary" type="button" disabled={busy === 'fx'} onClick={handleFxRefresh}>
-                  <RefreshCw size={16} className={busy === 'fx' ? 'spin' : ''} /> 更新匯率
+                <button className="primary" type="button" disabled={fxRefreshing} onClick={handleFxRefresh}>
+                  <RefreshCw size={16} className={fxRefreshing ? 'spin' : ''} /> {fxRefreshing ? '更新中…' : '更新匯率'}
                 </button>
               )}
             </div>
+            <RateReference state={state} currency={from} snapshot={fx} />
           </div>
         </div>,
         document.body,
       )}
-      {calcOpen && <CurrencyCalculator state={state} onClose={() => setCalcOpen(false)} />}
+      {calcOpen && <CurrencyCalculator key={`${state.activeTripId}:${tripCurrency}`} state={state} onClose={() => setCalcOpen(false)} />}
       {batch.length > 0 && (
         <div ref={batchContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setBatch([])}>
           <div className="modal sheet" onClick={(event) => event.stopPropagation()}>

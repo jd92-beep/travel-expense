@@ -1,0 +1,11 @@
+.rate-reference { min-width: 0; color: var(--theme-muted, var(--muted)); font-size: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.rate-reference p { margin: 5px 0; }
+.rate-reference a { color: var(--theme-text, var(--ink)); text-decoration: underline; text-underline-offset: 3px; }
+.rate-reference summary { min-height: 44px; padding-block: 12px; cursor: pointer; color: var(--theme-text, var(--ink)); font-weight: 700; }
+.rate-reference details[open] { border-top: 1px solid var(--theme-border, var(--hairline)); }
+.rate-reference ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 3px; }
+.rate-reference li { display: flex; flex-wrap: wrap; align-items: center; column-gap: 10px; }
+.rate-reference li a { display: inline-flex; align-items: center; min-height: 44px; }
+.rate-reference li span { font-size: 11px; }
+.rate-reference :is(a, summary):focus-visible { outline: 2px solid var(--theme-accent, var(--blue)); outline-offset: 3px; border-radius: 3px; }
+.rate-reference-stale { color: var(--theme-text, var(--ink)); }

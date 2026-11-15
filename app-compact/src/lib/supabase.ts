@@ -597,8 +597,8 @@ function rowToReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId
 }
 
 function rowToPulledReceipt(row: SupabaseReceiptRow, state: AppState, tripBySupabaseId: Map<string, TripProfile>, currentUserId?: string, ownerDisplayName?: string): Receipt | null {
-  const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
-  return rowToReceiptForTrip(row, state, trip, undefined, currentUserId, ownerDisplayName);
+  const trip = tripBySupabaseId.get(row.trip_id);
+  return trip ? rowToReceiptForTrip(row, state, trip, undefined, currentUserId, ownerDisplayName) : null;
 }
 
 function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: TripProfile, localId?: string, currentUserId?: string, ownerDisplayName?: string): Receipt {
@@ -607,13 +607,16 @@ function rowToReceiptForTrip(row: SupabaseReceiptRow, state: AppState, trip: Tri
     ? 'settlement'
     : 'expense';
   const visibility = row.visibility === 'private' ? 'private' : 'trip';
-  return stampReceiptForTrip(state, {
+  // A first pull resolves cloud trips before they exist in local state; never date-infer its rows.
+  const receiptState = { ...state, trips: [...(state.trips || []).filter((candidate) => candidate.id !== trip.id), trip] };
+  return stampReceiptForTrip(receiptState, {
     id: localId || row.id,
     supabaseId: row.id,
     ownerId: row.owner_id,
     createdByLabel: row.owner_id === currentUserId ? 'You' : (ownerDisplayName || 'Trip member'),
     ledgerSyncStatus,
     tripId: trip.id,
+    tripLinkSource: 'explicit',
     store: row.store,
     total: Number(row.amount) || 0,
     originalAmount: Number(row.original_amount ?? row.amount) || 0,
@@ -1694,9 +1697,9 @@ export async function pullSupabaseData(session: Session, state: AppState): Promi
       return receipt;
     })
     .filter((receipt): receipt is Receipt => !!receipt);
-  const tombstones = deletedReceiptRows.map((row) => {
-    const trip = tripBySupabaseId.get(row.trip_id) || activeTrip(state);
-    return rowToReceiptTombstone(row, trip);
+  const tombstones = deletedReceiptRows.flatMap((row) => {
+    const trip = tripBySupabaseId.get(row.trip_id);
+    return trip ? [rowToReceiptTombstone(row, trip)] : [];
   });
   let settings = rowToSettings(profileResult.data as SupabaseProfileRow | null);
   if (peopleRows.length) {

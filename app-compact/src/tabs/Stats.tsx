@@ -154,11 +154,11 @@ export function Stats({ state, setState, updateState, onTab }: { state: AppState
       <DataPanel
         className="trend-panel preview-daily-pace"
         icon={<TrendingUp size={19} />}
-        title="每日 Budget Pace"
+        title="每日開支走勢"
         status={<StatusPill tone={overBudgetDays ? 'warning' : 'ok'}>{overBudgetDays ? `${overBudgetDays} 日超支` : '未超支'}</StatusPill>}
       >
         {trend.length ? <BudgetPaceChart trend={trend} dailyBudget={dailyBudget} dailyAverage={dailyAverage} state={state} /> : null}
-        {trend.length ? trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />) : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
+        {trend.length ? <details className="journey-data-details"><summary>查看每日開支數字</summary>{trend.map(([date, total]) => <Bar key={date} label={date} value={total} state={{ ...scopedState, receipts: analysisReceipts }} color={dailyBudget > 0 && total > dailyBudget ? '#C23B5E' : '#2d5a8e'} />)}</details> : <EmptyState title="未有紀錄" description="新增跨日期 receipt 後會形成趨勢。" />}
       </DataPanel>
 
       <section className="stats-story-grid" aria-label="Budget story cards">
@@ -394,7 +394,7 @@ function SpendingCompass({ categories, dailyBudget, dailyAverage, state, setStat
   const shownPercent = safeBudget > 0 ? `${usedPercent}%` : '--';
   const remaining = Math.max(0, safeBudget - activeTotal);
   const overBudget = safeBudget > 0 && activeTotal > safeBudget;
-  const ring = budgetRingGradient(usedPercent);
+  const ring = `conic-gradient(${overBudget ? 'var(--journey-danger)' : 'var(--journey-accent)'} 0deg ${Math.max(0, Math.min(100, usedPercent)) * 3.6}deg, var(--journey-rule) 0deg 360deg)`;
   const delta = overBudget ? activeTotal - safeBudget : remaining;
 
   const fmtValue = (amt: number) => {
@@ -480,12 +480,9 @@ function SpendingCompass({ categories, dailyBudget, dailyAverage, state, setStat
               <b><TickerMoney text={fmtValue(activeTotal)} /></b>
             </div>
           </div>
-          <div className="spending-compass-legend" aria-label="類別比例">
-            {(slices.length ? slices : [{ id: 'empty', name: '未有分類', color: '#b8aa96', total: 0 }]).map((slice) => (
-              <span className="spending-compass-slice" key={slice.id} style={{ '--slice-color': slice.color } as CSSProperties}>
-                <i aria-hidden="true" />{slice.name}
-              </span>
-            ))}
+          <div className="spending-compass-legend" aria-label="預算比例">
+            <span className="spending-compass-slice" style={{ '--slice-color': overBudget ? 'var(--journey-danger)' : 'var(--journey-accent)' } as CSSProperties}><i aria-hidden="true" />已使用</span>
+            <span className="spending-compass-slice" style={{ '--slice-color': 'var(--journey-rule)' } as CSSProperties}><i aria-hidden="true" />尚餘預算</span>
           </div>
         </div>
         <div className="preview-budget-side">
@@ -700,7 +697,7 @@ function BudgetPaceChart({ trend, dailyBudget, dailyAverage, state }: { trend: A
   const peak = trend.slice().sort((a, b) => b[1] - a[1])[0];
 
   return (
-    <div className="budget-pace" aria-label={`每日 Budget Pace，超支 ${overDays.length} 日，日均 ${currencySymbol}${fmt(dailyAverage)}`}>
+    <div className="budget-pace" aria-label={`每日開支走勢，超支 ${overDays.length} 日，日均 ${currencySymbol}${fmt(dailyAverage)}`}>
       <div className="budget-pace-summary">
         <span><b><TickerMoney text={overDays.length} /></b><small>超支日</small></span>
         <span><b><TickerMoney text={`${currencySymbol}${fmt(dailyBudget)}`} /></b><small>每日預算線</small></span>

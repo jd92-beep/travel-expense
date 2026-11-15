@@ -46,8 +46,9 @@ converted, attributed ledger entry rather than a raw scan.
 - Scan must keep every existing function: photo + batch OCR with review,
   voice parse, email/screenshot parse, manual entry, FX converter (live/fixed),
   per-input AI model routing, saving into the active trip only.
-- Five trip themes must keep working on Scan: 日本和紙, 韓國韓紙, 台灣夜市
-  (dark), 歐洲鐵路, 全球旅誌; "auto" follows the trip destination.
+- Existing manual regional and style themes remain available on every surface.
+  Automatic mode uses the 沿途 mineral-teal palette, with landscape artwork
+  selected from the trip destination. Existing stored theme choices stay compatible.
 - Terminology: Trip, Ledger, Receipt (see repo `CONTEXT.md`).
 
 ## Brand Commitments

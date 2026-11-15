@@ -1,0 +1,181 @@
+/* The two reference recordings have separate colour, type and component treatments. */
+html:root[data-app-style='pocket_planner'][data-app-theme][data-color-scheme] {
+  --st-page: #fcf9f4;
+  --st-btn-radius: 8px;
+  --st-radius: 15px;
+  --planner-warm: #f4c86d;
+  --planner-green: #b3cf9f;
+  --planner-blue: #a0cadc;
+  --planner-outline: #383335;
+  --pocket-frame: 2px solid var(--planner-outline);
+
+  & .journey-shell :is(.journey-topbar,.journey-mobile-nav,.journey-desktop-rail) { background: var(--st-page) !important; }
+  & .journey-shell .journey-mobile-nav button.active, & .pocket-sections [aria-pressed='true'] {
+    background: var(--planner-green) !important; color: #29342a !important; border: 1px solid #504d44 !important;
+  }
+  & .journey-overview > .journey-cover, & .journey-shell .journey-planner-cover { display: none; }
+  & .journey-quick-links { gap: 4px; border: 0; }
+  & .journey-quick-links button { border: 1px solid #c6beb3; border-radius: 9px; min-height: 54px; padding-block: 8px; }
+  & .pocket-sections { display: flex; gap: 8px; margin: 0 0 14px; }
+  & .pocket-sections button { flex: 1; background: transparent; color: #345c4d; border: 1px solid transparent; border-radius: 10px; min-height: 44px; padding: 4px; font-weight: 650; }
+  & .timeline-screen > .stack { gap: 0; }
+  & .pocket-calendar-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; background: var(--planner-warm); padding: 6px 9px; border: var(--pocket-frame); border-bottom: 0; border-radius: 16px 16px 0 0; }
+  & .pocket-calendar-header > div { flex: 1; }
+  & .pocket-calendar-header h2 { margin: 0; font-size: 17px; }
+  & .pocket-calendar-header small { color: #554b38; font-size: 11px; }
+  & .pocket-view-switch { display: flex; align-items: center; border: 1px solid #c49e57; border-radius: 7px; background: #ffe3a8; }
+  & .pocket-view-switch button { min-height: 44px; border: 0; border-radius: 6px; padding: 4px 7px; background: transparent; color: #503d1f; font-size: 12px; }
+  & .pocket-view-switch [aria-pressed='true'] { background: #725018; color: white; }
+  & .pocket-add { display: grid; place-items: center; min-width: 44px; min-height: 44px; background: var(--journey-surface); color: var(--journey-ink); border: 1.5px solid; border-radius: 11px; }
+  & .journey-shell .timeline-screen .journey-day-rail { border-inline: var(--pocket-frame); padding-inline: 6px; background: var(--st-page); }
+  & .journey-shell .timeline-screen .journey-day { min-height: 48px; flex-basis: 44px; }
+  & .timeline-screen .journey-day :is(.journey-day-region,small) { display: none; }
+  & .timeline-screen .planner-day-dot { border: 2px solid #383335; background: var(--st-page); }
+  & .timeline-screen .journey-day[aria-pressed='true'] .planner-day-dot { background: var(--planner-green); }
+  & .planner-day-marker { color: var(--journey-ink); }
+  & .planner-schedule-pane { min-width: 0; }
+  & .timeline-screen:is([data-planner-view='schedule'],[data-planner-view='calendar']) .planner-schedule-pane { border: var(--pocket-frame); border-top: 0; border-radius: 0 0 16px 16px; padding: 8px; }
+  & .journey-shell .timeline-day { border: 0 !important; background: transparent !important; box-shadow: none !important; }
+  & .journey-shell .timeline-day-head { background: transparent !important; padding: 6px 4px !important; }
+  & .journey-shell .timeline-day-status { flex-direction: row !important; flex-wrap: wrap; align-items: center !important; gap: 3px !important; }
+  & .journey-shell .timeline-day-status > span:not(.timeline-day-tools) { display: none; }
+  & .journey-shell .journey-planner-actions { margin: 0; }
+  & .journey-shell .timeline-rail { position: relative; padding: 5px 2px !important; gap: 7px; }
+  & :is(.timeline-event,.planner-time-block) { --stripe: #efc45f; }
+  & :is(.timeline-event,.planner-time-block)[data-category='food'] { --stripe: #ed968a; }
+  & :is(.timeline-event,.planner-time-block)[data-category='lodging'] { --stripe: #94c6df; }
+  & :is(.timeline-event,.planner-time-block):is([data-category='transport'],[data-category='flight']) { --stripe: #a8c990; }
+  & .schedule-stop-card { border: var(--pocket-frame); border-left: 5px solid var(--stripe); border-radius: 12px; }
+  & .timeline-event.is-selected .schedule-stop-card { background: #f0e6ed; border-color: #986c89; border-left-color: var(--stripe); }
+  & .pocket-category { display: inline-block; border-radius: 6px; padding: 2px 7px; background: var(--stripe); color: #302c28; font-size: 11px; }
+  & .planner-select-place, & .planner-time-block { touch-action: manipulation; }
+  & .planner-time-block { border: 1px solid #d4cfc8; border-left: 5px solid var(--stripe); background: var(--journey-surface); border-radius: 4px; }
+  & .planner-time-block.is-selected { background: #f0e6ed; }
+  & .pocket-legend { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 5px 10px; padding: 10px 2px 4px; border-top: 1px solid var(--journey-rule); font-size: 11px; }
+  & .pocket-legend span::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: #efc45f; }
+  & .pocket-legend span:nth-child(2)::before { background: #ed968a; }
+  & .pocket-legend span:nth-child(3)::before { background: #94c6df; }
+  & .pocket-legend span:nth-child(4)::before { background: #a8c990; }
+  & .pocket-legend small { color: var(--journey-muted); font-size: inherit; }
+  & :is(.planner-map,.journey-check-group,.planner-capture-panel,.planner-scan-methods) { border: var(--pocket-frame); border-radius: 15px; overflow: hidden; }
+  & .planner-map { margin-top: 12px; }
+  & .planner-tools-handle { background: #315749; color: #fff; border-radius: 16px 16px 0 0; }
+  & .planner-tools-sheet { background: #fffdfb; border: var(--pocket-frame); border-bottom: 0; }
+  & .planner-sync-status { background: #dae7d0; }
+  & .planner-tools-grid button { background: #fff; border: 1px solid #c9c6c1; border-radius: 7px; }
+  & .planner-tools-sheet header, & .planner-tools-grid, & .planner-sync-status { margin-bottom: 6px; }
+}
+@media (min-width: 1000px) {
+  html[data-app-style='pocket_planner'] .timeline-screen :is(.pocket-calendar-header,.journey-day-rail) { width: calc((100% - 24px) * .607843); }
+}
+
+html:root[data-app-style='alpine_postcard'][data-app-theme][data-color-scheme] {
+  --st-page: linear-gradient(170deg,#fff 12%,#edf4f5 70%,#e4eef0);
+  --st-btn-radius: 20px;
+  --st-radius: 14px;
+  --planner-warm: #e9f2ec;
+  --planner-green: #d7e9e2;
+  --planner-blue: #e1eef3;
+  --planner-outline: #b4c8cb;
+  & .journey-shell :is(.journey-topbar,.journey-mobile-nav,.journey-desktop-rail) { background: #dceaf0 !important; border-color: #c3d4d8 !important; }
+  & .journey-shell :is(.journey-mobile-nav,.journey-rail-items) button.active { background: #497586 !important; color: #fff !important; border-radius: 24px !important; }
+  & .journey-cover { border-radius: 12px; }
+  & .journey-shell .journey-cover img { display: block; height: auto !important; aspect-ratio: 2.94; object-fit: cover; }
+  & .journey-shell .journey-itinerary-heading { border-bottom: 1px solid #98b8af; padding-bottom: 10px; }
+  & .journey-hero-heading h2, & .journey-itinerary-heading h2 { font-weight: 550 !important; letter-spacing: .015em; }
+  & .journey-departure { background: #e6f0ea; padding: 8px 14px; }
+  & .journey-shell .journey-day-rail { background: transparent; gap: 5px; }
+  & .journey-shell .journey-day { border-radius: 10px; border: 1px solid #cad8d7; background: #eff4f2; }
+  & .journey-shell .journey-day[aria-pressed='true'] { color: #fff; background: #497586; }
+  & .journey-shell .timeline-screen .journey-day[aria-pressed='true'] strong { background: transparent; }
+  & .timeline-screen .journey-day :is(.planner-day-marker,.planner-day-dot), & .timeline-screen .journey-day::before { display: none; }
+  & .journey-shell .timeline-day { border-color: #cedbda !important; }
+  & .schedule-stop-card { border: 0; border-bottom: 1px solid #d5dfdc; border-radius: 0; }
+  & .timeline-event.is-selected .schedule-stop-card { outline-color: #8bb1ad; }
+
+}
+.theme-style-preview[data-preview-style='pocket_planner'] { border: 2px solid #383335; border-radius: 9px; background: linear-gradient(#f4c86d 28%, #fcf9f4 28%); }
+.theme-style-preview[data-preview-style='alpine_postcard'] { border-radius: 9px; background: #d8e8eb url('../assets/journey/southern-alps.webp') center / cover; }
+.theme-style-preview[data-preview-style='alpine_postcard'] b { background: #f7fafae8; border-radius: 4px; padding-inline: 4px; }
+
+.pocket-trip-summary { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 2px 0 16px; }
+.pocket-trip-summary h2 { font-size: clamp(22px,4vw,32px); margin: 3px 0 0; line-height: 1.22; overflow-wrap: anywhere; }
+.pocket-trip-summary > div:last-child { flex: none; border-left: 1px solid var(--journey-rule); padding-inline: 12px; }
+.pocket-trip-summary strong, .pocket-trip-summary small { display: block; }
+.pocket-trip-summary strong { font-size: 22px; }
+.pocket-trip-summary small { color: var(--journey-muted); font-size: 11px; }
+html[data-app-style='pocket_planner'] .planner-tools-handle, .pocket-sheet-grip { touch-action: none; }
+html[data-app-style='pocket_planner'] .planner-tools-sheet::before { display: none; }
+.pocket-sheet-grip { display: grid; place-items: center; width: 100%; height: 44px; border: 0; background: none; }
+.pocket-sheet-grip span { width: 42px; height: 5px; border-radius: 5px; background: #89988f; }
+
+html:root[data-app-style='alpine_postcard'] .journey-overview { display: flex; flex-direction: column; }
+html:root[data-app-style='alpine_postcard'] .journey-overview > .journey-cover { order: -1; margin-bottom: 12px; }
+html:root[data-app-style='alpine_postcard'][data-app-theme] .journey-shell .timeline-screen[data-planner-view='schedule'] {
+  & .journey-itinerary-heading { order: -3; }
+  & .journey-day-rail { order: -2; position: static; padding-block: 8px; }
+  & .journey-day {
+    flex-basis: 82px; padding: 6px; background: linear-gradient(#f4f9fae8,#e2efebdd), url('../assets/journey/lakeside-town.webp') center / cover;
+  }
+  & .journey-day[aria-pressed='true'] { background: linear-gradient(#3e7186e8,#467382e8), url('../assets/journey/lakeside-town.webp') center / cover; }
+  & .journey-planner-cover { order: -1; display: block; }
+}
+
+html:root[data-app-style='pocket_planner'][data-app-theme] {
+  & .journey-shell .timeline-screen[data-planner-view='calendar'] .journey-day-rail {
+    display: flex; padding: 32px 6px 3px; gap: 0; overflow-x: auto; scroll-snap-type: x proximity;
+  }
+  & .journey-shell .timeline-screen .journey-day { flex: 1 0 42px; }
+  & .timeline-screen .journey-day .planner-day-marker { display: block; width: 36px; left: calc(50% - 18px); top: -31px; }
+  & .planner-day-marker img { width: 100%; height: 28px; object-fit: contain; }
+  & .timeline-screen[data-planner-view='calendar'] .journey-day :is(.planner-day-dot,.planner-day-marker),
+  & .timeline-screen[data-planner-view='calendar'] .journey-day::before { display: block; }
+  & .timeline-day-reveal { max-height: clamp(250px, 53dvh, 620px); overflow-y: auto; scrollbar-width: thin; }
+  & .planner-grid-scroll { max-height: clamp(250px, 53dvh, 620px); }
+  & .planner-tools-backdrop { background: rgb(20 32 24 / .09); }
+  & .planner-tools-sheet { width: min(100% - 12px, 540px); margin-bottom: max(5px,env(safe-area-inset-bottom)); border: 1px solid #c8c6bf; border-radius: 12px; padding: 0 10px 10px; }
+  & .planner-tools-sheet > header { margin: 0 0 4px; }
+  & .planner-tools-sheet > header h2 { font-size: 16px; }
+  & .pocket-sheet-grip { height: 32px; }
+  & .planner-tools-grid button, & .planner-sync-status { min-height: 44px; padding: 6px 9px; }
+  & .planner-tools-shortcuts button { min-height: 44px; }
+}
+
+html:root[data-app-style='alpine_postcard'] {
+  & .journey-checklist > header::after, & .journey-game > header::after {
+    content: ''; display: block; flex: 0 0 100%; width: 100%; margin-top: 8px;
+    border-radius: 12px; background: #e4efeb center / cover no-repeat;
+  }
+  & :is(.journey-checklist,.journey-game) > header { flex-wrap: wrap; }
+  & .journey-checklist > header::after { aspect-ratio: 2.5; background-image: url('../assets/journey/postcard-packing.webp'); }
+  & .journey-game > header::after { height: clamp(115px, 22dvh, 185px); background: #e3f0ee url('../assets/journey/postcard-sheep.webp') center / contain no-repeat; }
+  & .journey-stay-date { background: #b9d5df url('../assets/journey/postcard-lodge.webp') center / cover; }
+  & .journey-stay-date :is(span,small,svg) { background: #f6faf4eb; color: #344b50; padding-inline: 3px; border-radius: 3px; }
+}
+
+html:root[data-app-style='pocket_planner'][data-app-theme] .journey-shell .journey-calendar {
+  & .planner-grid-heading { height: 100px; padding: 2px 3px; align-items: center; }
+  & .planner-grid-heading .journey-day { flex: none; width: 100%; padding: 23px 0 0; position: relative; min-height: 62px; touch-action: manipulation; }
+  & .journey-day .planner-day-marker { top: -2px; }
+  & .journey-day .planner-day-dot, & .journey-day::before { display: none; }
+  & .journey-day strong { line-height: 21px; font-size: 17px; }
+  & .journey-day > span:not(.planner-day-marker,.planner-day-dot,.journey-day-region) { font-size: 11px; }
+}
+
+.postcard-flight-art { display: block; margin-bottom: 14px; }
+.postcard-flight-art img { display: block; width: 100%; height: auto; border-radius: 10px; }
+.postcard-lodging-icon { object-fit: cover; border-radius: 3px; }
+html:root[data-app-style='alpine_postcard'] .journey-stay-date {
+  min-height: 124px; justify-content: flex-end; padding: 0;
+  background: var(--journey-tint); overflow: hidden; gap: 0;
+}
+html:root[data-app-style='alpine_postcard'] .journey-stay-date::before {
+  content: ''; width: 100%; height: 78px; background: url('../assets/journey/postcard-lodge.webp') center 55% / cover;
+}
+html:root[data-app-style='alpine_postcard'] .journey-stay-date svg { display: none; }
+html:root[data-app-style='alpine_postcard'] .journey-stay-date :is(span,small) { width: 100%; text-align: center; }
+html:root[data-app-style='alpine_postcard'] .journey-stay-date small { padding-bottom: 3px; }
+html:root[data-app-style='pocket_planner'] .journey-shell .journey-check-group[data-group='3'] h3 { background: #b3ce9f; }
+html:root[data-app-style='pocket_planner'] .journey-shell .journey-check-group[data-group='4'] h3 { background: #d9c9e6; }
+html:root[data-app-style='pocket_planner'] .journey-shell .journey-check-group[data-group='5'] h3 { background: #ebbd9d; }
+html:root[data-app-style='pocket_planner'] .journey-shell .journey-check-group[data-group='2'] h3 { background: #ec9e92; }

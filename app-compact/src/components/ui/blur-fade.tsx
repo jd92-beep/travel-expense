@@ -57,11 +57,11 @@ export function BlurFade({
   // If IO hasn't fired shortly after mount, force the reveal.
   const [forceVisible, setForceVisible] = useState(false)
   useEffect(() => {
-    if (!inView || inViewResult || forceVisible) return
+    if (reducedMotion || !inView || inViewResult || forceVisible) return
     const t = window.setTimeout(() => setForceVisible(true), 700)
     return () => window.clearTimeout(t)
-  }, [inView, inViewResult, forceVisible])
-  const isInView = !inView || inViewResult || forceVisible
+  }, [reducedMotion, inView, inViewResult, forceVisible])
+  const isInView = reducedMotion || !inView || inViewResult || forceVisible
 
   const defaultVariants: Variants = {
     hidden: {
@@ -91,13 +91,13 @@ export function BlurFade({
     <AnimatePresence>
       <motion.div
         ref={ref}
-        initial="hidden"
+        initial={reducedMotion ? false : "hidden"}
         animate={isInView ? "visible" : "hidden"}
-        exit="hidden"
+        exit={reducedMotion ? undefined : "hidden"}
         variants={combinedVariants}
         transition={{
-          delay: 0.04 + delay,
-          duration: reducedMotion ? 0.01 : duration,
+          delay: reducedMotion ? 0 : 0.04 + delay,
+          duration: reducedMotion ? 0 : duration,
           ease: "easeOut",
           ...(shouldTransitionFilter && !reducedMotion && !disableHeavy ? { filter: { duration } } : {}),
         }}

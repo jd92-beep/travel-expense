@@ -25,7 +25,7 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   const nav = page.getByLabel('主要分頁');
   await nav.getByRole('button', { name: '行程' }).click();
-  await expect(page.locator('.timeline-command')).toBeVisible();
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
   const firstMap = page.getByRole('link', { name: '地圖' }).first();
   await expect(firstMap).toBeVisible();
   await expect(firstMap).toHaveAttribute('href', /maps|maps\.apple/);
@@ -41,12 +41,14 @@ test('Timeline edit, reset, maps, and loose receipt flows', async ({ page }) => 
   await page.getByRole('button', { name: '儲存' }).click();
   const editedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
   await expect(editedEvent).toBeVisible();
-  await expect(editedEvent.locator('.timeline-time')).toContainText('09:15 – 10:45');
+  await expect(editedEvent.locator('.timeline-time')).toContainText('09:15');
+  await expect(editedEvent.locator('.schedule-time-detail')).toContainText('10:45');
   await expect(editedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await page.reload();
   const reloadedEditedEvent = page.locator('.timeline-event').filter({ hasText: 'M6 Edited Spot' });
   await expect(reloadedEditedEvent).toBeVisible();
-  await expect(reloadedEditedEvent.locator('.timeline-time')).toContainText('09:15 – 10:45');
+  await expect(reloadedEditedEvent.locator('.timeline-time')).toContainText('09:15');
+  await expect(reloadedEditedEvent.locator('.schedule-time-detail')).toContainText('10:45');
   await expect(reloadedEditedEvent).toHaveAttribute('data-spot-key', stableSpotKey || '');
   await reloadedEditedEvent.getByRole('button', { name: '編輯' }).click();
   page.once('dialog', (dialog) => dialog.accept());
@@ -97,8 +99,8 @@ test('Timeline map links reject unsafe imported URLs and use Android intent fall
     }));
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-command')).toBeVisible();
-  const hrefs = await page.getByRole('link', { name: '地圖' }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
+  const hrefs = await page.locator('.timeline-route-actions').getByRole('link', { name: '地圖', exact:true }).evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
   expect(hrefs.join(' ')).not.toMatch(/javascript:|evil\.example/i);
   expect(hrefs).toHaveLength(3);
   for (const href of hrefs) expect(href).toMatch(/^intent:\/\/www\.google\.com\/maps\/search\//);
@@ -133,29 +135,30 @@ test('Timeline highlights live, passed, and future itinerary spots', async ({ pa
           { time: '09:00', name: 'Breakfast Stop', type: 'food' },
           { time: '12:00', name: 'Lunch Stop', type: 'food' },
           { time: '18:00', name: 'Dinner Stop', type: 'food' },
+          { time: '', name: 'Untimed Stop', type: 'other' },
         ],
       }],
       receipts: [],
     }));
   }, fixed);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-command')).toBeVisible();
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
   await expect(page.locator('.timeline-event.is-passed')).toContainText('Breakfast Stop');
   await expect(page.locator('.timeline-event.is-passed')).toContainText('完成');
+  await expect(page.locator('.timeline-event.is-untimed')).toContainText('Untimed Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Lunch Stop');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Now');
   await expect(page.locator('.timeline-event.is-future')).toContainText('Dinner Stop');
   await expect(page.locator('.timeline-event.is-future')).toContainText('即將');
-  await expect(page.locator('.timeline-live-card')).toContainText('12:30');
-  await expect(page.locator('.timeline-live-card')).toContainText('Lunch Stop');
-  await expect(page.locator('.timeline-live-card')).toContainText('Next · 18:00 Dinner Stop');
+  await expect(page.getByRole('region', {name:'目前行程'})).toContainText('12:30');
+  await expect(page.getByRole('region', {name:'目前行程'})).toContainText('Lunch Stop');
+  await expect(page.getByRole('region', {name:'目前行程'})).toContainText('Next · 18:00 Dinner Stop');
   await expect(page.locator('.timeline-route-actions').first()).toBeVisible();
   await expect(page.locator('.timeline-route-actions').first().getByRole('link', { name: '地圖' })).toBeVisible();
-  const liveGlint = await page.locator('.timeline-event.is-live').evaluate((node) => getComputedStyle(node, '::after').animationName);
-  expect(liveGlint).toContain('route-glint');
+  await expect(page.locator('.timeline-event.is-live .schedule-stop-node')).toBeVisible();
 });
 
-test('Timeline tab entry scrolls to the current live itinerary spot', async ({ page }) => {
+test('Timeline can jump to the live spot on request', async ({ page }) => {
   const fixed = new Date('2026-05-09T14:10:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -204,6 +207,8 @@ test('Timeline tab entry scrolls to the current live itinerary spot', async ({ p
   await page.locator('.app-floating-dock-mobile').getByRole('button', { name: '行程' }).click();
   const liveSpot = page.locator('.timeline-event.is-live').filter({ hasText: 'Live Garden Spot' });
   await expect(liveSpot).toBeVisible();
+  await page.getByRole('button', { name:'查看目前行程' }).click();
+  await expect(liveSpot).toBeInViewport();
   await page.waitForTimeout(500);
 
   const metrics = await liveSpot.evaluate((node) => {
@@ -253,37 +258,11 @@ test('Timeline command card stays compact and day header shows one date', async 
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-command')).toBeVisible();
-  const command = page.locator('.timeline-command');
-  await expect(command).not.toContainText('📍');
-  await expect(page.locator('.timeline-command-title-row')).toBeVisible();
-  await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
-  const commandAtmosphere = await command.evaluate((node) => getComputedStyle(node).backgroundImage);
-  expect(commandAtmosphere).toContain('travel-ai-atlas');
-  await page.locator('.timeline-command').evaluate(async node => { await document.fonts.ready; await Promise.all(node.getAnimations({ subtree: true }).map(a => a.finished.catch(() => {}))); });
-  const commandMetrics = await page.evaluate(() => {
-    const card = document.querySelector('.timeline-command')?.getBoundingClientRect();
-    const firstDay = document.querySelector('.timeline-day')?.getBoundingClientRect();
-    const screen = document.querySelector('.timeline-screen')?.getBoundingClientRect();
-    const title = document.querySelector('.timeline-command-title')?.getBoundingClientRect();
-    const days = document.querySelector('.timeline-trip-days')?.getBoundingClientRect();
-    return {
-      height: card?.height || 0,
-      topGap: card && screen ? card.top - screen.top : 0,
-      lowerGap: card && firstDay ? firstDay.top - card.bottom : 0,
-      firstDayTop: firstDay?.top || 0,
-      titleCenter: title ? title.top + title.height / 2 : 0,
-      daysCenter: days ? days.top + days.height / 2 : 0,
-      titleRight: title?.right || 0,
-      daysLeft: days?.left || 0,
-    };
-  });
-  expect(commandMetrics.height, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(130);
-  expect(commandMetrics.topGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(18);
-  expect(commandMetrics.lowerGap, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(16);
-  expect(commandMetrics.firstDayTop, JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(300);
-  expect(Math.abs(commandMetrics.titleCenter - commandMetrics.daysCenter), JSON.stringify(commandMetrics, null, 2)).toBeLessThanOrEqual(7);
-  expect(commandMetrics.daysLeft, JSON.stringify(commandMetrics, null, 2)).toBeGreaterThan(commandMetrics.titleRight);
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
+  const dates = page.getByRole('group', { name: '選擇行程日子' });
+  await expect(dates.getByRole('button')).toHaveCount(6);
+  expect((await dates.boundingBox()).height).toBeLessThanOrEqual(130);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await expect(page.getByLabel('Travel day widgets')).toHaveCount(0);
   await expect(page.getByLabel('Day readiness scores')).toHaveCount(0);
 
@@ -330,8 +309,9 @@ test('Timeline restores Nagoya canonical days and hides out-of-range scenery aft
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-command')).toBeVisible();
-  await expect(page.locator('.timeline-trip-days')).toHaveText('6日');
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
+  await expect(page.getByRole('group', {name:'選擇行程日子'}).getByRole('button')).toHaveCount(6);
+  await page.getByRole('button', {name:'顯示全部日子'}).click();
   await expect(page.locator('.timeline-day')).toHaveCount(6);
   await expect(page.locator('.timeline-day-date-primary')).toHaveText([
     '2026-04-20',
@@ -381,18 +361,19 @@ test('Timeline preserves every calendar day for an ordinary partial itinerary', 
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-trip-days')).toHaveText('3日');
+  await expect(page.getByRole('group', {name:'選擇行程日子'}).getByRole('button')).toHaveCount(3);
+  await page.getByRole('button', {name:'顯示全部日子'}).click();
   await expect(page.locator('.timeline-day')).toHaveCount(3);
   await expect(page.locator('.timeline-day-date-primary')).toHaveText([
     '2026-06-01',
     '2026-06-02',
     '2026-06-03',
   ]);
-  await expect(page.getByText('清水寺')).toBeVisible();
+  await expect(page.locator('.timeline-event').filter({hasText:'清水寺'})).toBeVisible();
   await expect(page.getByText('行程外景點')).toHaveCount(0);
 });
 
-test('Timeline mobile rail shines independently without covering compact itinerary cards', async ({ page }) => {
+test('Timeline mobile time labels and nodes sit to the left of each activity', async ({ page }) => {
   const fixed = new Date('2026-05-08T12:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -428,32 +409,14 @@ test('Timeline mobile rail shines independently without covering compact itinera
   }, fixed);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
-  await expect(page.locator('.timeline-command')).toBeVisible();
-  await expect(page.locator('.timeline-rail-beam')).toBeVisible();
-
-  const geometry = await page.evaluate(() => {
-    const railBeam = document.querySelector('.timeline-rail-beam')?.getBoundingClientRect();
-    const marker = document.querySelector('.timeline-now-marker')?.getBoundingClientRect();
-    const firstEvent = document.querySelector('.timeline-event')?.getBoundingClientRect();
-    const firstMain = document.querySelector('.timeline-main')?.getBoundingClientRect();
-    const eventHeights = Array.from(document.querySelectorAll('.timeline-event')).map((node) => Math.round(node.getBoundingClientRect().height));
-    return {
-      railBeam: railBeam && { right: railBeam.right },
-      marker: marker && { right: marker.right },
-      firstEvent: firstEvent && { left: firstEvent.left },
-      firstMain: firstMain && { left: firstMain.left },
-      eventHeights,
-    };
-  });
-
-  expect(geometry.railBeam).toBeTruthy();
-  expect(geometry.marker).toBeTruthy();
-  expect(geometry.firstEvent).toBeTruthy();
-  expect(geometry.firstMain).toBeTruthy();
-  expect(geometry.railBeam.right).toBeLessThanOrEqual(geometry.firstEvent.left - 8);
-  expect(geometry.marker.right).toBeLessThanOrEqual(geometry.firstEvent.left - 4);
-  expect(geometry.firstMain.left).toBeGreaterThan(geometry.firstEvent.left + 74);
-  expect(Math.max(...geometry.eventHeights), JSON.stringify(geometry, null, 2)).toBeLessThanOrEqual(116);
+  await expect(page.getByRole('group', {name:'選擇行程日子'})).toBeVisible();
+  for (const row of await page.locator('.timeline-event').all()) {
+    const time = await row.locator('.timeline-time').boundingBox();
+    const node = await row.locator('.schedule-stop-node').boundingBox();
+    const card = await row.locator('.schedule-stop-card').boundingBox();
+    expect(time.x + time.width).toBeLessThanOrEqual(node.x + 1);
+    expect(node.x + node.width).toBeLessThanOrEqual(card.x + 1);
+  }
 });
 
 test('Timeline rail progress follows the current itinerary spot instead of the whole day clock', async ({ page }) => {
@@ -503,14 +466,14 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.getByRole('heading', { name: 'Current Day' })).toBeVisible();
   const todayRail = page.locator('.timeline-rail.is-today');
-  await expect(todayRail.locator('.timeline-now-marker')).toContainText('09:30');
+  await expect(page.getByRole('region', {name:'目前行程'})).toContainText('09:30');
   await expect(page.locator('.timeline-event.is-live')).toContainText('Temple Gate');
 
   const railMetrics = await todayRail.evaluate((rail) => {
     const style = getComputedStyle(rail);
-    const marker = rail.querySelector('.timeline-now-marker')?.getBoundingClientRect();
+    const marker = rail.querySelector('.timeline-event.is-live .schedule-stop-node')?.getBoundingClientRect();
     const events = Array.from(rail.querySelectorAll('.timeline-event')).map((node) => node.getBoundingClientRect());
-    const live = rail.querySelector('.timeline-event.is-live')?.getBoundingClientRect();
+    const live = rail.querySelector('.timeline-event.is-live .timeline-time time')?.getBoundingClientRect();
     return {
       progress: Number(style.getPropertyValue('--timeline-progress')),
       markerCenterY: marker ? marker.top + marker.height / 2 : null,
@@ -525,7 +488,7 @@ test('Timeline rail progress follows the current itinerary spot instead of the w
   expect(Math.abs((railMetrics.markerCenterY || 0) - (railMetrics.liveCenterY || 0)), JSON.stringify(railMetrics, null, 2)).toBeLessThan(34);
 });
 
-test('Timeline rail uses a lighter inactive colour when today is outside the trip dates', async ({ page }) => {
+test('Timeline rail marks past stops when today is outside the trip dates', async ({ page }) => {
   const fixed = new Date('2026-05-12T09:30:00+09:00').valueOf();
   await page.addInitScript((fixedNow) => {
     window.__disable_supabase_configured = true;
@@ -565,29 +528,12 @@ test('Timeline rail uses a lighter inactive colour when today is outside the tri
   }, fixed);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
+  await page.getByRole('button', {name:'顯示全部日子'}).click();
   await expect(page.getByRole('heading', { name: 'Past Day Two' })).toBeVisible();
   await expect(page.locator('.timeline-rail.is-today')).toHaveCount(0);
   await expect(page.locator('.timeline-now-marker')).toHaveCount(0);
   await expect(page.locator('.timeline-rail.is-outside-trip')).toHaveCount(2);
 
-  const inactiveRail = await page.locator('.timeline-rail.is-outside-trip').first().evaluate((rail) => {
-    const fill = rail.querySelector('.timeline-rail-fill');
-    const track = rail.querySelector('.timeline-rail-track');
-    const sweep = rail.querySelector('.timeline-rail-sweep');
-    return {
-      progress: Number(getComputedStyle(rail).getPropertyValue('--timeline-progress')),
-      fillBackground: fill ? getComputedStyle(fill).backgroundImage : '',
-      fillOpacity: fill ? Number(getComputedStyle(fill).opacity) : 1,
-      trackBackground: track ? getComputedStyle(track).backgroundImage : '',
-      sweepOpacity: sweep ? Number(getComputedStyle(sweep).opacity) : 1,
-    };
-  });
-
-  expect(inactiveRail.progress).toBe(1);
-  expect(inactiveRail.fillBackground).toMatch(/194,\s*59,\s*94/);
-  expect(inactiveRail.fillBackground).toMatch(/212,\s*168,\s*67/);
-  expect(inactiveRail.fillBackground).toMatch(/45,\s*110,\s*72/);
-  expect(inactiveRail.trackBackground).toMatch(/194,\s*59,\s*94/);
-  expect(inactiveRail.fillOpacity).toBeLessThan(0.4);
-  expect(inactiveRail.sweepOpacity).toBeLessThan(0.2);
+  await expect(page.locator('.timeline-event.is-live')).toHaveCount(0);
+  await expect(page.locator('.timeline-event.is-passed .schedule-stop-node')).toHaveCount(2);
 });

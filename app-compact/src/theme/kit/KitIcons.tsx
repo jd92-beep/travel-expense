@@ -129,7 +129,7 @@ const CAT_GLYPHS = {
   transport: { body: 'M6 4h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z', detail: 'M4 11h16M8 21l2-3M16 21l-2-3', face: [12, 7.6] },
   food: { body: 'M3.5 11h17a8.5 8.5 0 0 1-17 0z', detail: 'M9 3.5c-1 1.5 1 2.5 0 4.5M13 3.5c-1 1.5 1 2.5 0 4.5M7.5 21.5h9', face: [12, 14.5] },
   shopping: { body: 'M5 8h14l-1 13H6z', detail: 'M9 8V6a3 3 0 0 1 6 0v2', face: [12, 14] },
-  lodging: { body: 'M3 12h14a4 4 0 0 1 4 4v3H3z', detail: 'M3 6.5V20.5M21 19v1.5M7 9.5h.5', face: [11, 15.6] },
+  lodging: { body: 'M3 9 12 3l9 6v12H3z', detail: 'M7 11h2m6 0h2m-10 4h2m6 0h2m-6 6v-4h2v4', face: [12, 11] },
   ticket: { body: 'M3 7h18v3a2 2 0 0 0 0 4v3H3v-3a2 2 0 0 0 0-4z', detail: 'M15 7.5v2M15 11v2M15 14.5v2', face: [9, 12] },
   pin: { body: 'M12 21.5s-7-6.2-7-11.7a7 7 0 0 1 14 0c0 5.5-7 11.7-7 11.7z', detail: 'M12 7.3a2.4 2.4 0 1 0 0 4.8 2.4 2.4 0 0 0 0-4.8z', face: [12, 9.8] },
   medicine: { body: 'M8 7h8a5 5 0 0 1 0 10H8A5 5 0 0 1 8 7z', detail: 'M12 7v10', face: [8.2, 12] },
@@ -202,18 +202,18 @@ const CAT_SPRITES: Record<keyof typeof CAT_GLYPHS, string[]> = {
     '............',
   ],
   lodging: [
-    '............',
-    '#...........',
-    '#.##........',
-    '#.##........',
-    '#.....#####.',
-    '###########+',
-    '#+++++++++++',
-    '#+++++++++++',
-    '############',
-    '#..........#',
-    '#..........#',
-    '............',
+    '.....##.....',
+    '....#++#....',
+    '...#++++#...',
+    '..#++++++#..',
+    '.##########.',
+    '..#++++++#..',
+    '..#+#++#+#..',
+    '..#++++++#..',
+    '..#+#++#+#..',
+    '..#++##++#..',
+    '..#++##++#..',
+    '.##########.',
   ],
   ticket: [
     '............',
@@ -430,6 +430,12 @@ const CREST_SCALE = 'translate(12 12) scale(.68) translate(-12 -12)';
 function KitGlyph({ kit, g, sprite, badge, size }: { kit: StyleThemeKey; g: Glyph; sprite: string[]; badge: boolean; size: number }) {
   const lines = <><path d={g.body} /><path d={g.detail || ''} /></>;
   switch (kit) {
+    case 'night_ledger':
+    case 'harbor_blueprint':
+    case 'pocket_planner':
+    case 'alpine_postcard':
+    case 'sunset_terrace':
+      return <SVG kit={kit} size={size}><g stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{lines}</g></SVG>;
     case 'sketch_notebook':
       return (
         <SVG kit="sketch" size={size}>

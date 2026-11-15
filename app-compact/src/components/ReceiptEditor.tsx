@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { CATEGORIES, PAYMENTS } from '../lib/constants';
 import { currencyPrefix, perHkdForCurrency, SUPPORTED_CURRENCIES } from '../lib/currency';
 import { canBePrivateReceipt, getItinerary, getPersons, safePhotoUrl, todayForReceipts, compressPhoto } from '../lib/domain';
@@ -8,12 +9,17 @@ import { ReceiptPhotoModal } from './ReceiptPhotoModal';
 import { GradientButton } from './ui/gradient-button';
 import { SegmentedControl } from './ui';
 import { formatRate, knownLiveRate, settingsFixedRate } from '../lib/rateMode';
+import { useModalAccessibility } from '../lib/useModalAccessibility';
+import { useModalOpenClass } from '../lib/useModalOpenClass';
 
 const newId = () => `manual_${Date.now()}_${(typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(16).slice(2)}`;
 const MAX_RECEIPT_AMOUNT = 1_000_000_000;
 
-function validAmount(value: unknown): number | null {
-  const amount = Number(value);
+function validAmount(value: string): number | null {
+  const raw = value.trim();
+  // Accept complete decimal amounts and conventional thousands grouping, never a numeric prefix.
+  if (!/^(?:(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d*)?|\.\d+)$/.test(raw)) return null;
+  const amount = Number(raw.replace(/,/g, ''));
   if (!Number.isFinite(amount) || amount < 0 || amount > MAX_RECEIPT_AMOUNT) return null;
   return amount;
 }
@@ -74,13 +80,14 @@ function formatItemLine(item: { desc: string; amount: number; qty?: number }, pr
 function parseItemLine(
   text: string,
   prev: { desc: string; amount: number; qty?: number },
+  prefix: string,
   hkdOf: (n: number) => number,
   fromHkd: (n: number) => number,
 ): { desc: string; amount: number; qty?: number } {
   const segments = String(text || '').split(/\s{2,}|\t/).map((seg) => seg.trim()).filter(Boolean);
   if (!segments.length) return { ...prev, desc: '' };
   let desc = segments[0];
-  let qty = prev.qty;
+  let qty: number | undefined;
   const qtyMatch = desc.match(/^(.*?)\s+[x×]\s*(\d+)$/);
   if (qtyMatch) {
     desc = qtyMatch[1].trim();
@@ -93,12 +100,12 @@ function parseItemLine(
     if (!digits) continue;
     const value = Number(digits);
     if (!Number.isFinite(value) || value < 0) continue;
-    if (/HK/i.test(seg)) hkdAmount = value;
+    if (/HK/i.test(seg) && prefix !== 'HK$') hkdAmount = value;
     else if (destAmount == null) destAmount = value;
     else if (hkdAmount == null) hkdAmount = value;
   }
   let amount = prev.amount;
-  const destChanged = destAmount != null && Math.round(destAmount) !== Math.round(prev.amount);
+  const destChanged = destAmount != null && destAmount !== prev.amount;
   const hkdChanged = hkdAmount != null && Math.abs(hkdAmount - hkdOf(prev.amount)) > 0.01;
   if (destChanged) amount = Math.min(destAmount as number, MAX_RECEIPT_AMOUNT);
   else if (hkdChanged) amount = Math.min(fromHkd(hkdAmount as number), MAX_RECEIPT_AMOUNT);
@@ -129,8 +136,17 @@ function ItemLineInput({ item, prefix, hkdOf, fromHkd, onCommit, placeholder, ar
       aria-label={ariaLabel}
       disabled={disabled}
       onChange={(e) => setRaw(e.target.value)}
+      onKeyDown={(event) => {
+        // Enter submits without blurring; commit the visible item before the form reads it.
+        if (event.key === 'Enter' && !event.nativeEvent.isComposing && raw != null) {
+          flushSync(() => {
+            onCommit(parseItemLine(raw, item, prefix, hkdOf, fromHkd));
+            setRaw(null);
+          });
+        }
+      }}
       onBlur={() => {
-        if (raw != null) onCommit(parseItemLine(raw, item, hkdOf, fromHkd));
+        if (raw != null) onCommit(parseItemLine(raw, item, prefix, hkdOf, fromHkd));
         setRaw(null);
       }}
     />
@@ -185,8 +201,25 @@ export function ReceiptEditor({
   const mountedRef = useRef(true);
   const [viewPhoto, setViewPhoto] = useState<Receipt | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [draft, setDraft] = useState<Receipt>(() => (receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
+  const editorRef = useModalAccessibility(!viewPhoto && !showDeleteConfirm, onCancel);
+  const deleteRef = useModalAccessibility(showDeleteConfirm, () => setShowDeleteConfirm(false));
+  const dateRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  const rateRef = useRef<HTMLInputElement>(null);
+  const [amountTouched, setAmountTouched] = useState(false);
+  const [dateTouched, setDateTouched] = useState(false);
+  const [rateTouched, setRateTouched] = useState(false);
+  useModalOpenClass(true);
+  const createDraft = (): Receipt => receipt ? {
+    ...receipt,
+    // New OCR/manual drafts belong to the trip where they were opened; legacy rows keep their fallback.
+    ...(!receipt.tripId && !state.receipts.some((r) => r.id === receipt.id)
+      ? { tripId: activeTrip(state).id, tripLinkSource: 'explicit' as const } : {}),
+    lineItems: hydratedLineItems(receipt),
+  } : {
     id: newId(),
+    tripId: activeTrip(state).id,
+    tripLinkSource: 'explicit',
     store: '',
     total: 0,
     date: todayForReceipts(state),
@@ -197,10 +230,16 @@ export function ReceiptEditor({
     personId: first?.id || '',
     splitMode: 'shared',
     createdAt: Date.now(),
-  });
-  // Keystroke string for 金額 — parsing every keystroke would turn "12." into 12 and make
-  // decimals untypeable. Committed into draft.total on blur / save (Dashboard budget pattern).
+  };
+  const [draft, setDraft] = useState<Receipt>(createDraft);
+  // Keep the typed amount intact until validation succeeds, including decimal separators.
   const [totalInput, setTotalInput] = useState<string>(() => (receipt?.total != null ? String(receipt.total) : ''));
+  const [rateInput, setRateInput] = useState(() => receipt?.exchangeRate != null ? String(receipt.exchangeRate) : '');
+  const parsedTotal = validAmount(totalInput);
+  const amountError = amountTouched && parsedTotal == null
+    ? (totalInput.trim() ? `請輸入 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString('en-US')} 嘅有效金額，例如 2,480.50。` : '請輸入金額；零元紀錄請填 0。')
+    : '';
+  const dateError = dateTouched && !draft.date ? '請選擇記帳日期，再儲存。' : '';
 
   useEffect(() => {
     mountedRef.current = true;
@@ -211,21 +250,13 @@ export function ReceiptEditor({
 
   useEffect(() => {
     setShowDeleteConfirm(false);
-    const nextDraft = (receipt ? { ...receipt, lineItems: hydratedLineItems(receipt) } : null) || {
-      id: newId(),
-      store: '',
-      total: 0,
-      date: todayForReceipts(state),
-      currency: currencyForDate(todayForReceipts(state)),
-      originalCurrency: currencyForDate(todayForReceipts(state)),
-      category: 'food',
-      payment: 'cash',
-      personId: first?.id || '',
-      splitMode: 'shared',
-      createdAt: Date.now(),
-    };
+    const nextDraft = createDraft();
     setDraft(nextDraft);
-    setTotalInput(nextDraft.total != null ? String(nextDraft.total) : '');
+    setTotalInput(receipt?.total != null ? String(receipt.total) : '');
+    setRateInput(receipt?.exchangeRate != null ? String(receipt.exchangeRate) : '');
+    setAmountTouched(false);
+    setDateTouched(false);
+    setRateTouched(false);
     // Only reset when the receipt ID changes, not on every AppState update or object reference change
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [receipt?.id]);
@@ -237,34 +268,45 @@ export function ReceiptEditor({
       // Follow the new day's currency (e.g. JP day → KR day) — but only when the user hasn't
       // manually diverged the currency from the previous day's. Never override a custom choice.
       if (!d.currency || d.currency === prevDayCurrency) {
-        return { ...d, [key]: value, currency: nextDayCurrency, originalCurrency: nextDayCurrency };
+        return { ...d, [key]: value, currency: nextDayCurrency, originalCurrency: nextDayCurrency,
+          ...(nextDayCurrency !== d.currency ? { exchangeRate: undefined, exchangeRatePinned: undefined } : {}) };
       }
     }
     return { ...d, [key]: value };
   });
   // 品項 rows: structured lineItems are the source of truth; legacy free-text receipts whose
   // itemsText can't be parsed keep the old textarea instead.
-  const itemRowsMode = Boolean(draft.lineItems?.length) || !draft.itemsText?.trim();
-  const [newItem, setNewItem] = useState<{ desc: string; amount: number }>({ desc: '', amount: 0 });
+  const itemRowsMode = draft.lineItems != null || !draft.itemsText?.trim();
+  const [newItem, setNewItem] = useState<{ desc: string; amount: number; qty?: number }>({ desc: '', amount: 0 });
   const editPrefix = currencyPrefix(draft.currency || draft.originalCurrency || currencyForDate(draft.date));
   const editCurrencyCode = String(draft.currency || draft.originalCurrency || currencyForDate(draft.date) || 'JPY').toUpperCase();
-  const currentPerHkd = Math.max(0.1, perHkdForCurrency(state, editCurrencyCode));
-  // 鎖定匯率：pinned 就用呢張單自己嘅匯率，否則跟返而家 app 嘅匯率。
-  const pinnedPerHkd = draft.exchangeRatePinned ? Number(draft.exchangeRate) : 0;
-  const editPerHkd = pinnedPerHkd > 0 && Number.isFinite(pinnedPerHkd) ? Math.max(0.1, pinnedPerHkd) : currentPerHkd;
+  const currentPerHkd = perHkdForCurrency(state, editCurrencyCode);
+  // Preserve the receipt's saved rate; only new/currency-changed records use today's setting.
+  const savedCurrency = String(receipt?.currency || receipt?.originalCurrency || '').toUpperCase();
+  const draftRate = Number(draft.exchangeRate);
+  const validDraftRate = Number.isFinite(draftRate) && draftRate > 0 ? draftRate : 0;
+  const savedPerHkd = editCurrencyCode === savedCurrency ? validDraftRate : 0;
+  const parsedRate = validAmount(rateInput);
+  const validPinnedRate = parsedRate != null && parsedRate > 0 && parsedRate <= 1_000_000 ? parsedRate : null;
+  const unsafeConversion = validPinnedRate != null && parsedTotal != null && !Number.isSafeInteger(Math.round(parsedTotal / validPinnedRate));
+  const invalidPinnedRate = !!draft.exchangeRatePinned && editCurrencyCode !== 'HKD' && (validPinnedRate == null || unsafeConversion);
+  const rateError = rateTouched && invalidPinnedRate
+    ? unsafeConversion ? '折算金額超出可處理範圍，請檢查匯率。' : '請輸入大於 0、最多 1,000,000 嘅有效匯率。'
+    : '';
+  const pinnedPerHkd = draft.exchangeRatePinned ? validPinnedRate : 0;
+  const editPerHkd = editCurrencyCode === 'HKD' ? 1 : pinnedPerHkd || savedPerHkd || currentPerHkd;
   const hkdOfItem = (amount: number) => Math.round((amount / editPerHkd) * 100) / 100;
   const fromHkdAmount = (hkdValue: number) => Math.round(hkdValue * editPerHkd * 100) / 100;
   const effectivePayerId = draft.personId || first?.id || '';
   const privacyEligible = canBePrivateReceipt({ splitMode: draft.splitMode || 'shared', beneficiaryId: draft.beneficiaryId, personId: effectivePayerId });
-  const parseAmountInput = (raw: string) => {
-    const parsed = parseFloat(raw);
-    return !isNaN(parsed) && parsed >= 0 ? Math.min(parsed, MAX_RECEIPT_AMOUNT) : 0;
-  };
-  // Parse the string draft into draft.total and return it for validation/save.
-  const commitTotalDraft = (): number => {
-    const parsed = parseAmountInput(totalInput);
-    setDraft((d) => ({ ...d, total: parsed }));
-    return parsed;
+  const validateDraft = (): number | null => {
+    setDateTouched(true);
+    setAmountTouched(true);
+    setRateTouched(true);
+    if (!draft.date) { dateRef.current?.focus(); return null; }
+    if (parsedTotal == null) { amountRef.current?.focus(); return null; }
+    if (invalidPinnedRate) { rateRef.current?.focus(); return null; }
+    return parsedTotal;
   };
   const updateItem = (idx: number, patch: Partial<ReceiptLineItem>) => setDraft((d) => ({
     ...d,
@@ -278,7 +320,7 @@ export function ReceiptEditor({
     if (!newItem.desc.trim() && !newItem.amount) return;
     setDraft((d) => ({
       ...d,
-      lineItems: [...(d.lineItems || []), { id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }],
+      lineItems: [...(d.lineItems || []), { ...newItem, id: newId(), desc: newItem.desc.trim() || '未命名品項' }],
     }));
     setNewItem({ desc: '', amount: 0 });
   };
@@ -321,21 +363,18 @@ export function ReceiptEditor({
 
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-editor-title" onClick={onCancel}>
+    <div ref={editorRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="receipt-editor-title" onClick={onCancel}>
       <form
-        className="modal sheet"
+        className="modal sheet receipt-editor-sheet"
         onClick={(event) => event.stopPropagation()}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!draft.date) { alert('收據冇日期，請確認記帳日期先儲存。'); return; }
-          const total = validAmount(commitTotalDraft());
-          if (total == null) {
-            alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
-            return;
-          }
+          if (readOnly) return;
+          const total = validateDraft();
+          if (total == null) return;
           // A filled 加新品項 row the user never confirmed with ＋ still counts.
           const pendingNewItem = (newItem.desc.trim() || newItem.amount)
-            ? [{ id: newId(), desc: newItem.desc.trim() || '未命名品項', amount: newItem.amount }]
+            ? [{ ...newItem, id: newId(), desc: newItem.desc.trim() || '未命名品項' }]
             : [];
           const finalLineItems = [...(draft.lineItems || []), ...pendingNewItem];
           const nextOriginalCurrency = draft.originalCurrency || draft.currency || currencyForDate(draft.date);
@@ -366,8 +405,12 @@ export function ReceiptEditor({
             personId: draft.personId || first?.id || '',
             splitMode: draft.splitMode || 'shared',
             // 鎖定匯率：pinned 就 stamp 用户輸入嘅匯率；HKD 永遠 1:1 唔使 pin。
-            // 冇 pin 就照舊俾 normalize 處理（保留已有 exchangeRate，冇就用而家嘅匯率）。
-            exchangeRate: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? editPerHkd : draft.exchangeRate,
+            // Existing receipts keep their saved rate until the user explicitly changes it.
+            exchangeRate: editPerHkd,
+            // Only an explicit monetary edit replaces the historical HKD snapshot.
+            hkdAmount: totalCorrected || currencyChanged || editPerHkd !== Number(receipt?.exchangeRate)
+              ? Math.round(total / editPerHkd)
+              : receipt?.hkdAmount,
             exchangeRatePinned: draft.exchangeRatePinned && editCurrencyCode !== 'HKD' ? true : undefined,
             visibility: privacyEligible && draft.visibility === 'private' ? 'private' : undefined,
             // Photo replaced/deleted in this edit session must re-upload (or clear cloud path).
@@ -390,18 +433,20 @@ export function ReceiptEditor({
       >
         <div className="modal-head">
           <h2 id="receipt-editor-title">{receipt ? (foreignOwned ? '旅伴紀錄' : '編輯紀錄') : '手動記一筆'}</h2>
-          <button type="button" className="icon-btn" onClick={onCancel}>×</button>
+          <button type="button" className="icon-btn" aria-label="關閉記帳視窗" onClick={onCancel}>×</button>
         </div>
+        <div className="receipt-editor-fields">
         {foreignOwned && (
           <p className="muted field-hint" style={{ margin: '0 0 8px' }}>👤 呢筆由 {ownerLabel} 記錄，全團可見，但只有建立者可以修改或刪除。</p>
         )}
 
         <label>店名 / 項目
-          <input value={draft.store} onChange={(e) => set('store', e.target.value)} autoFocus disabled={readOnly} />
+          <input data-modal-initial-focus value={draft.store} onChange={(e) => set('store', e.target.value)} disabled={readOnly} />
         </label>
         <div className="form-grid form-grid--pair">
           <label>日期
-            <input type="date" value={draft.date} onChange={(e) => set('date', e.target.value)} disabled={readOnly} />
+            <input ref={dateRef} aria-label="日期" type="date" value={draft.date} aria-required="true" aria-invalid={!!dateError} aria-describedby={dateError ? 'receipt-date-error' : undefined} onChange={(e) => set('date', e.target.value)} disabled={readOnly} />
+            {dateError && <small id="receipt-date-error" className="receipt-field-error" role="alert">{dateError}</small>}
           </label>
           <label>時間
             <input type="time" value={draft.time || ''} onChange={(e) => set('time', e.target.value)} disabled={readOnly} />
@@ -409,58 +454,61 @@ export function ReceiptEditor({
         </div>
         <div className="form-grid form-grid--pair">
           <label>金額
-            <input type="text" inputMode="decimal" value={totalInput} disabled={readOnly} onChange={(e) => {
+            <input ref={amountRef} aria-label="金額" type="text" inputMode="decimal" placeholder="例如 2,480" value={totalInput} disabled={readOnly} aria-required="true" aria-invalid={!!amountError} aria-describedby={amountError ? 'receipt-amount-error' : undefined} onChange={(e) => {
               setTotalInput(e.target.value);
-            }} onBlur={() => {
-              commitTotalDraft();
-              // Normalize the display after commit; keep a blank field blank.
-              setTotalInput(totalInput.trim() === '' ? '' : String(parseAmountInput(totalInput)));
-            }} />
+            }} onBlur={() => setAmountTouched(true)} />
+            {amountError && <small id="receipt-amount-error" className="receipt-field-error" role="alert">{amountError}</small>}
           </label>
           <label>貨幣
             {/* Explicit aria-label: a wrapping <label> gives the select an accessible name polluted
                 with every <option> text (貨幣JPYHKD...), breaking exact a11y queries. */}
-            <select aria-label="貨幣" value={draft.originalCurrency || draft.currency || currencyForDate(draft.date)} disabled={readOnly} onChange={(e) => {
-              set('originalCurrency', e.target.value);
-              set('currency', e.target.value);
+            <select aria-label="貨幣" value={draft.currency || draft.originalCurrency || currencyForDate(draft.date)} disabled={readOnly} onChange={(e) => {
+              setDraft((d) => ({ ...d, originalCurrency: e.target.value, currency: e.target.value, exchangeRate: undefined, exchangeRatePinned: undefined }));
             }}>
               {SUPPORTED_CURRENCIES.map((code) => <option key={code} value={code}>{code}</option>)}
             </select>
           </label>
         </div>
         {editCurrencyCode !== 'HKD' && (() => {
-          // 匯率：預設跟 app 設定（即時／固定）並直接顯示用緊嘅數；揀「鎖定匯率」先釘死呢張單。
+          // Show the rate used by this draft, including an existing receipt's historical rate.
           const appFixed = settingsFixedRate(state, editCurrencyCode);
           const liveRate = knownLiveRate(state, editCurrencyCode);
-          const pinRate = (rate: number) => setDraft((d) => ({ ...d, exchangeRatePinned: true, exchangeRate: Math.min(1_000_000, rate) }));
+          const pinRate = (rate: number) => {
+            setRateInput(String(rate));
+            setRateTouched(false);
+            setDraft((d) => ({ ...d, exchangeRatePinned: true, exchangeRate: rate }));
+          };
           const presets = [
             appFixed ? { key: 'settings', label: '設定固定匯率', rate: appFixed } : null,
             liveRate ? { key: 'live', label: '即時匯率', rate: liveRate } : null,
-            receipt?.exchangeRate && Number(receipt.exchangeRate) > 0 ? { key: 'saved', label: '此單原有匯率', rate: Number(receipt.exchangeRate) } : null,
+            editCurrencyCode === savedCurrency && receipt?.exchangeRate && Number(receipt.exchangeRate) > 0 ? { key: 'saved', label: '此單原有匯率', rate: Number(receipt.exchangeRate) } : null,
           ].filter((preset): preset is { key: string; label: string; rate: number } => !!preset)
             .filter((preset, index, list) => list.findIndex((other) => Math.abs(other.rate - preset.rate) < 1e-9) === index);
-          const amountHkd = Math.round((Number(draft.total) || 0) / editPerHkd).toLocaleString('en-US');
+          const amountHkd = parsedTotal == null || invalidPinnedRate ? '—' : Math.round(parsedTotal / editPerHkd).toLocaleString('en-US');
+          const autoRateLabel = savedPerHkd > 0 ? '此單原有匯率' : appFixed ? '設定固定匯率' : '即時匯率';
           return (
             <div className="receipt-rate-pin">
               <div className="receipt-rate-head">
                 <span>匯率（1 HKD = {editCurrencyCode}）</span>
                 <SegmentedControl ariaLabel="收據匯率" value={draft.exchangeRatePinned ? 'pinned' : 'auto'}
-                  options={[{ value: 'auto', label: appFixed ? '設定固定匯率' : '即時匯率' }, { value: 'pinned', label: '鎖定匯率' }]}
+                  options={[{ value: 'auto', label: autoRateLabel }, { value: 'pinned', label: '鎖定匯率' }]}
                   onChange={(mode) => {
                     if (readOnly) return;
                     if (mode === 'pinned') pinRate(Number(draft.exchangeRate) > 0 ? Number(draft.exchangeRate) : currentPerHkd);
-                    // 取消鎖定：跟返 app 設定嘅匯率，等 normalize 處理。
-                    else setDraft((d) => ({ ...d, exchangeRatePinned: undefined, exchangeRate: currentPerHkd }));
+                    // Return to this receipt's original rate, or the setting for a new currency.
+                    else setDraft((d) => ({ ...d, exchangeRatePinned: undefined, exchangeRate: editCurrencyCode === savedCurrency ? receipt?.exchangeRate : undefined }));
                   }} />
               </div>
               {draft.exchangeRatePinned ? (
                 <div className="receipt-rate-locked">
                   <label className="receipt-rate-input">
                     <span>鎖定匯率</span>
-                    <input aria-label={`鎖定匯率（1 HKD = ${editCurrencyCode}）`} type="number" min="0.01" step="0.0001" value={draft.exchangeRate || ''} disabled={readOnly} onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      set('exchangeRate', Number.isFinite(val) && val > 0 ? Math.min(1_000_000, val) : undefined);
+                    <input ref={rateRef} aria-label={`鎖定匯率（1 HKD = ${editCurrencyCode}）`} type="text" inputMode="decimal" value={rateInput} disabled={readOnly} aria-required="true" aria-invalid={!!rateError} aria-describedby={rateError ? 'receipt-rate-error' : undefined} onBlur={() => setRateTouched(true)} onChange={(e) => {
+                      setRateInput(e.target.value);
+                      const val = validAmount(e.target.value);
+                      set('exchangeRate', val != null && val > 0 && val <= 1_000_000 ? val : undefined);
                     }} />
+                    {rateError && <small id="receipt-rate-error" className="receipt-field-error" role="alert">{rateError}</small>}
                   </label>
                   {presets.length > 0 && (
                     <div className="receipt-rate-presets" role="group" aria-label="快速選擇匯率">
@@ -477,8 +525,8 @@ export function ReceiptEditor({
                 </div>
               ) : (
                 <p className="receipt-rate-current">
-                  <b>{formatRate(currentPerHkd)}</b>
-                  <span>{appFixed ? '跟設定固定匯率' : '即時匯率 · 自動更新'} · 折合約 HK$ {amountHkd}</span>
+                  <b>{formatRate(editPerHkd)}</b>
+                  <span>{autoRateLabel} · 折合約 HK$ {amountHkd}</span>
                 </p>
               )}
             </div>
@@ -549,7 +597,7 @@ export function ReceiptEditor({
                   hkdOf={hkdOfItem}
                   fromHkd={fromHkdAmount}
                   ariaLabel={`品項 ${idx + 1}`}
-                  disabled={readOnly}
+                  disabled={readOnly || invalidPinnedRate}
                   onCommit={(next) => updateItem(idx, next)}
                 />
                 <button type="button" className="icon-btn receipt-item-remove" aria-label={`刪除品項 ${idx + 1}`} disabled={readOnly} onClick={() => removeItem(idx)}>×</button>
@@ -563,8 +611,8 @@ export function ReceiptEditor({
                 fromHkd={fromHkdAmount}
                 ariaLabel="新品項"
                 placeholder={`加新品項…   ${editPrefix}金額   HK$`}
-                disabled={readOnly}
-                onCommit={(next) => setNewItem({ desc: next.desc, amount: next.amount })}
+                disabled={readOnly || invalidPinnedRate}
+                onCommit={setNewItem}
               />
               <button type="button" className="icon-btn receipt-item-add" aria-label="新增品項" disabled={readOnly || (!newItem.desc.trim() && !newItem.amount)} onClick={appendNewItem}>＋</button>
             </div>
@@ -607,16 +655,13 @@ export function ReceiptEditor({
             }))}>刪除相片</button>}
             {!readOnly && <button type="button" className="secondary" onClick={() => photoRef.current?.click()}>加入 / 更換收據相</button>}
             {onAddToItinerary && !readOnly && <button type="button" className="secondary" onClick={() => {
-              const total = validAmount(commitTotalDraft());
-              if (total == null) {
-                alert(`金額必須係 0 至 ${MAX_RECEIPT_AMOUNT.toLocaleString()} 之間嘅有效數字`);
-                return;
-              }
+              const total = validateDraft();
+              if (total == null) return;
               onAddToItinerary({ ...draft, store: draft.store.trim() || '未命名', total });
             }}>加入行程</button>}
           </div>
         </div>
-
+        </div>
         <div className="modal-actions receipt-editor-actions">
           {receipt && onDelete && !readOnly
             ? <div className="receipt-delete-slot"><button type="button" className="danger" onClick={() => setShowDeleteConfirm(true)}>刪除</button></div>
@@ -631,6 +676,7 @@ export function ReceiptEditor({
       </form>
       {showDeleteConfirm && receipt && onDelete && (
         <div
+          ref={deleteRef}
           className="modal-backdrop receipt-delete-confirm-backdrop"
           role="alertdialog"
           aria-modal="true"
@@ -646,7 +692,7 @@ export function ReceiptEditor({
               你即將刪除「{receipt.store || '未命名'}」。確認後會移除呢筆消費紀錄；按取消會返回編輯畫面。
             </p>
             <div className="modal-actions receipt-delete-confirm-actions">
-              <button type="button" className="secondary" onClick={() => setShowDeleteConfirm(false)}>取消</button>
+              <button type="button" className="secondary" autoFocus onClick={() => setShowDeleteConfirm(false)}>取消</button>
               <button type="button" className="danger" onClick={() => {
                 setShowDeleteConfirm(false);
                 onDelete(receipt);

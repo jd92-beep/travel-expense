@@ -12,6 +12,7 @@ import {
   todayForReceipts,
 } from '../src/lib/domain.ts';
 import { amountToHkd, hkdToCurrency, perHkdForCurrency } from '../src/lib/currency.ts';
+import { stampReceiptForTrip } from '../src/domain/trip/normalize.ts';
 import type { AppState, Receipt } from '../src/lib/types.ts';
 
 const baseState = {
@@ -62,6 +63,18 @@ assert.equal(
 const pinned = receipt({ total: 100, currency: 'GBP', exchangeRate: 0.095, exchangeRatePinned: true, hkdAmount: 1053 });
 assert.equal(getReceiptHkdAmount(pinned, baseState), Math.round(100 / 0.095),
   'pinned rate 0.095 must convert with the real rate, not the 0.1 floor');
+const stampedPound = stampReceiptForTrip(baseState, receipt({ total: 95, currency: 'GBP', exchangeRate: 0.095, exchangeRatePinned: true }));
+assert.equal(stampedPound.exchangeRate, 0.095, 'stamping must not replace a valid small rate');
+assert.equal(stampedPound.hkdAmount, 1000, '95 GBP at 0.095 GBP/HKD is exactly HKD 1000');
+assert.equal(getReceiptHkdAmount(receipt({ total: 5, currency: 'GBP', exchangeRate: 0.005, exchangeRatePinned: true }), baseState), 1000,
+  'valid rates must not acquire a new hidden lower bound');
+for (const badRate of [NaN, Infinity, -2, 0]) {
+  const stamped = stampReceiptForTrip(baseState, receipt({ total: 2036, currency: 'JPY', exchangeRate: badRate }));
+  assert.equal(stamped.exchangeRate, 20.36);
+  assert.equal(stamped.hkdAmount, 100);
+}
+assert.equal(stampReceiptForTrip(baseState, receipt({ total: 95, currency: 'HKD', exchangeRate: 0.095 })).hkdAmount, 95,
+  'HKD always uses identity conversion, even with an invalid legacy currency rate');
 
 // --- zero / negative totals ---
 assert.equal(getReceiptHkdAmount(receipt({ total: 0, currency: 'JPY' }), baseState), 0);

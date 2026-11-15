@@ -16,7 +16,7 @@ export function TripRateInput({
     <input
       type="number"
       inputMode="decimal"
-      min="0.01"
+      min="0"
       max="1000000"
       step="any"
       value={value}

@@ -6,7 +6,6 @@ import { cn } from '../lib/cn';
 import { BlurFade } from './ui/blur-fade';
 import { BorderBeam } from './ui/border-beam';
 import { MagicCard } from './ui/magic-card';
-import { NumberTicker } from './ui/number-ticker';
 import { RippleButton } from './ui/ripple-button';
 import { Button as StatefulButtonBase } from './ui/stateful-button';
 import { ShineBorder } from './ui/shine-border';
@@ -35,23 +34,11 @@ export function GlassCard({
   tone?: VariantProps<typeof glassSurface>['tone'];
   children: ReactNode;
 }) {
-  const strong = tone === 'strong' || /budget|command|hero|stats|weather|scan/i.test(className);
+  const Tag = as;
   return (
-    <MagicCard
-      as={as}
-      className={cn(glassSurface({ tone }), className, "relative overflow-hidden")}
-      gradientFrom="#d8503d"
-      gradientTo="#315e8e"
-      gradientColor="rgba(255, 247, 230, 0.5)"
-      gradientOpacity={0.14}
-    >
-      <ShineBorder
-        className="opacity-70 -z-10"
-        shineColor={strong ? ['#d8503d', '#d9a441'] : ['rgba(216, 80, 61, 0.4)', 'rgba(211, 154, 41, 0.3)']}
-        borderWidth={strong ? 2 : 1}
-      />
+    <Tag className={cn(glassSurface({ tone }), className)}>
       {children}
-    </MagicCard>
+    </Tag>
   );
 }
 
@@ -67,7 +54,7 @@ export function Reveal({
   /** Skip blur filter — compositor-cheap for long lists (Timeline days). */
   lowCost?: boolean;
 }) {
-  return <BlurFade className={className} delay={delay} blur={lowCost ? '0px' : '6px'} inView>{children}</BlurFade>;
+  return <div className={className}>{children}</div>;
 }
 
 export function ActionRippleButton({
@@ -193,17 +180,8 @@ export function TabSkeleton({ label = '載入分頁' }: { label?: string }) {
   );
 }
 
-// Renders an already-formatted money/percent string (e.g. "HK$ 1,234", "¥5,600", "87%")
-// as an animated NumberTicker, keeping the prefix/suffix static. Falls back to plain
-// text when the string has no leading number to tick.
 export function TickerMoney({ text, className }: { text: string | number; className?: string }) {
-  const raw = String(text);
-  const match = raw.match(/^([^\d-]*)(-?[\d,]+(?:\.\d+)?)(.*)$/);
-  if (!match) return <>{raw}</>;
-  const value = Number(match[2].replace(/,/g, ''));
-  if (!Number.isFinite(value)) return <>{raw}</>;
-  const decimalPlaces = match[2].includes('.') ? match[2].split('.')[1].length : 0;
-  return <NumberTicker value={value} decimalPlaces={decimalPlaces} prefix={match[1]} suffix={match[3]} className={cn('ticker-money text-inherit', className)} />;
+  return <span className={cn('ticker-money tabular-nums text-inherit', className)}>{text}</span>;
 }
 
 export function EmptyState({

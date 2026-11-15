@@ -165,7 +165,10 @@ export function History({
     const q = query.trim().toLowerCase();
     return tripReceipts
       .filter((r) => category === 'all' || r.category === category)
-      .filter((r) => !q || [r.store, r.note, r.itemsText, r.region, r.bookingRef, r.address].some((v) => String(v || '').toLowerCase().includes(q)))
+      .filter((r) => !q || [displayStore(r), r.store, categoryById(r.category).name, r.category, r.note, r.itemsText,
+        ...(r.lineItems || []).map(item => item.desc), r.region, r.regionSnapshot, r.date, r.bookingRef, r.address,
+        r.currency, r.total, fmt(r.total), r.originalAmount, fmt(getReceiptHkdAmount(r, state)),
+      ].some(value => String(value ?? '').toLowerCase().includes(q)))
       .sort((a, b) => {
         const dateA = a.date || '0000-00-00';
         const dateB = b.date || '0000-00-00';
@@ -176,7 +179,7 @@ export function History({
         const timeB = b.time || '00:00';
         return timeB.localeCompare(timeA);
       });
-  }, [tripReceipts, query, category]);
+  }, [tripReceipts, query, category, state]);
   const groups = receipts.reduce<Record<string, Receipt[]>>((acc, r) => {
     (acc[r.date || 'no-date'] ||= []).push(r);
     return acc;
@@ -194,20 +197,19 @@ export function History({
   useEffect(() => {
     const repairReceiptId = takeReceiptRepairIntent();
     if (!repairReceiptId) return;
-    const receipt = tripReceipts.find((item) => item.id === repairReceiptId)
-      || (state.receipts || []).find((item) => item.id === repairReceiptId);
+    const receipt = tripReceipts.find((item) => item.id === repairReceiptId);
     if (receipt) {
       setStatus(`已開啟需要修正嘅紀錄：${displayStore(receipt)}`);
       onOpen(receipt);
       return;
     }
     setStatus('找不到需要修正嘅紀錄，請檢查目前旅程。');
-  }, [tripReceipts, state.receipts, onOpen]);
+  }, [tripReceipts, onOpen]);
   const categoryChips = [
     { id: 'all' as const, name: '全部', color: '#cf2626' },
     ...CATEGORIES.filter((item) => ['flight', 'lodging', 'food', 'transport', 'shopping', 'ticket', 'other'].includes(item.id)),
   ];
-  const filterBadge = (category !== 'all' ? 1 : 0) + pending.length;
+
 
 
   function handleKeepLocal(conflict: ReceiptConflictItem) {
@@ -306,12 +308,12 @@ export function History({
       <div className="history-filter-deck history-filters">
         <label className="search-field">
           <Search size={16} />
-          <input placeholder="搜尋店家、類別、標籤、金額..." value={query} onChange={(e) => setQuery(e.target.value)} />
+          <input type="search" aria-label="搜尋紀錄" placeholder="搜尋店家、類別或金額" value={query} onChange={(e) => setQuery(e.target.value)} />
         </label>
         <label className="history-filter-button">
           <SlidersHorizontal size={19} aria-hidden="true" />
           <span>篩選</span>
-          {filterBadge > 0 && <b>{filterBadge}</b>}
+          {category !== 'all' && <b>1</b>}
           <select aria-label="篩選類別" value={category} onChange={(e) => setCategory(e.target.value as 'all' | CategoryId)}>
             <option value="all">全部類別</option>
             {CATEGORIES.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -386,9 +388,9 @@ export function History({
         </section>
       )}
       {Object.keys(groups).length === 0 && (
-        <p className="empty card">
-          未有紀錄
-        </p>
+        <div className="empty card" role="status">
+          {tripReceipts.length ? <><p>沒有符合搜尋或篩選條件的紀錄。</p><button type="button" className="secondary" onClick={() => { setQuery(''); setCategory('all'); }}>清除搜尋及篩選</button></> : '未有紀錄'}
+        </div>
       )}
       {Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0])).map(([date, items], groupIdx) => (
         <Reveal key={date} className="history-date-reveal" delay={Math.min(0.16, groupIdx * 0.018)}>
@@ -411,10 +413,7 @@ export function History({
                 <div
                   key={r.id}
                   className="receipt-row history-ledger-row"
-                  role="button"
-                  tabIndex={0}
                   onClick={() => onOpen(r)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') onOpen(r); }}
                 >
                   <VisualIcon id={r.category as CategoryId} size="md" className="history-ledger-icon washi-nippon-stamp" />
                   <span className="receipt-main history-ledger-main">
@@ -424,7 +423,7 @@ export function History({
                       {r.createdByLabel && r.createdByLabel !== 'You' && (
                         <span className="history-owner-mini" title={`由 ${r.createdByLabel} 記錄`} aria-label={`由 ${r.createdByLabel} 記錄`}>👤 {r.createdByLabel}</span>
                       )}
-                      {displayStore(r)}
+                      <button type="button" className="history-open-receipt" aria-label={`開啟紀錄：${displayStore(r)}`}>{displayStore(r)}</button>
                     </strong>
                     <small>{[cat.name, r.date ? r.date.slice(5).replace('-', '/') : '', r.region || r.regionSnapshot, person?.name].filter(Boolean).join(' · ')}</small>
                     {healthMarkers.length > 0 && (

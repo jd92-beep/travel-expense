@@ -1,4 +1,6 @@
+const { openTab } = require('./helpers/journey-navigation.cjs');
 const { test, expect } = require('@playwright/test');
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -123,13 +125,14 @@ function cloudReceiptRow({
 }
 
 async function setAccordion(page, title, expanded = true) {
-  const button = page.locator('.accordion-summary', { hasText: new RegExp(title) }).first();
+  const label = title === 'Credentials & Connection' ? '連線（進階）' : title;
+  const button = page.locator('.accordion-summary', { hasText: new RegExp(label) }).first();
   if ((await button.getAttribute('aria-expanded')) !== String(expanded)) await button.click();
   await expect(button).toHaveAttribute('aria-expanded', String(expanded));
 }
 
 function historyHeader(page) {
-  return page.getByRole('banner', { name: '紀錄中心 header' });
+  return page.getByRole('banner', { name: '紀錄中心' });
 }
 
 function sessionPayload() {
@@ -245,15 +248,16 @@ test('Supabase public mirror status stays scoped before Personal Notion is conne
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await page.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await openTab(page, '設定');
+  await expect(page.getByRole('banner', {name:'設定控制中心',exact:true})).toBeVisible();
   await setAccordion(page, 'Credentials & Connection');
 
   const credentials = page.locator('#settings-credentials-panel');
   await expect(page.getByLabel('Database ID', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Notion Sync/ })).toHaveCount(0);
-  await expect(credentials).toContainText('Notion mirror: needs own DB');
+  await expect(credentials).toContainText('未連接');
+  await expect(page.locator('[aria-controls="settings-credentials-panel"]')).toContainText('Notion 未連接');
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
     return state.themePreference;
@@ -323,10 +327,10 @@ test('Supabase public email intake stays out of the shared Gmail inbox', async (
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#scan');
-  await expect(page.getByRole('banner', { name: '收據掃描工作室 header' })).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#scan`);
+  await expect(page.getByRole('banner', { name: '收據掃描工作室' })).toBeVisible();
   await page.getByRole('button', { name: 'Email' }).click();
-  await expect(page.getByText(/Public Supabase mode 不使用共享 Gmail inbox/)).toBeVisible();
+  await expect(page.getByText(/雲端帳號唔使用共享 Gmail inbox/)).toBeVisible();
   await expect(page.getByRole('button', { name: /複製 Gmail/ })).toHaveCount(0);
   await expect(page.getByPlaceholder('貼 booking confirmation / email 文字')).toBeVisible();
 });
@@ -382,7 +386,7 @@ test('Supabase Personal Notion connect persists database scope and queues settin
         status: {
           provider: 'notion',
           status: 'connected',
-          databaseId: 'db_personal_new',
+          databaseId: 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
           updatedAt: Date.now(),
         },
       }),
@@ -422,18 +426,19 @@ test('Supabase Personal Notion connect persists database scope and queues settin
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#settings');
-  await expect(page.getByText('設定控制中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
+  await expect(page.getByRole('banner', {name:'設定控制中心',exact:true})).toBeVisible();
   await setAccordion(page, 'Credentials & Connection');
-  await page.getByLabel('Personal Notion database ID').fill('db_personal_new');
-  await page.getByLabel('Personal Notion connector secret').fill('ntn_test_personal_secret');
-  await page.getByRole('button', { name: /Connect Personal Notion/ }).click();
+  const credentials = page.locator('#settings-credentials-panel');
+  await credentials.getByLabel('Notion database', { exact: true }).fill('aaaaaaaabbbb4ccc8dddeeeeeeeeeeee');
+  await credentials.getByLabel('Integration secret', { exact: true }).fill('ntn_test_personal_secret');
+  await credentials.getByRole('button', { name: '連接', exact: true }).click();
   await expect(page.getByText(/Personal Notion 已安全連接/)).toBeVisible();
 
   expect(connectRequests).toHaveLength(1);
   expect(connectRequests[0].supabaseAuth).toBe('Bearer test-access-token');
   expect(connectRequests[0].brokerSession).toBe('');
-  expect(connectRequests[0].body.databaseId).toBe('db_personal_new');
+  expect(connectRequests[0].body.databaseId).toBe('aaaaaaaabbbb4ccc8dddeeeeeeeeeeee');
 
   await expect.poll(() => page.evaluate((userId) => {
     const state = JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`) || '{}');
@@ -445,7 +450,7 @@ test('Supabase Personal Notion connect persists database scope and queues settin
       queuedTypes: (state.syncQueue || []).map((item) => `${item.type}:${item.entityId}`).sort(),
     };
   }, userId), { timeout: 10000 }).toEqual({
-    notionDb: 'db_personal_new',
+    notionDb: 'aaaaaaaabbbb4ccc8dddeeeeeeeeeeee',
     personalNotionConnected: true,
     activeTripNotionDb: undefined,
     queuedTypes: ['settings:app-settings'],
@@ -663,7 +668,7 @@ test('Supabase shared-trip owner drains the Personal Notion outbox without a bro
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(historyHeader(page)).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
 
@@ -821,7 +826,7 @@ test('Supabase profile settings stay authoritative over stale Notion meta in pub
     }));
   }, { userId, session: sessionPayload(), now });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(historyHeader(page)).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
@@ -936,7 +941,7 @@ test('Supabase pull ignores stale profile activeTripId that is not in the user t
     }));
   }, { userId, session: sessionPayload(), now });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(historyHeader(page)).toBeVisible();
   await page.getByRole('button', { name: '重新同步' }).click();
 
@@ -1095,7 +1100,7 @@ test('Supabase public account without own Notion database does not use shared No
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
   await expect(historyHeader(page)).toBeVisible();
   await page.evaluate(() => window.dispatchEvent(new Event('online')));
 

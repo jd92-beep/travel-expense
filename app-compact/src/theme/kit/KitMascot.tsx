@@ -11,6 +11,17 @@ export function KitMascot({ kit }: { kit: StyleThemeKey }) {
   // The mascot renders in both the rail and the phone header; SVG ids must not collide.
   const uid = useId().replace(/:/g, '');
   switch (kit) {
+    case 'night_ledger':
+    case 'harbor_blueprint':
+    case 'pocket_planner':
+    case 'alpine_postcard':
+    case 'sunset_terrace':
+      return (
+        <svg className="kit-mascot" viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="8" y="7" width="32" height="35" rx={kit === 'sunset_terrace' ? 9 : 3} fill="var(--theme-card)" stroke="var(--theme-accent)" strokeWidth="2" />
+          <path d="M16 7v35M22 17h11M22 25h11M22 33h7" fill="none" stroke="var(--theme-accent)" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      );
     case 'sketch_notebook':
       return (
         <svg className="kit-mascot kit-mascot--sketch" viewBox="0 0 48 48" aria-hidden="true">

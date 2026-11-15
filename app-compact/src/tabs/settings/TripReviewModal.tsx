@@ -1,7 +1,10 @@
+import { itineraryQuestions, tripPacking } from '../../lib/journeyActivities';
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DEFAULT_TRIP_UPDATE_MODEL_ID } from '../../lib/constants';
 import { categoryById } from '../../lib/domain';
+import { useModalAccessibility } from '../../lib/useModalAccessibility';
 import type { AppState, ItineraryDay, ItinerarySpot, TripDraft } from '../../lib/types';
 import { tripDraftPreviewStats, TRIP_REVIEW_SPOT_TYPES, cloneTripDraft, tripReviewNotices, updateDraftDayAt, sortReviewSpots, defaultReviewSpot } from './tripReview';
 import { aiModelLabel } from './aiModels';
@@ -15,8 +18,16 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
   const tripReviewDraft = editableTripDraft;
   const tripReviewStats = tripReviewDraft ? tripDraftPreviewStats(tripReviewDraft) : null;
   const tripReviewDays = tripReviewDraft?.trip.itinerary || [];
+  const packing = tripPacking(tripReviewDays);
+  const questions = itineraryQuestions(tripReviewDays);
   const tripReviewDay = tripReviewDays[Math.min(tripReviewDayIndex, Math.max(0, tripReviewDays.length - 1))];
   const tripReviewWarnings = tripReviewDraft ? tripReviewNotices(tripReviewDraft) : [];
+  const closeReview = () => {
+    if (JSON.stringify(editableTripDraft) !== JSON.stringify(tripDraft)
+      && !window.confirm('有未儲存嘅修改，確定要放棄？')) return;
+    setTripDraftModalOpen(false);
+  };
+  const modalRef = useModalAccessibility(true, closeReview);
 
   function updateTripReviewDay(dayIndex: number, updater: (day: ItineraryDay) => ItineraryDay) {
     setEditableTripDraft((draft) => updateDraftDayAt(draft, dayIndex, updater));
@@ -70,11 +81,12 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
   }
 
   if (!tripReviewStats) return null;
-  return (
+  return createPortal(
       <div
+        ref={modalRef}
         className="modal-backdrop trip-confirm-backdrop"
         role="presentation"
-        onClick={() => setTripDraftModalOpen(false)}
+        onClick={closeReview}
       >
         <section
           className="modal trip-confirm-modal"
@@ -93,7 +105,7 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
                 {tripReviewDraft.trip.startDate} → {tripReviewDraft.trip.endDate} · {tripReviewDraft.trip.destinationSummary}
               </p>
             </div>
-            <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={() => setTripDraftModalOpen(false)}>
+            <button className="icon-button" type="button" aria-label="關閉行程確認" onClick={closeReview}>
               <X size={18} />
             </button>
           </div>
@@ -111,6 +123,11 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
             <strong>AI 已經整理好行程，請逐日望一望。</strong>
             <span>{tripReviewDraft.summary || '確認無誤後，行程、天氣和記帳預設會跟住呢份資料更新。'}</span>
           </div>
+
+          <details className="trip-review-notices trip-content-preview"><summary>套用到清單及小遊戲 · {packing.length} 件用品 · {questions.length} 道題目</summary>
+            <ul>{packing.map(item => <li key={item.label}>{item.label}{item.note && ' · ' + item.note}{item.suggested && '（建議）'}</li>)}</ul>
+            <ul>{questions.map((q, i) => <li key={i}>{q.question} · {q.answer}</li>)}</ul>
+          </details>
 
           {tripReviewWarnings.length > 0 && (
             <details className="trip-review-notices">
@@ -254,10 +271,11 @@ export function TripReviewModal({ state, tripDraft, setTripDraftModalOpen, apply
           )}
 
           <div className="modal-actions trip-confirm-actions">
-            <button className="secondary" type="button" onClick={() => setTripDraftModalOpen(false)}>返回修改文字</button>
+            <button className="secondary" type="button" onClick={closeReview}>返回修改文字</button>
             <button className="primary" type="button" onClick={() => applyTripDraft(tripReviewDraft)}>確認並更新行程</button>
           </div>
         </section>
-      </div>
+      </div>,
+      document.body,
   );
 }

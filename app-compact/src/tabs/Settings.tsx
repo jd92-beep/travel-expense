@@ -36,6 +36,7 @@ import { DiagnosticsPanels } from './settings/DiagnosticsPanels';
 import { useStressTools } from './settings/useStressTools';
 
 export function Settings({
+  initialSection, onSectionOpened,
   state,
   setState,
   updateState,
@@ -59,6 +60,7 @@ export function Settings({
   updateState: (patch: Partial<AppState>) => void;
   onReset: () => void;
   syncState?: SyncEngineState;
+  initialSection?: string; onSectionOpened?: () => void;
   onPull?: () => Promise<void>;
   onPush?: () => Promise<void>;
   cloudSyncAvailable?: boolean;
@@ -172,10 +174,16 @@ export function Settings({
     }
   }
 
+  useEffect(() => {
+    if (!initialSection) return;
+    const frame = requestAnimationFrame(() => { openSettingsPanel(initialSection); onSectionOpened?.(); });
+    return () => cancelAnimationFrame(frame);
+  }, [initialSection]);
+
   function openSettingsPanel(id: string) {
     const trigger = document.querySelector<HTMLButtonElement>(`[aria-controls="${id}-panel"]`);
     if (trigger && trigger.getAttribute('aria-expanded') !== 'true') trigger.click();
-    window.setTimeout(() => trigger?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 40);
+    window.setTimeout(() => trigger?.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' }), 40);
   }
 
   function applyPersonalNotionConnection(databaseId: string, connected: boolean) {
@@ -321,7 +329,7 @@ export function Settings({
       <div className="stack w-full relative z-10">
       <GlassCard className="settings-command">
         <div>
-          <h2>{isMobile ? '安全設定主控台' : '設定控制中心'} ⚙️</h2>
+          <h2>設定控制中心</h2>
           <TooltipProvider>
             <div className="stats-status-row settings-status-tooltips">
               <Tooltip>

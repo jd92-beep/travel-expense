@@ -1,3 +1,4 @@
+const { openTab } = require('./helpers/journey-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 
 test.use({ viewport: { width: 390, height: 844 } });
@@ -418,7 +419,7 @@ test('Supabase clear-device sign out removes scoped local snapshots', async ({ p
     db.close();
   }, { scopedStorageKey, scopedIndexedKey });
 
-  await page.getByLabel('主要分頁').getByRole('button', { name: '設定' }).click();
+  await openTab(page, '設定');
   await page.getByRole('button', { name: /雲端帳號與密碼設定/ }).click();
   await expect(page.getByText('device-clear@example.com').first()).toBeVisible();
   await page.getByRole('button', { name: '清除此裝置資料並登出 Supabase' }).click();
@@ -615,7 +616,7 @@ test('Supabase scoped IndexedDB fallback does not hydrate another user or legacy
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.getByLabel('紀錄中心 header')).toBeVisible();
+  await expect(page.getByRole('banner', { name: '紀錄中心', exact: true })).toBeVisible();
 
   await expect.poll(async () => page.evaluate((keyB) => {
     const raw = localStorage.getItem(keyB);

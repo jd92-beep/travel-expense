@@ -1,9 +1,9 @@
-import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency } from './currency';
+import { appRatePatchFromSnapshot, fetchLiveCurrencySnapshot, loadCurrencySnapshot, perHkdForCurrency, usableSnapshot } from './currency';
 import type { AppState } from './types';
 
 // Shared by Settings 匯率設定, the Scan rate sheet and the receipt editor so every surface
 // confirms a live/fixed choice the same way.
-export const MIN_FIXED_RATE = 0.01;
+export const MIN_FIXED_RATE = 0;
 export const MAX_FIXED_RATE = 1_000_000;
 
 export function rateCurrency(state: AppState): string {
@@ -11,13 +11,14 @@ export function rateCurrency(state: AppState): string {
 }
 
 export function isValidFixedRate(rate: number): boolean {
-  return Number.isFinite(rate) && rate >= MIN_FIXED_RATE && rate <= MAX_FIXED_RATE;
+  return Number.isFinite(rate) && rate > MIN_FIXED_RATE && Number.isFinite(1 / rate) && rate <= MAX_FIXED_RATE;
 }
 
 export function fixedRatePatch(state: AppState, code: string, rate: number): Partial<AppState> {
+  if (code === 'HKD') rate = 1;
   return {
     rateMode: 'fixed',
-    rate,
+    ...(code === 'JPY' ? { rate } : {}),
     rateTable: { ...state.rateTable, [code]: { currency: code, perHkd: rate, source: 'manual', fetchedAt: Date.now() } },
   };
 }
@@ -32,10 +33,13 @@ export function settingsFixedRate(state: AppState, code: string): number | undef
 // Best known market rate without a network call: cached snapshot first, then live-mode state.
 export function knownLiveRate(state: AppState, code: string): number | undefined {
   if (code === 'HKD') return 1;
-  const cached = Number(loadCurrencySnapshot()?.rates?.[code]);
+  const cached = Number(usableSnapshot(loadCurrencySnapshot())?.rates?.[code]);
   if (Number.isFinite(cached) && cached > 0) return cached;
   if (state.rateMode === 'fixed') return undefined;
-  const rate = perHkdForCurrency(state, code);
+  const entry = state.rateTable?.[code];
+  const age = Date.now() - Number(entry?.fetchedAt);
+  if (!entry || entry.source === 'manual' || !Number.isFinite(age) || age < 0 || age >= 60 * 60 * 1000) return undefined;
+  const rate = Number(entry.perHkd);
   return Number.isFinite(rate) && rate > 0 ? rate : undefined;
 }
 

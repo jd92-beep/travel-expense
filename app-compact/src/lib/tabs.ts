@@ -9,3 +9,12 @@ export const TAB_MANIFEST: Array<{ id: TabId; label: string }> = [
   { id: 'stats', label: '統計' },
   { id: 'settings', label: '設定' },
 ];
+
+export const MOBILE_PRIMARY_TABS = ['dashboard', 'timeline', 'scan', 'history'] as const;
+
+export function tabDirection(current: TabId, next: TabId) {
+  const order: readonly TabId[] = window.matchMedia('(min-width: 768px)').matches
+    ? TAB_MANIFEST.map(tab => tab.id)
+    : [...MOBILE_PRIMARY_TABS, 'weather', 'stats', 'settings'];
+  return Math.sign(order.indexOf(next) - order.indexOf(current));
+}

@@ -1,5 +1,6 @@
+import { createPortal } from 'react-dom';
 import type { CSSProperties, Dispatch, FormEvent, SetStateAction } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ArrowDownUp, CalendarDays, Home, MapPin, PencilLine, Plus, ReceiptText, RotateCcw, Trash2, Settings } from 'lucide-react';
 import { ActionSheet, GlassCard, Reveal, StatusPill, TimelineRail, Toast } from '../components/ui';
 import { MagicCard } from '../components/ui/magic-card';
@@ -7,21 +8,28 @@ import { ShineBorder } from '../components/ui/shine-border';
 import { applyItineraryEdit, categoryById, compareSpotsByTime, dayLooseReceipts, fmt, getItinerary, getReceiptHkdAmount, getReceiptTripAmount, getResolvedTripCurrency, getScheduleSpots, mapsUrl, safeExternalUrl, setItineraryOverride, swapItineraryDays, todayForReceipts } from '../lib/domain';
 import { activeTrip, scopedReceiptsForTrip } from '../domain/trip/normalize';
 import { currencyPrefix } from '../lib/currency';
-import type { AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
+import type { SyncEngineState, AppState, ItineraryDay, ItinerarySpot, Receipt } from '../lib/types';
 import { ReceiptRow } from './Dashboard';
 import { ReceiptPhotoModal } from '../components/ReceiptPhotoModal';
 import { VisualIcon } from '../components/VisualIcon';
 import { categoryIconId } from '../lib/iconManifest';
 import { useModalOpenClass } from '../lib/useModalOpenClass';
+import { useModalAccessibility } from '../lib/useModalAccessibility';
 import travelAiAtlas from '../assets/atmosphere/travel-ai-atlas.webp';
 import '../styles/timeline.css';
+import { JourneyMap } from '../components/journey/JourneyMap';
+import { TripTools } from '../components/journey/TripTools';
+import { clockLabel, endLabel, freeMinutes, dayAxisMinute, spotDuration, durationLabel, placeIdentity } from '../lib/plannerLayout';
+import { DayRail } from '../components/journey/DayRail';
+import { useTripTheme } from '../theme/tripTheme';
+import { JourneyCover } from '../components/journey/JourneyCover';
+import { JourneyPlanner, type PlannerView } from '../components/journey/JourneyPlanner';
 
 type ScheduleSpot = ItinerarySpot & { _spotIdx: number; receiptId?: string };
-type TimelineStatus = 'is-passed' | 'is-live' | 'is-future';
+type TimelineStatus = 'is-passed' | 'is-live' | 'is-future' | 'is-untimed';
 
 // Intl.DateTimeFormat construction is expensive — hoist the fixed weekday formatters and
 // cache the per-timezone parts formatters instead of rebuilding them per spot per render.
-const zhWeekdayLongFmt = new Intl.DateTimeFormat('zh-HK', { weekday: 'long' });
 const zhWeekdayShortFmt = new Intl.DateTimeFormat('zh-HK', { weekday: 'short' });
 const zonePartsFormatterCache = new Map<string, Intl.DateTimeFormat>();
 
@@ -37,7 +45,7 @@ type TimelineLiveContext = {
   nextLabel: string;
 };
 
-export function Timeline({ state, setState, onOpen }: { state: AppState; setState: Dispatch<SetStateAction<AppState>>; onOpen: (receipt: Receipt) => void }) {
+export function Timeline({ state, setState, onOpen, scope = 'local', plannerView = 'schedule', onPlannerView, onExpenses, syncState, onSettings = () => { location.hash = 'settings'; } }: { state: AppState; setState: Dispatch<SetStateAction<AppState>>; onOpen: (receipt: Receipt) => void; scope?: string; onExpenses?: () => void; syncState?: SyncEngineState; onSettings?: (section: string) => void; plannerView?: PlannerView; onPlannerView?: (view: PlannerView) => void }) {
   // getItinerary normalizes + canonicalizes on every call, so memoize it on the state slices
   // it actually reads (trips / customItinerary / activeTripId / tripDateRange / tripName /
   // tripCurrency). Without this the per-day memo below never hits and every keystroke in the
@@ -48,7 +56,17 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
     [state.trips, state.customItinerary, state.activeTripId, state.tripDateRange, state.tripName, state.tripCurrency],
   );
   // Reuse the memoized itinerary instead of letting todayForReceipts re-run getItinerary.
+  const pocket = useTripTheme().theme.id === 'pocket_planner';
   const today = todayForReceipts(state, itinerary);
+  const [selectedDate, setSelectedDate] = useState(() => itinerary.find(day => day.date === today)?.date || itinerary[0]?.date || '');
+  const [calendarJump, setCalendarJump] = useState(0);
+  const [showAllDays, setShowAllDays] = useState(false);
+  const selectedDay = itinerary.find(day => day.date === selectedDate) || itinerary[0];
+  const [selectedPlace, setSelectedPlace] = useState('');
+  const [dayDirection, setDayDirection] = useState(1);
+  const selectDay = (date: string) => { setDayDirection(date >= selectedDate ? 1 : -1); setSelectedDate(date); setSelectedPlace(''); setShowAllDays(false); };
+  const jumpToDay = (date: string) => { selectDay(date); if (plannerView === 'calendar') setCalendarJump(value => value + 1); };
+  const selectPlace = (day: ItineraryDay, spot: ItinerarySpot, index: number) => { if (day.date !== selectedDay?.date) selectDay(day.date); setSelectedPlace(placeIdentity(spot, index)); };
   const resolvedTripCurrency = getResolvedTripCurrency(state, activeTrip(state));
   const tripPrefix = currencyPrefix(resolvedTripCurrency);
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -103,148 +121,32 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
 
   const activeDay = dayReceipts ? itinerary.find((day) => day.date === dayReceipts) : null;
   const activeDayEntry = activeDay ? perDayTimelineByDate.get(activeDay.date) : undefined;
-  const hasOpenModal = Boolean(editing || activeDay || viewPhoto || dayEdit || swapSource);
+  const hasOpenModal = Boolean(editing || activeDay || viewPhoto || dayEdit || swapSource || swapConfirm);
   const travelAtlasStyle = { '--travel-ai-atlas': `url(${travelAiAtlas})` } as CSSProperties;
   const liveContext = timelineLiveContext(itinerary, nowTick, tripWindow, perDayTimelineByDate);
-  const commandDay = (liveContext.date ? itinerary.find((day) => day.date === liveContext.date) : null) || itinerary.find((day) => day.date === today) || itinerary[0];
-  const commandDayEntry = commandDay ? perDayTimelineByDate.get(commandDay.date) : undefined;
-  const commandDate = commandDay?.date ? new Date(`${commandDay.date}T00:00:00`) : null;
-  const commandYear = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getFullYear()) : '----';
-  const commandMonth = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getMonth() + 1) : '--';
-  const commandDateDay = commandDate && !Number.isNaN(commandDate.getTime()) ? String(commandDate.getDate()) : '--';
-  const commandWeekday = commandDate && !Number.isNaN(commandDate.getTime()) ? zhWeekdayLongFmt.format(commandDate) : '';
-
   useEffect(() => {
     const timer = window.setInterval(() => setNowTick(Date.now()), 60 * 1000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const lastAutoScrollKeyRef = useRef('');
-  const autoScrollRetryHandlesRef = useRef<number[]>([]);
-  const programmaticScrollRef = useRef(false);
-  const userScrollAtRef = useRef(0);
-
-  const markProgrammaticTimelineScroll = useCallback(() => {
-    programmaticScrollRef.current = true;
-    window.setTimeout(() => { programmaticScrollRef.current = false; }, 800);
-  }, []);
-
-  useEffect(() => {
-    const onUserScroll = () => {
-      if (programmaticScrollRef.current) return;
-      userScrollAtRef.current = Date.now();
-    };
-    window.addEventListener('scroll', onUserScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onUserScroll);
-  }, []);
-
-  const scrollToLiveTimelineSpot = useCallback((force = false) => {
-    if (typeof window === 'undefined') return;
-    const targetDate = liveContext.date || commandDay?.date;
-    if (!targetDate) return;
-
-    const scrollKey = [
-      liveContext.mode,
-      targetDate,
-      liveContext.currentLabel,
-      liveContext.nextLabel,
-    ].join('|');
-    if (!force && lastAutoScrollKeyRef.current === scrollKey) return;
-    // Minute-tick label refresh must not yank a browsing user back to the live spot.
-    // Entry (force) and a real live-date change still jump.
-    if (!force && Date.now() - userScrollAtRef.current < 4000) {
-      lastAutoScrollKeyRef.current = scrollKey;
-      return;
-    }
-    lastAutoScrollKeyRef.current = scrollKey;
-
-    autoScrollRetryHandlesRef.current.forEach((handle) => window.clearTimeout(handle));
-    autoScrollRetryHandlesRef.current = [];
-
-    let attempts = 0;
-    const tryScroll = () => {
-      const element = selectTimelineAutoScrollTarget(targetDate);
-      if (element) {
-        markProgrammaticTimelineScroll();
-        scrollTimelineElementIntoCenter(element);
-        return;
-      }
-      attempts += 1;
-      if (attempts <= 8) {
-        autoScrollRetryHandlesRef.current.push(window.setTimeout(tryScroll, 120));
-      }
-    };
-
-    autoScrollRetryHandlesRef.current.push(window.setTimeout(tryScroll, force ? 80 : 180));
-  }, [commandDay?.date, liveContext.currentLabel, liveContext.date, liveContext.mode, liveContext.nextLabel, markProgrammaticTimelineScroll]);
-
-  useLayoutEffect(() => {
-    scrollToLiveTimelineSpot();
-  }, [scrollToLiveTimelineSpot]);
-
-  useEffect(() => {
-    const handleTimelineEntry = () => {
-      if (window.location.hash.slice(1) !== 'timeline') return;
-      lastAutoScrollKeyRef.current = '';
-      userScrollAtRef.current = 0;
-      scrollToLiveTimelineSpot(true);
-    };
-    window.addEventListener('hashchange', handleTimelineEntry);
-    window.addEventListener('popstate', handleTimelineEntry);
-    return () => {
-      window.removeEventListener('hashchange', handleTimelineEntry);
-      window.removeEventListener('popstate', handleTimelineEntry);
-    };
-  }, [scrollToLiveTimelineSpot]);
+  function goToCurrentStop() {
+    const date = liveContext.date;
+    if (!date) return;
+    selectDay(date);
+    requestAnimationFrame(() => {
+      const target = selectTimelineAutoScrollTarget(date);
+      target?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+    });
+  }
 
   useModalOpenClass(hasOpenModal);
 
-  const editingContainerRef = useRef<HTMLDivElement>(null);
-  const editingPrevFocusRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!editing) return;
-    editingPrevFocusRef.current = document.activeElement as HTMLElement;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); handleCloseSpotEditor(); }
-      if (e.key === 'Tab' && editingContainerRef.current) {
-        const focusable = editingContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if (!focusable.length) return;
-        const first = focusable[0]; const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => { document.removeEventListener('keydown', handleKeyDown); editingPrevFocusRef.current?.focus?.(); };
-  }, [editing]);
-
-  const dayReceiptsContainerRef = useRef<HTMLDivElement>(null);
-  const dayReceiptsPrevFocusRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!activeDay) return;
-    dayReceiptsPrevFocusRef.current = document.activeElement as HTMLElement;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); setDayReceipts(null); }
-      if (e.key === 'Tab' && dayReceiptsContainerRef.current) {
-        const focusable = dayReceiptsContainerRef.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-        if (!focusable.length) return;
-        const first = focusable[0]; const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => { document.removeEventListener('keydown', handleKeyDown); dayReceiptsPrevFocusRef.current?.focus?.(); };
-  }, [activeDay]);
-
-  useEffect(() => {
-    if (!dayEdit && !swapSource && !swapConfirm) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); setDayEdit(null); setSwapSource(null); setSwapConfirm(null); }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [dayEdit, swapSource, swapConfirm]);
+  // Only the top sheet owns keyboard handling; closing a detail must preserve its day draft.
+  const editingContainerRef = useModalAccessibility(Boolean(editing), () => handleCloseSpotEditor());
+  const dayReceiptsContainerRef = useModalAccessibility(Boolean(activeDay && !viewPhoto), () => setDayReceipts(null));
+  const dayEditContainerRef = useModalAccessibility(Boolean(dayEdit && !editing), () => handleCloseDayEditor());
+  const swapSourceContainerRef = useModalAccessibility(Boolean(swapSource && !swapConfirm), () => setSwapSource(null));
+  const swapConfirmContainerRef = useModalAccessibility(Boolean(swapConfirm), () => setSwapConfirm(null));
 
   function saveSpot(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -257,6 +159,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       type: String(data.get('type') || 'other') as ItinerarySpot['type'],
       note: String(data.get('note') || ''),
       address: String(data.get('address') || ''),
+      bookingRef: String(data.get('bookingRef') || ''),
     };
     // Draft spots (opened via 詳情 inside the day editor) write back into the unsaved
     // dayEdit draft — nothing persists until the day editor's 儲存 is pressed.
@@ -436,70 +339,47 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
 
   return (
     <>
-      <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative timeline-screen" style={travelAtlasStyle}>
+      <section className="japanese-washi-bg w-full min-h-screen px-4 pb-28 pt-6 relative timeline-screen" style={travelAtlasStyle} data-planner-view={plannerView}>
       <div className="japanese-sun-decor" />
       <div className="japanese-sakura-decor" />
       <div className="stack w-full relative z-10">
-      <MagicCard className="timeline-command p-0 rounded-[32px] overflow-hidden relative w-full border border-white/50 shadow-[0_20px_60px_-15px_rgba(45,110,72,0.25)]">
-        <ShineBorder className="opacity-80 timeline-command-shine" shineColor={['#2D6E48', '#D4A843']} borderWidth={3} />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#2D6E48] via-[#D4A843] to-[#C23B5E] opacity-[0.25] mix-blend-multiply timeline-command-blend" />
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay timeline-command-texture" />
-        <div className="absolute inset-0 bg-gradient-to-t from-white/40 via-transparent to-white/10 timeline-command-wash" />
+      {plannerView === 'schedule' && liveContext.mode === 'active' && <section className="planner-live-stop" aria-label="目前行程">
+        <div><small>當地時間 {liveContext.nowLabel}</small><strong>{liveContext.headline}</strong><span>{liveContext.nextLabel}</span></div>
+        <button type="button" className="secondary" onClick={goToCurrentStop}>查看目前行程</button>
+      </section>}
+      {pocket && <div className="pocket-trip-summary">
+        <div><small>{itinerary[0]?.date.slice(0, 4)} · {itinerary.length} 日</small><h2>{activeTrip(state).name}</h2></div>
+        <div><strong>{perDayTimeline.reduce((count, entry) => count + entry.spots.length, 0)}</strong><small>已安排站點</small></div>
+      </div>}
+      {pocket && <nav className="pocket-sections" aria-label="旅程分類">
+        <button type="button" aria-pressed={plannerView !== 'checklist'} onClick={() => onPlannerView?.('schedule')}>行程規劃</button>
+        <button type="button" onClick={onExpenses}>費用總覽</button>
+        <button type="button" aria-pressed={plannerView === 'checklist'} onClick={() => onPlannerView?.('checklist')}>攜帶用品</button>
+      </nav>}
+      {pocket && ['schedule', 'calendar', 'route'].includes(plannerView) ? <header className="pocket-calendar-header">
+        <div><h2>行事曆</h2><small>{selectedDay ? selectedDay.date.slice(0, 7).replace('-', ' 年 ') + ' 月' : '未有日期'}</small></div>
+        <nav aria-label="行程工具" className="pocket-view-switch">
+          <button type="button" aria-label="多日" aria-pressed={plannerView === 'calendar'} onClick={() => onPlannerView?.('calendar')}>週行事曆</button>
+          <button type="button" aria-label="日程" aria-pressed={plannerView === 'schedule'} onClick={() => onPlannerView?.('schedule')}>單日時間軸</button>
+        </nav>
+        {canEditItinerary && selectedDay && <button type="button" className="pocket-add" aria-label="加入行程" onClick={() => openDayEditor(selectedDay)}><Plus size={18} /></button>}
+      </header> : <>
+      <header className="journey-itinerary-heading"><div><h2>每日行程</h2><p>{activeTrip(state).name} · {itinerary.length} 日</p></div><div className="action-row">{selectedDay && canEditItinerary && <button type="button" className="secondary" onClick={() => openDayEditor(selectedDay)}><Plus size={17} /> 加入行程</button>}</div></header>
+      <JourneyCover day={selectedDay?.day} trip={activeTrip(state)} className="journey-planner-cover" />
+      </>}
+      {['schedule', 'calendar', 'route'].includes(plannerView) && !(pocket && plannerView === 'calendar') && <DayRail pocket={pocket} days={itinerary} selected={selectedDay?.date || ''} onSelect={jumpToDay} />}
+      <div className="planner-connected-layout"><div className="planner-schedule-pane" style={{ '--day-direction': dayDirection } as CSSProperties}>
+      <JourneyPlanner pocket={pocket} days={itinerary} calendarJump={calendarJump} selectedPlace={selectedPlace} onSelectPlace={selectPlace} state={state} setState={setState} scope={scope} view={plannerView} onViewChange={view => onPlannerView?.(view)} selectedDay={selectedDay} onSelectDay={jumpToDay} onEditDay={openDayEditor} onEditSpot={(date, idx, original) => setEditing({ date, idx, original })} scheduleActions={<div className="journey-day-view-options"><button className="journey-text-action" type="button" aria-pressed={showAllDays} onClick={() => setShowAllDays(value => !value)}>{showAllDays ? '只看選定日子' : '顯示全部日子'}</button>{itinerary.some(day => day.date === today) && <button className="journey-text-action" type="button" onClick={() => selectDay(today)}>回到今日</button>}</div>} />
+      {plannerView === 'schedule' && !itinerary.length && <div className="journey-empty"><CalendarDays size={32} /><h2>未有每日行程</h2><p>匯入旅行安排，開始規劃每日路線。</p><a className="primary" href="#settings">去設定匯入行程</a></div>}
 
-        <div className="relative z-10 w-full timeline-command-inner">
-          <div className="timeline-command-title-row">
-            <span className="timeline-command-seal" aria-hidden="true">旅</span>
-            <h2 className="timeline-command-title">行程時間線</h2>
-            <span className="timeline-trip-days" aria-label={`${itinerary.length}日行程`}>
-              <CalendarDays size={14} />
-              {itinerary.length}日
-            </span>
-          </div>
-          {commandDay && (
-            <div className="preview-timeline-overview">
-              <div className="preview-timeline-date">
-                <span>{commandYear}</span>
-                <small>{commandMonth}月</small>
-                <strong>{commandDateDay}</strong>
-                <em>{commandWeekday}</em>
-              </div>
-              <div className="preview-timeline-copy">
-                <span>第 {commandDay.day} 天 / 共 {itinerary.length || 1} 天</span>
-                <strong>{commandDay.region}</strong>
-                <small>{liveContext.detail}</small>
-                <div className={`timeline-live-card mode-${liveContext.mode}`} aria-label="Live travel timeline">
-                  <span className="timeline-live-clock">{liveContext.nowLabel}</span>
-                  <b>{liveContext.headline}</b>
-                  <em>{liveContext.currentLabel}</em>
-                  <small>{liveContext.nextLabel}</small>
-                </div>
-              </div>
-              <div className="preview-timeline-stats">
-                <span><MapPin size={18} /> 行程 {(commandDayEntry?.spots ?? getScheduleSpots(state, commandDay, tripReceipts)).length} 個景點</span>
-                <b><ReceiptText size={18} /> 支出 HK$ {fmt(commandDayEntry?.hkdTotal ?? dayLooseReceipts(state, commandDay, undefined, tripReceipts).reduce((s, r) => s + getReceiptHkdAmount(r, state), 0))}</b>
-              </div>
-            </div>
-          )}
-          {!commandDay && (
-            <div className="preview-timeline-overview">
-              <div className="preview-timeline-copy">
-                <strong>{liveContext.headline}</strong>
-                <small>{liveContext.detail} — 去「設定」匯入行程 JSON，或者建立新旅程，呢度就會顯示每日時間線。</small>
-                <a className="secondary mini" href="#settings"><CalendarDays size={14} /> 去設定匯入行程</a>
-              </div>
-            </div>
-          )}
-        </div>
-      </MagicCard>
-
-      {perDayTimeline.map(({ day, spots, dayReceipts: daySpend, tripTotal, hkdTotal, rail }) => {
+      {plannerView === 'schedule' && perDayTimeline.filter(entry => showAllDays || entry.day.date === selectedDay?.date).map(({ day, spots, dayReceipts: daySpend, tripTotal, hkdTotal, rail }) => {
         const dayDate = new Date(`${day.date}T00:00:00`);
         const dayDateValid = !Number.isNaN(dayDate.getTime());
         const dayDateNumber = dayDateValid ? String(dayDate.getDate()) : String(day.day);
         const dayMonth = dayDateValid ? `${dayDate.getMonth() + 1}月` : '';
         const dayWeekday = dayDateValid ? zhWeekdayShortFmt.format(dayDate) : '';
         return (
-        <Reveal key={day.date} className="timeline-day-reveal" delay={Math.min(0.18, day.day * 0.018)} lowCost>
+        <div key={day.date} className="timeline-day-reveal planner-day-enter" tabIndex={pocket ? 0 : undefined} role={pocket ? 'region' : undefined} aria-label={pocket ? `第 ${day.day} 天時間軸` : undefined}>
         <GlassCard className={`timeline-day ${day.date === today ? 'today' : ''}`} data-date={day.date}>
           <span className="timeline-day-anchor" data-date={day.date} hidden />
           <div className="section-head timeline-day-head">
@@ -513,6 +393,9 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               <div>
                 <p className="eyebrow timeline-day-date-primary">{day.date}</p>
                 <h2>{day.region}</h2>
+                {day.timezone && <small className="schedule-zone">當地時間 · {day.timezone}</small>}
+                {day.highlight && day.highlight !== day.region && <p>{day.highlight}</p>}
+                {day.note && <p className="schedule-day-note">{day.note}</p>}
                 {day.lodging?.name && <p className="muted timeline-lodging"><Home size={13} /> 住宿：{day.lodging.name}</p>}
               </div>
             </div>
@@ -534,22 +417,35 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
               </span>
             )}
             {spots.map((spot, idx) => {
-              const progress = timelineProgress(day.date, nowPartsForZone(nowTick, normalizeTimelineTimezone(spot.timezone || day.timezone)), spots, idx);
+              const progress = timelineProgress(day, nowPartsForZone(nowTick, normalizeTimelineTimezone(day.timezone)), spots, idx);
               const stateLabel = timelineStateLabel(progress);
               const category = categoryById(spot.type);
+              const startTime = clockLabel(spot.time);
+              const finishTime = endLabel(spot, day.date, day.timezone);
+              const duration = spotDuration(spot, day);
+              const gap = freeMinutes(day, spot, spots[idx + 1]);
               const stableKey = spotStableKey(day.date, spot, idx);
               return (
-              <article className={`timeline-event ${progress}`} data-spot-key={stableKey} key={stableKey}>
-                <time className="timeline-time" dateTime={`${day.date}T${spot.time || '00:00'}`}>
-                  <span>{spot.timeEnd ? `${spot.time} – ${spot.timeEnd}` : spot.time}</span>
-                  {spot.timezone && <small>{spot.timezone}</small>}
-                </time>
+              <div className="planner-stop-group" data-timed={!!startTime} key={stableKey}><article className={`timeline-event ${progress}${(selectedPlace || placeIdentity(spots[0], 0)) === placeIdentity(spot, idx) && day.date === selectedDay?.date ? ' is-selected' : ''}`} data-category={spot.type} data-spot-key={stableKey} key={stableKey} onClick={pocket ? event => {
+                if (!(event.target as HTMLElement).closest('button, a')) selectPlace(day, spot, idx);
+              } : undefined} onDoubleClick={pocket && canEditItinerary && spot._spotIdx >= 0 ? event => {
+                if (!(event.target as HTMLElement).closest('.timeline-route-actions')) setEditing({ date: day.date, idx: spot._spotIdx, original: spot });
+              } : undefined}>
+                <div className="timeline-time">
+                  <span><time dateTime={startTime && !startTime.startsWith('翌日') ? spot.time : undefined}>{startTime || '待定'}</time></span>
+                </div>
+                <i className="schedule-stop-node" aria-hidden="true" />
+                <div className="schedule-stop-card">
                 <VisualIcon id={categoryIconId(spot.type)} label={category.name} className="cat timeline-cat" />
                 <strong className="timeline-main">
+                  {pocket && <span className="pocket-category">{spot.type === 'sightseeing' ? '景點' : category.name}</span>}
                   <span className="timeline-title-row">
-                    <span className="timeline-title">{spot.name}</span>
+                    <button type="button" className="timeline-title planner-select-place" aria-label={`在行程地圖查看 ${spot.name}`} aria-pressed={day.date === selectedDay?.date && (selectedPlace || placeIdentity(spots[0], 0)) === placeIdentity(spot, idx)} onClick={() => selectPlace(day, spot, idx)}>{spot.name}</button>
                     <em className={`timeline-now timeline-state-${progress}`}>{stateLabel}</em>
                   </span>
+                  {(finishTime || spot.timezone && spot.timezone !== day.timezone) && <small className="schedule-time-detail">
+                    {[spot.timezone && spot.timezone !== day.timezone ? spot.timezone : '', finishTime ? `${spot.type === 'flight' ? '抵達' : '至'} ${finishTime}${spot.endTimezone && spot.endTimezone !== (spot.timezone || day.timezone) ? ' ' + spot.endTimezone : ''}` : '', duration !== null ? durationLabel(duration) : ''].filter(Boolean).join(' · ')}
+                  </small>}
                   {spot.note && <small>{spot.note}</small>}
                   {spot.address && <small>{spot.address}</small>}
                 </strong>
@@ -573,7 +469,10 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
                 )}
                 </ActionSheet>
                 </div>
+                </div>
               </article>
+              {gap !== null && <div className="planner-between-stops"><span />{durationLabel(gap)} 空檔 · 可安排交通或休息</div>}
+              </div>
             );})}
           </TimelineRail>
           <button className="secondary full-width timeline-loose-receipts" type="button" onClick={() => setDayReceipts(day.date)}>
@@ -587,9 +486,10 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
             </span>
           </button>
         </GlassCard>
-        </Reveal>
+        </div>
       );})}
       {(() => {
+        if (plannerView !== 'schedule') return null;
         // Receipts dated outside every itinerary day used to silently vanish from this tab.
         const dayDates = new Set(itinerary.map((d) => d.date));
         const orphans = tripReceipts.filter((r) => r.date && !dayDates.has(r.date));
@@ -604,12 +504,21 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           </GlassCard>
         );
       })()}
+      {pocket && (plannerView === 'calendar' || plannerView === 'schedule') && <footer className="pocket-legend">
+        <span>景點</span><span>餐飲</span><span>住宿</span><span>交通／航班</span>
+        <small>{canEditItinerary ? '單擊預覽・雙擊編輯' : '單擊預覽'}</small>
+      </footer>}
+      </div>
+      {['schedule', 'calendar', 'route'].includes(plannerView) && <JourneyMap day={selectedDay} spots={selectedDay ? getScheduleSpots(state, selectedDay) : []} selectedPlace={selectedPlace} onSelect={(spot, index) => selectedDay && selectPlace(selectedDay, spot, index)} onEdit={spot => selectedDay && setEditing({ date: selectedDay.date, idx: spot._spotIdx, original: spot })} canEdit={canEditItinerary} />}
+      </div>
+      <TripTools state={state} syncState={syncState} onView={view => onPlannerView?.(view)} onSettings={onSettings} />
       {status && <Toast tone="info">{status}</Toast>}
       </div>
     </section>
 
+    {createPortal(<>
     {editing && (
-      <div ref={editingContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={handleCloseSpotEditor}>
+      <div ref={editingContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="編輯行程點" onClick={handleCloseSpotEditor}>
         <form ref={editingFormRef} className="modal sheet timeline-edit-sheet" onClick={(event) => event.stopPropagation()} onSubmit={saveSpot}>
           <div className="modal-head">
             <h2>編輯行程點</h2>
@@ -626,6 +535,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
           </div>
           <label>名稱<input name="name" defaultValue={editing.original.name} /></label>
           <label>地址<input name="address" defaultValue={editing.original.address || ''} /></label>
+          <label>訂位編號<input name="bookingRef" defaultValue={editing.original.bookingRef || ''} /></label>
           <label>備註<input name="note" defaultValue={editing.original.note || ''} /></label>
           {canEditItinerary && !editing.draft && itinerary.length > 1 && (
             <label>移至日子
@@ -652,21 +562,21 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       </div>
     )}
     {activeDay && (
-      <div ref={dayReceiptsContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setDayReceipts(null)}>
+      <div ref={dayReceiptsContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="當日消費" onClick={() => setDayReceipts(null)}>
         <div className="modal sheet timeline-receipt-sheet" onClick={(event) => event.stopPropagation()}>
           <div className="modal-head">
             <div>
               <h2>{activeDay.date} 消費</h2>
               <p className="muted">{activeDayEntry?.dayReceipts.length ?? 0} 筆 · {tripPrefix}{fmt(activeDayEntry?.tripTotal ?? 0)} · HK$ {fmt(activeDayEntry?.hkdTotal ?? 0)}</p>
             </div>
-            <button type="button" className="icon-btn" onClick={() => setDayReceipts(null)}>×</button>
+            <button type="button" className="icon-btn" aria-label="關閉當日消費" onClick={() => setDayReceipts(null)}>×</button>
           </div>
-          {activeDayEntry?.dayReceipts.length ? activeDayEntry.dayReceipts.map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={onOpen} onViewPhoto={setViewPhoto} />) : <p className="empty">呢日未有消費。</p>}
+          {activeDayEntry?.dayReceipts.length ? activeDayEntry.dayReceipts.map((r) => <ReceiptRow key={r.id} state={state} receipt={r} onOpen={receipt => { setDayReceipts(null); onOpen(receipt); }} onViewPhoto={setViewPhoto} />) : <p className="empty">呢日未有消費。</p>}
         </div>
       </div>
     )}
     {dayEdit && (
-      <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={handleCloseDayEditor}>
+      <div ref={dayEditContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`編輯 Day ${dayEdit.day} 行程`} style={editing?.draft ? { display: 'none' } : undefined} onClick={handleCloseDayEditor}>
         <div className="modal sheet timeline-day-editor" onClick={(event) => event.stopPropagation()}>
           <div className="modal-head">
             <div>
@@ -707,7 +617,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       </div>
     )}
     {swapSource && (
-      <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setSwapSource(null)}>
+      <div ref={swapSourceContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="對調行程日" style={swapConfirm ? { display: 'none' } : undefined} onClick={() => setSwapSource(null)}>
         <div className="modal sheet timeline-swap-sheet" onClick={(event) => event.stopPropagation()}>
           <div className="modal-head">
             <div>
@@ -730,7 +640,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       const b = itinerary.find((d) => d.date === swapConfirm.targetDate);
       if (!a || !b) return null;
       return (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setSwapConfirm(null)}>
+        <div ref={swapConfirmContainerRef} className="modal-backdrop" role="dialog" aria-modal="true" aria-label="確認對調行程" onClick={() => setSwapConfirm(null)}>
           <div className="modal sheet timeline-swap-confirm-sheet" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head">
               <h2>確認對調行程</h2>
@@ -750,6 +660,7 @@ export function Timeline({ state, setState, onOpen }: { state: AppState; setStat
       );
     })()}
     {viewPhoto && <ReceiptPhotoModal receipt={viewPhoto} onClose={() => setViewPhoto(null)} />}
+    </>, document.body)}
   </>
   );
 }
@@ -794,15 +705,6 @@ function selectTimelineAutoScrollTarget(date: string): Element | null {
   return events[events.length - 1] || day;
 }
 
-function scrollTimelineElementIntoCenter(element: Element) {
-  // One smooth scroll after layout — a second hard snap mid-animation causes visible lag/jumps.
-  requestAnimationFrame(() => {
-    const rect = element.getBoundingClientRect();
-    const targetTop = Math.max(0, window.scrollY + rect.top - window.innerHeight * 0.42);
-    window.scrollTo({ top: targetTop, behavior: 'smooth' });
-  });
-}
-
 // "Now" parts cached per timezone for a single nowMs value: a render with N spots sharing a
 // timezone should format once, not N times. Cleared whenever the clock tick changes.
 let nowPartsCacheMs = -1;
@@ -818,25 +720,24 @@ function nowPartsForZone(nowMs: number, timezone: string): { date: string; minut
   return parts;
 }
 
-function timelineProgress(date: string, current: { date: string; minutes: number } | null, spots: Array<ItinerarySpot & { _spotIdx: number }>, idx: number): 'is-passed' | 'is-live' | 'is-future' {
+function timelineProgress(day: Pick<ItineraryDay, 'date' | 'timezone'>, current: { date: string; minutes: number } | null, spots: ScheduleSpot[], idx: number): TimelineStatus {
   if (!current) return 'is-future';
-  if (date < current.date) return 'is-passed';
-  if (date > current.date) return 'is-future';
-  const start = minutesForTime(spots[idx]?.time);
-  // A time-less spot can't be "upcoming" forever — on its own day it counts as available now.
-  if (!Number.isFinite(start)) return 'is-live';
-  // The next TIMED spot bounds this spot's live window; time-less spots don't.
-  let next = Number.POSITIVE_INFINITY;
-  for (let j = idx + 1; j < spots.length; j += 1) {
-    const candidate = minutesForTime(spots[j]?.time);
-    if (Number.isFinite(candidate)) { next = candidate; break; }
+  const start = dayAxisMinute(spots[idx], day);
+  if (start === null) return 'is-untimed';
+  const dateOffset = (Date.parse(current.date + 'T00:00:00Z') - Date.parse(day.date + 'T00:00:00Z')) / 60000;
+  const now = dateOffset + current.minutes;
+  if (now < start) return 'is-future';
+  const duration = spotDuration(spots[idx], day);
+  if (duration !== null) return now < start + duration ? 'is-live' : 'is-passed';
+  for (let j = idx + 1; j < spots.length; j++) {
+    const next = dayAxisMinute(spots[j], day);
+    if (next !== null && next > start) return now < next ? 'is-live' : 'is-passed';
   }
-  if (current.minutes < start) return 'is-future';
-  if (current.minutes < next) return 'is-live';
-  return 'is-passed';
+  return now < (Math.floor(start / 1440) + 1) * 1440 ? 'is-live' : 'is-passed';
 }
 
 function timelineStateLabel(progress: TimelineStatus): string {
+  if (progress === 'is-untimed') return '待安排';
   if (progress === 'is-passed') return '完成';
   if (progress === 'is-live') return 'Now';
   return '即將';
@@ -889,10 +790,10 @@ function timelineLiveContext(itinerary: ItineraryDay[], nowMs: number, tripWindo
   let passedCount = 0;
   for (let idx = 0; idx < spots.length; idx += 1) {
     const spot = spots[idx];
-    const progress = timelineProgress(activeDay.date, nowPartsForZone(nowMs, normalizeTimelineTimezone(spot.timezone || activeDay.timezone)), spots, idx);
+    const progress = timelineProgress(activeDay, current, spots, idx);
     if (progress === 'is-live') { if (!live) live = spot; }
     else if (progress === 'is-future') { if (!next) next = spot; }
-    else passedCount += 1;
+    else if (progress === 'is-passed') passedCount += 1;
   }
 
   return {
@@ -901,7 +802,7 @@ function timelineLiveContext(itinerary: ItineraryDay[], nowMs: number, tripWindo
     day: activeDay.day,
     region: activeDay.region,
     nowLabel: current ? formatTimelineMinutes(current.minutes) : '--:--',
-    headline: live ? `而家 · ${live.name}` : next ? '準備出發' : '今日行程完成',
+    headline: live ? `而家 · ${live.name}` : next ? '準備出發' : !spots.length ? '今日未有行程' : passedCount < spots.length ? '尚有待安排的站點' : '今日行程完成',
     detail: `Day ${activeDay.day} · ${activeDay.region} · ${passedCount}/${spots.length || 0} 完成`,
     currentLabel: live ? `Current · ${live.time || '--:--'} ${live.name}` : 'Current · 等待下一站',
     nextLabel: next ? `Next · ${next.time || '--:--'} ${next.name}` : 'Next · 今日已無下一站',
@@ -917,7 +818,7 @@ function timelineRailMetrics(date: string, timezone: string | undefined, spots: 
   }
   if (date < current.date) return { isToday: false, isOutsideTrip: false, progress: 100, label: '' };
   if (date > current.date) return { isToday: false, isOutsideTrip: false, progress: 0, label: '' };
-  const progress = timelineSpotProgress(current.minutes, spots);
+  const progress = timelineSpotProgress(current.minutes, spots, { date, timezone });
   return { isToday: true, isOutsideTrip: false, progress, label: formatTimelineMinutes(current.minutes) };
 }
 
@@ -927,17 +828,16 @@ function timelineTripWindow(itinerary: Array<{ date: string }>): { start: string
   return { start: dates[0], end: dates[dates.length - 1] };
 }
 
-function timelineSpotProgress(currentMinutes: number, spots: Array<ItinerarySpot & { _spotIdx: number }>): number {
+function timelineSpotProgress(currentMinutes: number, spots: ScheduleSpot[], day: Pick<ItineraryDay, 'date' | 'timezone'>): number {
   if (!spots.length) return 0;
   let currentIdx = -1;
   for (let idx = 0; idx < spots.length; idx += 1) {
-    const start = minutesForTime(spots[idx]?.time);
+    const start = dayAxisMinute(spots[idx], day);
     // Skip time-less spots instead of breaking — one bad spot must not freeze the rail at 0.
-    if (!Number.isFinite(start)) continue;
+    if (start === null) continue;
     if (currentMinutes < start) break;
     currentIdx = idx;
-    const next = minutesForTime(spots[idx + 1]?.time);
-    if (Number.isFinite(next) && currentMinutes < next) break;
+
   }
   if (currentIdx < 0) return 0;
   if (spots.length === 1) return 50;
@@ -954,14 +854,6 @@ function timelineRailStyle(metrics: { progress: number }): CSSProperties {
 function formatTimelineMinutes(total: number): string {
   const minutes = Math.max(0, Math.min(24 * 60 - 1, Math.round(total)));
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
-
-function minutesForTime(value?: string): number {
-  const match = String(value || '').match(/^(\d{1,3}):(\d{2})/);
-  if (!match) return Number.POSITIVE_INFINITY;
-  // Keep 24+ hour spill (overnight flights) as later-than-midnight instead of clamping to 23.
-  const hour = Math.max(0, Number(match[1]) || 0);
-  return hour * 60 + Math.min(59, Number(match[2]) || 0);
 }
 
 function normalizeTimelineTimezone(value?: string): string {

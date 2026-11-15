@@ -14,12 +14,8 @@ function definitionFor(option: Option): ThemeDefinition | null {
   return option.value === 'auto' ? null : TRIP_THEMES[option.value as keyof typeof TRIP_THEMES];
 }
 
-export function ThemeSection({ ctx }: { ctx: SettingsContext }) {
-  const { state, updateState } = ctx;
-  const themePreference: ThemePreference = state.themePreference;
-  const regionOptions = THEME_OPTIONS.filter((option) => !definitionFor(option)?.kit);
-  const styleOptions = THEME_OPTIONS.filter((option) => definitionFor(option)?.kit);
-
+// Mounts with the open accordion, not every visit to Settings.
+function ThemePreviewFonts() {
   useEffect(() => {
     if (document.querySelector('link[data-style-preview-fonts]')) return;
     const link = document.createElement('link');
@@ -28,6 +24,15 @@ export function ThemeSection({ ctx }: { ctx: SettingsContext }) {
     link.dataset.stylePreviewFonts = '';
     document.head.appendChild(link);
   }, []);
+  return null;
+}
+
+export function ThemeSection({ ctx }: { ctx: SettingsContext }) {
+  const { state, updateState } = ctx;
+  const themePreference: ThemePreference = state.themePreference;
+  const regionOptions = THEME_OPTIONS.filter((option) => !definitionFor(option)?.kit);
+  const styleOptions = THEME_OPTIONS.filter((option) => definitionFor(option)?.kit);
+
 
   const renderOption = (option: Option) => {
     const definition = definitionFor(option);
@@ -43,6 +48,7 @@ export function ThemeSection({ ctx }: { ctx: SettingsContext }) {
         />
         <span className="theme-option-copy">
           <span>{option.label}</span>
+          {definition && <span className="theme-option-scheme">{definition.scheme === 'dark' ? '深色' : '淺色'}</span>}
           {definition ? <small>{definition.region.motif}</small> : <small>跟目的地自動換色</small>}
           {kit && definition ? (
             <span
@@ -77,6 +83,7 @@ export function ThemeSection({ ctx }: { ctx: SettingsContext }) {
   return (
     <>
     <AccordionCard id="settings-theme" eyebrow="外觀" title="外觀主題" icon={<Sparkles />} defaultOpen={false} meta={<span className="pill">{THEME_OPTIONS.find((o) => o.value === themePreference)?.label || '自動'}</span>}>
+      <ThemePreviewFonts />
       <p className="muted">揀自動就跟返旅程目的地。風格主題會連按鈕、卡片、字體同導航列一齊換。</p>
       <div className="theme-selector-group">
         <h4 id="theme-group-region">旅程地區</h4>

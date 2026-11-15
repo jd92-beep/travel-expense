@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -26,7 +27,7 @@ test('expired access_token session survives cold boot (refresh_token not thrown 
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ budget: 100000, rate: 20.36, tripCurrency: 'JPY', lastTab: 'dashboard' }));
   }, SUPA_KEY);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   await page.waitForLoadState('networkidle');
 
   // The persisted session (and crucially its refresh_token) must still be there.
@@ -46,7 +47,7 @@ test('malformed session blob is ignored without crashing the app', async ({ page
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ budget: 100000, rate: 20.36, tripCurrency: 'JPY', lastTab: 'dashboard' }));
   }, SUPA_KEY);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   // App renders real UI (didn't throw on the malformed blob) rather than a blank/error screen.
   await expect(page.getByRole('banner').first()).toBeVisible();
 });
@@ -67,7 +68,7 @@ test('unreachable Supabase releases the reconnect screen after session refresh f
     }));
   }, SUPA_KEY);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
 
   await expect(page.getByLabel('Supabase reconnect')).toBeHidden({ timeout: 10_000 });
   await expect(page.getByLabel('Travel Expense Supabase login')).toBeVisible();
@@ -80,7 +81,7 @@ test('Taiwan theme keeps the configured Supabase login on semantic dark tokens',
     localStorage.setItem('boss-japan-tracker:theme:v1', 'taiwan_nightmarket');
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ schemaVersion: 4, themePreference: 'taiwan_nightmarket' }));
   });
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/`);
   await expect(page.getByLabel('Travel Expense Supabase login')).toBeVisible();
 
   expect(await page.evaluate(() => {

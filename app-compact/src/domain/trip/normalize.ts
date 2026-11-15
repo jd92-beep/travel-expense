@@ -1,3 +1,4 @@
+import { packingSuggestions, dayQuestions } from '../../lib/journeyActivities';
 import { APP_SCHEMA_VERSION, DEFAULT_STATE, ITINERARY, normalizeThemePreference } from '../../lib/constants';
 import { perHkdForCurrency } from '../../lib/currency';
 import type { AppState, CategoryId, ItineraryDay, ItinerarySpot, Receipt, TripIntelligence, TripProfile } from '../../lib/types';
@@ -88,10 +89,11 @@ function normalizeSpotTime(value: unknown): string {
     .replace(/：/g, ':')
     .trim();
   if (!raw) return '';
-  const m = raw.match(/([01]?\d|2[0-3])\s*[:時.]\s*([0-5]\d)/);
+  const m = raw.match(/^(?:上午|下午|晚上)?\s*([0-3]?\d|4[0-7])\s*[:時.]\s*([0-5]\d)(?::[0-5]\d|分)?\s*(?:am|pm)?$/i);
   if (!m) return '';
   let hour = Number(m[1]);
   if (/pm|下午|晚上/i.test(raw) && hour < 12) hour += 12;
+  if (/am|上午/i.test(raw) && hour === 12) hour = 0;
   return `${String(hour).padStart(2, '0')}:${m[2]}`;
 }
 
@@ -100,7 +102,7 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
   return itinerary.map((day, dayIdx) => {
     const safeDate = normalizeItineraryDate(day.date, fallbackYear);
     const dayId = day.dayId || day.id || stableDayId(tripId, safeDate);
-    return {
+    const normalized = {
       ...day,
       date: safeDate,
       id: dayId,
@@ -137,6 +139,19 @@ export function normalizeItinerary(itinerary: ItineraryDay[], tripId: string, fa
         };
       }),
     };
+    if (day.lodging?.name) {
+      const stay = { ...day.lodging };
+      for (const spot of normalized.spots) {
+        if (spot.type !== 'lodging' || !spot.time || !spot.name.includes(stay.name) && !stay.name.includes(spot.name)) continue;
+        const action = [spot.name, spot.note].filter(Boolean).join(' ');
+        if (!stay.checkIn && /入住|check[ -]?in/i.test(action)) stay.checkIn = spot.time;
+        if (!stay.checkOut && /退房|check[ -]?out/i.test(action)) stay.checkOut = spot.time;
+      }
+      normalized.lodging = stay;
+    }
+    if (day.packing !== undefined) normalized.packing = packingSuggestions(day.packing);
+    if (day.quiz !== undefined) normalized.quiz = dayQuestions(normalized);
+    return normalized;
   });
 }
 
@@ -299,8 +314,7 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   // archived trip 仍然係「已知」旅程：收據必須保留喺佢哋原本嘅 trip，唔可以偷走。
   const knownTrip = originalTripId ? trips.find((t) => t.id === originalTripId) : undefined;
   const isDefaultOrEmptyTripId = !originalTripId
-    || originalTripId === 'trip_default'
-    || originalTripId === 'default'
+    || ((originalTripId === 'trip_default' || originalTripId === 'default') && receipt.tripLinkSource !== 'explicit')
     || !knownTrip;
 
   let trip: TripProfile | undefined;
@@ -341,12 +355,10 @@ export function stampReceiptForTrip(state: AppState, receipt: Receipt, options: 
   const currency = receipt.currency || receipt.originalCurrency || day?.currency || state.tripCurrency || 'JPY';
   // 鎖定匯率嘅收據（用户手動釘死，例如出發前唱錢）唔准用而家嘅匯率重新 stamp。
   const pinnedRate = receipt.exchangeRatePinned ? Number(receipt.exchangeRate) : 0;
-  const rate = Math.max(
-    0.1,
-    (Number.isFinite(pinnedRate) && pinnedRate > 0 ? pinnedRate : 0)
-      || Number(receipt.exchangeRate)
-      || perHkdForCurrency(state, currency),
-  );
+  const storedRate = Number(receipt.exchangeRate);
+  const rate = currency.toUpperCase() === 'HKD' ? 1
+    : Number.isFinite(storedRate) && storedRate > 0 ? storedRate
+      : perHkdForCurrency(state, currency);
 
   // 港幣折算自我修復：只修「缺失」同真正矛盾嘅行內數據。
   // 用戶釘死匯率 / 已有正數 hkdAmount 嘅歷史單，唔可以因為今日市場匯率漂移而被改寫。
@@ -418,12 +430,12 @@ export function migrateAppState(input: unknown): AppState {
         ),
         timezones: Array.isArray(item.timezones)
           ? Array.from(new Set(item.timezones.map(normalizeZone).filter(Boolean)))
-          : trip.timezones,
+          : trip.timezones || [timezoneForDestination(item.destinationSummary || item.name)],
         intelligence: normalizeTripIntelligence(
           item.intelligence,
           item.destinationSummary || trip.destinationSummary,
           item.currencies?.find((currency) => currency !== 'HKD') || parsed.tripCurrency || 'JPY',
-          Array.isArray(item.timezones) ? item.timezones[0] : trip.timezones[0],
+          Array.isArray(item.timezones) ? item.timezones[0] : trip.timezones?.[0],
         ),
       }))
     : [trip];

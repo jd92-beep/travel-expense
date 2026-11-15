@@ -38,19 +38,20 @@ test('Click camera icon in record tab and display receipt image modal', async ({
     localStorage.setItem('boss-japan-tracker', JSON.stringify({ lastTab: 'history', receipts: seedReceipts, autoSync: false }));
   }, receipts);
 
-  await page.goto('http://localhost:8903/travel-expense/compact/');
+  await page.goto(`${process.env.COMPACT_TEST_ORIGIN}/travel-expense/compact/`);
   await page.getByRole('button', { name: '紀錄', exact: true }).click();
 
   // 驗證紀錄中心 (Record Tab) 正常渲染
-  await expect(page.getByLabel('紀錄中心 header')).toBeVisible();
+  await expect(page.getByRole('banner', { name: '紀錄中心', exact: true })).toBeVisible();
 
   // 驗證「Test Camera Receipt」呢個 expense record 正常顯示
   await expect(page.getByText('Test Camera Receipt')).toBeVisible();
 
   // 點擊相機 icon 📷
-  const cameraBtn = page.locator('.receipt-row').filter({ hasText: 'Test Camera Receipt' }).locator('button');
+  const cameraBtn = page.locator('.receipt-row').filter({ hasText: 'Test Camera Receipt' }).getByRole('button', { name: /收據相片/ });
   await expect(cameraBtn).toBeVisible();
-  await cameraBtn.click();
+  await cameraBtn.press('Enter');
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toHaveCount(0);
 
   // 驗證 Modal 浮現，並且圖片能夠正常加載出來！
   const modalImg = page.locator('.modal-backdrop img');

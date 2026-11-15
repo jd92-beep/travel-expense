@@ -1,6 +1,7 @@
+import { itineraryQuestions, tripPacking } from '../lib/journeyActivities';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Compass, Sparkles, Calendar, Loader2, ArrowRight, Info, Check, Mail, Plus, Minus, Trash2, Users } from 'lucide-react';
-import { parseNewTripParagraph } from '../lib/ai';
+import { hasUsefulTripItinerary, parseNewTripParagraph } from '../lib/ai';
 import { sharePercents } from '../lib/domain';
 import { createTripProfile, normalizeTripIntelligence } from '../domain/trip/normalize';
 import type { AppState, Person, TripProfile, TripSharingInviteDraft } from '../lib/types';
@@ -182,8 +183,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
     setAiDraft(null);
     try {
       const result = await parseNewTripParagraph(tripText, state);
-      const hasSpots = result && result.trip && Array.isArray(result.trip.itinerary) &&
-        result.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
+      const hasSpots = hasUsefulTripItinerary(result);
       if (hasSpots) {
         setAiDraft(result.trip);
         setAiSummary(result.summary || '已成功分析你嘅行程計畫！');
@@ -653,7 +653,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
             {!aiDraft ? (
               <div style={{ display: 'grid', gap: '12px' }}>
                 <p style={{ margin: 0, fontSize: '12px', color: '#6B7280', lineHeight: 1.5 }}>
-                  複製並貼上你嘅機票、酒店訂單確認郵件，或者隨性嘅行程計畫大綱。AI 模型會自動為你填充時間、地點、預算及生成每日行程！
+                  複製並貼上你嘅機票、酒店訂單確認郵件，或者整份行程。AI 會整理每日時間、地點、住宿、清單同旅程小測驗；有列明嘅預算亦會帶入。
                 </p>
                 <textarea
                   value={tripText}
@@ -741,7 +741,7 @@ export function WelcomeGuidePopup({ state, onSave, onDismiss }: WelcomeGuidePopu
                   {(aiDraft.itinerary?.length ?? 0) > 0 && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: '11px', color: '#9CA3AF', fontWeight: 800 }}>行程景點</span>
-                      <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📍 {aiDraft.itinerary!.reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 個景點 / {aiDraft.itinerary!.filter(day => day.lodging?.name).length} 酒店</span>
+                      <span style={{ fontSize: '12px', color: '#2A1E12', fontWeight: 700 }}>📍 {aiDraft.itinerary!.reduce((sum, day) => sum + (day.spots?.length || 0), 0)} 個景點 / {aiDraft.itinerary!.filter(day => day.lodging?.name).length} 酒店 · {tripPacking(aiDraft.itinerary).length} 件用品 · {itineraryQuestions(aiDraft.itinerary).length} 道題目</span>
                     </div>
                   )}
                 </div>

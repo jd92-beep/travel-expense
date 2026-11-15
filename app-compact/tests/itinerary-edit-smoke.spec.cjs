@@ -45,6 +45,7 @@ async function openTimeline(page) {
   });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#timeline`);
   await expect(page.locator('.timeline-day').first()).toBeVisible();
+  await page.getByRole('button', { name: '顯示全部日子', exact: true }).click();
 }
 
 function storedTrip(page) {
@@ -60,6 +61,14 @@ function storedTrip(page) {
   }, TRIP_ID);
 }
 
+test('day editor remains in the viewport when opened from a scrolled animated timeline', async ({ page }, info) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await openTimeline(page);
+  await page.getByRole('button', { name: '編輯 Day 2 行程' }).click();
+  await expect(page.locator('.timeline-day-editor')).toBeInViewport({ ratio: 1 });
+  await page.screenshot({ path: info.outputPath('timeline-day-contained.png'), animations: 'disabled' });
+});
+
 test('day editor edits region + spot and persists into trip.itinerary', async ({ page }) => {
   await openTimeline(page);
   await page.getByRole('button', { name: '編輯 Day 1 行程' }).click();
@@ -69,8 +78,8 @@ test('day editor edits region + spot and persists into trip.itinerary', async ({
   await editor.getByRole('button', { name: '新增行程點' }).click();
   await editor.getByLabel('名稱').last().fill('新加嘅景點');
   await editor.getByRole('button', { name: '儲存', exact: true }).click();
-  await expect(page.getByText('改名咖啡店')).toBeVisible();
-  await expect(page.getByText('新加嘅景點')).toBeVisible();
+  await expect(page.locator('.timeline-title').filter({ hasText: '改名咖啡店' })).toBeVisible();
+  await expect(page.locator('.timeline-title').filter({ hasText: '新加嘅景點' })).toBeVisible();
   await expect.poll(() => storedTrip(page)).toMatchObject({
     version: 4,
     queuedTripPush: true,
@@ -108,4 +117,75 @@ test('per-spot edit writes trip.itinerary directly and can move spot to another 
   const persisted = await storedTrip(page);
   expect(persisted.overrides).toBe(0);
   expect(persisted.queuedTripPush).toBe(true);
+});
+
+test('day editor traps focus and Escape respects unsaved changes', async ({ page }) => {
+  await openTimeline(page);
+  const opener = page.getByRole('button', { name: '編輯 Day 1 行程', exact: true });
+  await opener.click();
+  const editor = page.locator('.timeline-day-editor');
+  const close = editor.locator('.modal-head button');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(editor.getByRole('button', { name: '儲存', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await editor.getByLabel('名稱').first().fill('保留未儲存行程');
+  let confirms = 0;
+  const dismiss = (dialog) => { confirms += 1; void dialog.dismiss(); };
+  page.on('dialog', dismiss);
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeVisible();
+  expect(confirms).toBe(1);
+  await expect(editor.getByLabel('名稱').first()).toHaveValue('保留未儲存行程');
+  page.off('dialog', dismiss);
+  page.once('dialog', dialog => void dialog.accept());
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect((await storedTrip(page)).itinerary[0].spots[0]).toBe('早餐咖啡店');
+});
+
+test('nested spot detail preserves the day draft and only persists after saving the day', async ({ page }) => {
+  await openTimeline(page);
+  await page.getByRole('button', { name: '編輯 Day 1 行程' }).click();
+  const editor = page.locator('.timeline-day-editor');
+  await editor.getByLabel('名稱').first().fill('未儲存日程草稿');
+  await editor.getByRole('button', { name: '詳情', exact: true }).first().click();
+  const sheet = page.locator('.timeline-edit-sheet');
+  await expect(editor).toBeHidden();
+  await expect(sheet.locator('.modal-head button')).toBeFocused();
+  await sheet.getByLabel('名稱').fill('未儲存景點詳情');
+  const dismiss = (dialog) => void dialog.dismiss();
+  page.on('dialog', dismiss);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeVisible();
+  await expect(editor).toBeAttached();
+  await expect(sheet.getByLabel('名稱')).toHaveValue('未儲存景點詳情');
+  page.off('dialog', dismiss);
+  await sheet.getByRole('button', { name: '儲存', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(editor).toBeVisible();
+  await expect(editor.getByLabel('名稱').first()).toHaveValue('未儲存景點詳情');
+  expect((await storedTrip(page)).itinerary[0].spots[0]).toBe('早餐咖啡店');
+  await editor.getByRole('button', { name: '儲存', exact: true }).click();
+  await expect.poll(async () => (await storedTrip(page)).itinerary[0].spots[0]).toBe('未儲存景點詳情');
+});
+
+test('Escape from day swap confirmation returns to the focused day picker', async ({ page }) => {
+  await openTimeline(page);
+  const opener = page.getByRole('button', { name: 'Day 1 與其他日子對調' });
+  await opener.click();
+  const picker = page.locator('.timeline-swap-sheet');
+  await picker.locator('.timeline-swap-option').first().click();
+  const confirm = page.locator('.timeline-swap-confirm-sheet');
+  await expect(picker).toBeHidden();
+  await expect(confirm.locator('.modal-head button')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(confirm).toHaveCount(0);
+  await expect(picker).toBeVisible();
+  expect(await picker.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveCount(0);
+  await expect(opener).toBeFocused();
 });

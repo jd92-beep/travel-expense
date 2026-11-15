@@ -6,6 +6,9 @@ import './styles/themes.css';
 import './styles/desktop.css';
 import './styles/style-themes.css';
 import './styles/style-kit-fx.css';
+import './styles/journey.css';
+import './styles/planner.css';
+import './styles/video-themes.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 

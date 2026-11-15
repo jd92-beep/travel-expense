@@ -51,7 +51,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#stats`);
-  await expect(page.getByText('預算使用分析').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: '預算使用分析', exact: true })).toBeVisible();
   await expect(page.getByText('4 筆紀錄')).toBeVisible();
   await expect(page.locator('.stats-command-title-row')).toContainText('預算使用分析');
   await expect(page.locator('.stats-command-title-row')).not.toContainText(/筆轉帳|已平衡/);
@@ -81,7 +81,9 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(compass).toContainText(/(尚餘|超出)/);
   await expect(compass).toContainText('餐飲');
   await expect(compass).toContainText('最高');
-  await expect(compass.locator('.spending-compass-slice')).toHaveCount(4);
+  await expect(compass.locator('.spending-compass-slice')).toHaveCount(2);
+  await expect(compass.locator('.spending-compass-legend')).toContainText('已使用');
+  await expect(compass.locator('.spending-compass-legend')).toContainText('尚餘預算');
   const compassMetrics = await compass.evaluate((node) => {
     const rect = node.getBoundingClientRect();
     return {
@@ -106,7 +108,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     const rect = node.getBoundingClientRect();
     const cards = Array.from(node.querySelectorAll('.stats-story-card')).map((card) => {
       const cardRect = card.getBoundingClientRect();
-      return { top: Math.round(cardRect.top), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
+      return { top: Math.round(cardRect.top), bottom: Math.round(cardRect.bottom), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
     });
     return {
       width: Math.round(rect.width),
@@ -116,7 +118,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   });
   expect(storyMetrics.width, JSON.stringify(storyMetrics, null, 2)).toBeLessThanOrEqual(366);
   expect(storyMetrics.scrollWidth, JSON.stringify(storyMetrics, null, 2)).toBeLessThanOrEqual(390);
-  expect(storyMetrics.cards[0].top).toBe(storyMetrics.cards[1].top);
+  expect(storyMetrics.cards[1].top).toBeGreaterThanOrEqual(storyMetrics.cards[0].bottom);
   await expect(page.getByText('圖表統計額')).toHaveCount(0);
   await expect(page.getByText('共同分帳額')).toHaveCount(0);
   await expect(page.getByText('私人/代付')).toHaveCount(0);
@@ -152,7 +154,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
     const rect = node.getBoundingClientRect();
     const cards = Array.from(node.querySelectorAll('.settlement-action-card')).map((card) => {
       const cardRect = card.getBoundingClientRect();
-      return { top: Math.round(cardRect.top), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
+      return { top: Math.round(cardRect.top), bottom: Math.round(cardRect.bottom), left: Math.round(cardRect.left), width: Math.round(cardRect.width) };
     });
     return {
       width: Math.round(rect.width),
@@ -163,14 +165,15 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   expect(actionMetrics.width, JSON.stringify(actionMetrics, null, 2)).toBeLessThanOrEqual(354);
   expect(actionMetrics.scrollWidth, JSON.stringify(actionMetrics, null, 2)).toBeLessThanOrEqual(390);
   expect(actionMetrics.cards).toHaveLength(3);
-  expect(actionMetrics.cards[0].width).toBeGreaterThan(actionMetrics.cards[1].width);
+  expect(actionMetrics.cards[0].width).toBe(actionMetrics.cards[1].width);
+  expect(actionMetrics.cards[1].top).toBeGreaterThanOrEqual(actionMetrics.cards[0].bottom);
   await expect(page.locator('.transfer-modern')).toContainText('¥2,850');
   await expect(page.locator('.transfer-modern')).toContainText('User 1 Cheung');
   await expect(page.locator('.transfer-modern')).toContainText('Xinxin Wong');
   const transferTextOverflow = await page.locator('.stats-transfer-person span:last-child').evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).textOverflow));
   expect(transferTextOverflow).not.toContain('ellipsis');
   await expect(page.getByText('代付：User 1 Cheung 代 Xinxin Wong 付 ¥300 · M9 Gift')).toBeVisible();
-  await expect(page.getByText('每日 Budget Pace')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '每日開支走勢' })).toBeVisible();
   await expect(page.locator('.trend-panel')).toContainText('超支');
   await expect(page.locator('.budget-pace')).toContainText('預算線');
   await expect(page.locator('.budget-pace-day.over')).toHaveCount(2);
@@ -189,6 +192,7 @@ test('Stats settlement, filters, top expenses, and trend are usable', async ({ p
   await expect(page.locator('.rank-row').filter({ hasText: 'M9 Train' })).toBeVisible();
   await expect(page.getByText('M9 Sushi')).toBeVisible();
 
+  await page.locator('.journey-data-details summary').click();
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-20' })).toBeVisible();
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-21' })).toBeVisible();
   await expect(page.locator('.bar-row').filter({ hasText: '2026-04-22' })).toBeVisible();

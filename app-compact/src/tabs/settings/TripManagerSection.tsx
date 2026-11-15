@@ -396,7 +396,7 @@ export function TripManagerSection({ ctx, openTripDraft }: { ctx: SettingsContex
 
   return (
     <>
-    <AccordionCard id="settings-trip" eyebrow="旅程" title={theme.id === 'japan_washi' ? '旅程管理器 🏯🌸' : '旅程管理器'} defaultOpen={false} meta={<span className="pill">v{managedTrip.version}</span>}>
+    <AccordionCard id="settings-trip" eyebrow="旅程" title="旅程管理器" defaultOpen={false} meta={<span className="pill">v{managedTrip.version}</span>}>
       <div className="settings-trip-manager">
       <div className="settings-trip-panel settings-trip-panel--active">
         <div className="settings-trip-panel-head">

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
 test.use({ viewport: { width: 390, height: 844 } });
 
@@ -28,9 +29,16 @@ function sessionPayload() {
   };
 }
 
-test('Active Supabase trip push deactivates stale active trips for the same user', async ({ page }) => {
+test('Supabase trip push keeps active selection local and never deactivates another shared trip', async ({ page }) => {
   const tripUpserts = [];
   const tripPatches = [];
+  const serverTrips = [
+    { id: oldTripUuid, localId: 'trip_old', name: 'Old Trip', date: '2026-07-01' },
+    { id: newTripUuid, localId: 'trip_new', name: 'New Trip', date: '2026-08-01' },
+  ].map(({ id, localId, name, date }) => ({ id, owner_id: userId, name, start_date: date, end_date: date,
+    active: true, archived: false, version: 1, itinerary_version: 1, home_currency: 'HKD', trip_currency: 'JPY',
+    timezones: ['Asia/Tokyo'], itinerary: [], legacy_source_id: localId, app_metadata: { localTripId: localId },
+    updated_at: new Date().toISOString(), created_at: new Date().toISOString() }));
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
@@ -47,7 +55,7 @@ test('Active Supabase trip push deactivates stale active trips for the same user
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: userId, app_settings: {} }]) });
       return;
     }
     if (table === 'profiles' && method === 'PATCH') {
@@ -71,11 +79,15 @@ test('Active Supabase trip push deactivates stale active trips for the same user
     }
     if (table === 'trips' && method === 'PATCH') {
       tripPatches.push({ body, query: url.searchParams.toString() });
-      await route.fulfill({ status: 204, body: '' });
+      tripUpserts.push(body);
+      const id = url.searchParams.get('id')?.replace(/^eq\./, '');
+      const row = serverTrips.find(trip => trip.id === id);
+      await route.fulfill({ status: 200, json: { ...row, ...body } });
       return;
     }
     if (table === 'trips' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      const id = url.searchParams.get('id')?.replace(/^eq\./, '');
+      await route.fulfill({ status: 200, json: id ? serverTrips.filter(trip => trip.id === id) : serverTrips });
       return;
     }
     if (table === 'receipts' && method === 'GET') {
@@ -144,20 +156,25 @@ test('Active Supabase trip push deactivates stale active trips for the same user
     }));
   }, { userId, session: sessionPayload(), oldTripUuid, newTripUuid });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#dashboard');
-  await expect(page.getByText('Travel Ledger')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
+  await expect(page.getByRole('navigation', { name: '主要分頁' })).toBeVisible();
 
   await expect.poll(() => tripUpserts.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
-  expect(tripUpserts.at(-1).active).toBe(true);
-
-  await expect.poll(() => tripPatches.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
-  expect(tripPatches.at(-1).body.active).toBe(false);
-  expect(tripPatches.at(-1).query).toContain(`id=neq.${newTripUuid}`);
-  expect(tripPatches.at(-1).query).toContain(`owner_id=eq.${userId}`);
+  await expect.poll(() => tripPatches.some(patch => patch.query.includes(`id=eq.${newTripUuid}`))).toBe(true);
+  expect(tripUpserts.every(row => row.active === false)).toBe(true);
+  expect(tripPatches.every(patch => !patch.query.includes('id=neq.'))).toBe(true);
+  expect(await page.evaluate(userId => JSON.parse(localStorage.getItem(`boss-japan-tracker:state:supabase:${userId}`)).activeTripId, userId)).toBe('trip_new');
 });
 
 test('Supabase receipt archive is scoped to the deleted receipt trip when SourceID repeats', async ({ page }) => {
-  const receiptPatches = [];
+  const receiptLookups = [];
+  const receiptDeletes = [];
+  const deletedReceiptUuid = '77777777-7777-4777-8777-777777777777';
+  const serverTrips = [oldTripUuid, newTripUuid].map((id, index) => ({ id, owner_id: userId,
+    legacy_source_id: index ? 'trip_b' : 'trip_a', name: index ? 'Trip B' : 'Trip A',
+    start_date: index ? '2026-08-01' : '2026-07-01', end_date: index ? '2026-08-02' : '2026-07-02',
+    active: !index, archived: false, version: 1, itinerary: [], timezones: ['Asia/Tokyo'],
+    home_currency: 'HKD', trip_currency: 'JPY', created_at: new Date().toISOString(), updated_at: new Date().toISOString() }));
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: sessionPayload().user }) });
@@ -173,22 +190,24 @@ test('Supabase receipt archive is scoped to the deleted receipt trip when Source
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: userId, app_settings: {} }]) });
       return;
     }
     if (table === 'trips' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(serverTrips) });
       return;
     }
     if (table === 'receipts' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      if (url.searchParams.get('select') === 'id') receiptLookups.push(url.searchParams.toString());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(url.searchParams.get('select') === 'id' ? [{ id: deletedReceiptUuid }] : []) });
       return;
     }
-    if (table === 'receipts' && method === 'PATCH') {
-      receiptPatches.push({ body: route.request().postDataJSON?.(), query: url.searchParams.toString() });
-      await route.fulfill({ status: 204, body: '' });
+    if (table === 'delete_receipt_v2' && method === 'POST') {
+      receiptDeletes.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, json: { id: deletedReceiptUuid, version: 3, deleted_at: new Date().toISOString() } });
       return;
     }
+    if (table === 'receipts' && ['PATCH', 'DELETE'].includes(method)) throw new Error('Receipt deletes must use the versioned RPC');
 
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
   });
@@ -249,22 +268,23 @@ test('Supabase receipt archive is scoped to the deleted receipt trip when Source
         payload: {
           sourceId: 'trip_a::shared_source',
           tripId: 'trip_a',
+          version: 2,
           updatedAt: now,
         },
       }],
     }));
   }, { userId, session: sessionPayload(), oldTripUuid, newTripUuid });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
+  await expect(page.getByRole('banner', { name: '紀錄中心' })).toBeVisible();
 
-  await expect.poll(() => receiptPatches.length, { timeout: 10000 }).toBeGreaterThanOrEqual(1);
-  expect(receiptPatches.at(-1).body.status).toBe('deleted');
-  expect(receiptPatches.at(-1).query).toContain(`owner_id=eq.${userId}`);
-  expect(receiptPatches.at(-1).query).toContain('source_id=eq.shared_source');
-  expect(receiptPatches.at(-1).query).not.toContain('source_id=eq.trip_a%3A%3Ashared_source');
-  expect(receiptPatches.at(-1).query).toContain(`trip_id=eq.${oldTripUuid}`);
-  expect(receiptPatches.at(-1).query).not.toContain(`trip_id=eq.${newTripUuid}`);
+  await expect.poll(() => receiptDeletes.length, { timeout: 10000 }).toBe(1);
+  expect(receiptLookups[0]).toContain(`owner_id=eq.${userId}`);
+  expect(receiptLookups[0]).toContain('source_id=eq.shared_source');
+  expect(receiptLookups[0]).not.toContain('source_id=eq.trip_a%3A%3Ashared_source');
+  expect(receiptLookups[0]).toContain(`trip_id=eq.${oldTripUuid}`);
+  expect(receiptDeletes[0]).toMatchObject({ p_trip_id: oldTripUuid, p_receipt_id: deletedReceiptUuid, p_expected_version: 2 });
+  expect(receiptDeletes[0].p_idempotency_key).toBe(`${oldTripUuid}:shared_source:delete:2`);
 });
 
 test('Supabase pull merges a migrated local receipt by trip SourceID when Supabase id is new', async ({ page }) => {
@@ -340,7 +360,7 @@ test('Supabase pull merges a migrated local receipt by trip SourceID when Supaba
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: userId, app_settings: {} }]) });
       return;
     }
     if (table === 'trips' && method === 'GET') {
@@ -395,8 +415,8 @@ test('Supabase pull merges a migrated local receipt by trip SourceID when Supaba
     }));
   }, { userId, session: sessionPayload(), localUpdatedAt });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
+  await expect(page.getByRole('banner', { name: '紀錄中心' })).toBeVisible();
 
   await expect.poll(async () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker:state:supabase:44444444-4444-4444-8444-444444444444') || '{}');
@@ -559,6 +579,15 @@ test('Supabase pull keeps duplicate SourceID receipts separate across trips', as
       updated_at: nowIso,
       deleted_at: null,
     },
+    {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      trip_id: '99999999-0000-4000-8000-000000000999',
+      source_id: 'shared_source',
+      version: 99,
+      sync_revision: 99,
+      deleted_at: nowIso,
+      updated_at: nowIso,
+    },
   ];
 
   await page.route('https://test-travel-expense.supabase.co/auth/v1/**', async (route) => {
@@ -575,7 +604,7 @@ test('Supabase pull keeps duplicate SourceID receipts separate across trips', as
       return;
     }
     if (table === 'profiles' && method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ app_settings: {} }) });
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: userId, app_settings: {} }]) });
       return;
     }
     if (table === 'trips' && method === 'GET') {
@@ -604,8 +633,8 @@ test('Supabase pull keeps duplicate SourceID receipts separate across trips', as
     }));
   }, { userId, session: sessionPayload() });
 
-  await page.goto('http://localhost:8903/travel-expense/compact/#history');
-  await expect(page.getByText('紀錄中心')).toBeVisible();
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
+  await expect(page.getByRole('banner', { name: '紀錄中心' })).toBeVisible();
 
   await expect.poll(async () => page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('boss-japan-tracker:state:supabase:44444444-4444-4444-8444-444444444444') || '{}');

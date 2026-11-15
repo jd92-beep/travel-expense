@@ -31,7 +31,11 @@ export default defineConfig({
   server: {
     fs: {
       allow: [srcPath, repoRoot],
-      deny: ['**/.env', '**/.env.*', '**/*.{crt,pem}', '**/.git/**', '**/secrets.local.*'],
+      deny: [
+        '**/.env*', '**/.dev.vars*', '**/*.{crt,pem}', '**/.git/**',
+        '**/secrets.local.*', '**/.broker-vault-session*.json',
+        '**/credential-seed*.json', '**/credential-vault*.json', '**/.wrangler/**',
+      ],
     },
   },
 });

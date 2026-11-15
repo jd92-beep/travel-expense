@@ -18,6 +18,12 @@ try {
   assert.equal(constants.parseThemePreference('not-a-theme'), undefined);
   assert.equal(constants.parseThemePreference('cyberpunk_hud'), 'cyberpunk_hud');
   assert.equal(trip.migrateAppState({ themePreference: 'sketch_notebook' }).themePreference, 'sketch_notebook');
+  for (const key of ['night_ledger', 'harbor_blueprint', 'sunset_terrace', 'pocket_planner', 'alpine_postcard'] as const) {
+    assert.equal(constants.parseThemePreference(key), key);
+    assert.equal(trip.migrateAppState({ themePreference: key }).themePreference, key);
+    assert.equal(supabase.rowToSettings({ app_settings: { themePreference: key } })?.themePreference, key);
+    assert.equal(supabase.buildAppSettings({ ...constants.DEFAULT_STATE, themePreference: key }).themePreference, key);
+  }
 
   const remoteInvalid = supabase.rowToSettings({ app_settings: { themePreference: 'not-a-theme' } });
   assert.equal(remoteInvalid?.themePreference, undefined);

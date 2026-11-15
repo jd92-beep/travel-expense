@@ -10,6 +10,7 @@ export const hydrateScope = scope => window.defer('hydrate', scope.split(':')[1]
 export const persistScope = async () => ({ status: 'succeeded' });` }));
   await page.route('**/src/lib/supabase.ts', route => route.fulfill({ contentType: 'application/javascript', body: `export * from '/travel-expense/compact/src/lib/supabase.ts?actual';
 export const hasSupabaseSession = s => !!s?.user?.id;
+export const isSupabaseConfigured = () => window.auditCloudConfigured !== false;
 export const upsertSupabaseReceipt = (s, state, receipt) => window.defer('push', s.user.id, receipt);
 export const pullSupabaseData = (s) => window.defer('pull', s.user.id);` }));
   await page.route('**/audit-harness', route => route.fulfill({ contentType: 'text/html', body: '<div id="root"></div><script type="module">import RefreshRuntime from "/travel-expense/compact/@react-refresh"; RefreshRuntime.injectIntoGlobalHook(window); window.$RefreshReg$=()=>{};window.$RefreshSig$=()=>t=>t;window.__vite_plugin_react_preamble_installed__=true; await import("/travel-expense/compact/tests/fixtures/account-scope.tsx");</script>' }));
@@ -73,6 +74,27 @@ test('late A pull does not merge into B', async ({ page }) => {
   await page.evaluate(() => window.pullDone);
   expect(await page.evaluate(() => ({ budget: window.api.state.budget, receipts: window.api.state.receipts }))).toEqual({ budget: 200, receipts: [] });
 });
+for (const mode of ['unconfigured', 'failed']) {
+  test(`${mode} cloud pull preserves cached trips and uploaded photo flags`, async ({ page }) => {
+    await boot(page); await hydrate(page, 'A');
+    await page.evaluate(({ mode, receipt }) => {
+      window.auditCloudConfigured = mode !== 'unconfigured';
+      window.api.setState(state => ({ ...state, activeTripId: 't1',
+        trips: [{ id: 't1', name: 'Cached trip', supabaseId: 'cloud-trip', timezones: ['Asia/Tokyo'], currencies: ['JPY'], itinerary: [], active: true, version: 1 }],
+        receipts: [{ ...receipt, supabaseId: 'cloud-receipt', photoThumb: 'synthetic-thumbnail', _photoSyncedToSupabase: true }],
+      }));
+    }, { mode, receipt });
+    await expect.poll(() => page.evaluate(() => window.api.state.trips[0]?.id)).toBe('t1');
+    await page.evaluate(() => { window.pullDone = window.api.pull(); });
+    await expect.poll(() => page.evaluate(() => window.calls.length)).toBe(1);
+    await page.evaluate(mode => window.calls[0].resolve(mode === 'failed'
+      ? Promise.reject(new Error('offline fixture'))
+      : { trips: [], receipts: [], tombstones: [], settings: {} }), mode);
+    await page.evaluate(() => window.pullDone);
+    expect(await page.evaluate(() => ({ trip: window.api.state.trips[0]?.id, receipt: window.api.state.receipts[0]?.id,
+      photoSynced: window.api.state.receipts[0]?._photoSyncedToSupabase }))).toEqual({ trip: 't1', receipt: 'r1', photoSynced: true });
+  });
+}
 test('service requests keep their initiating bearer, mutation keys, and deleted trip target', async ({ page }) => {
   const calls = [];
   await page.route('**/rest/v1/**', async route => {

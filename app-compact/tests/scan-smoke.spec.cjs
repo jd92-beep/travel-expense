@@ -67,8 +67,8 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   await expect(page.getByText('掃描收據')).toBeVisible();
   await expect(page.getByRole('button', { name: '相機' }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: '相簿' }).first()).toBeVisible();
-  // Passport-stamp layout: one stamp shutter, four route stamps, the visa rate button, today's ledger.
-  await expect(page.locator('.scan-route')).toHaveText(['相簿', '語音', 'Email', '手動']);
+  // Journey capture layout: camera panel, four capture routes, rate controls and today's ledger.
+  await expect(page.locator('.scan-route > span')).toHaveText(['相簿', '語音', 'Email', '手動']);
   await expect(page.getByRole('button', { name: '匯率' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '今日入帳' })).toBeVisible();
   await expect(page.locator('.scan-page')).not.toContainText('P<HKG');
@@ -165,8 +165,10 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   const fxDialog = page.getByRole('dialog', { name: '即時匯率' });
   await expect(fxDialog).toBeVisible();
   await fxDialog.locator('input').first().fill('2000');
-  await expect(fxDialog).toContainText('2000 JPY');
-  await expect(fxDialog).not.toContainText('來源');
+  await expect(fxDialog.locator('.scan-fx-result span')).toHaveText('2,000 JPY');
+  await expect(fxDialog.locator('.scan-fx-result strong')).toHaveText('98.23 HKD'); // offline fixture default: 2,000 / 20.36
+  await expect(fxDialog.locator('.rate-reference')).toContainText('每日參考匯率，非即時成交價');
+  await expect(fxDialog.locator('summary')).toHaveText('匯率來源與比價參考');
   // The sheet switches to a fixed rate in place (same contract as Settings 匯率設定).
   await fxDialog.getByRole('tab', { name: '固定匯率' }).click();
   await fxDialog.getByLabel('固定匯率（1 HKD = JPY）').fill('20');
@@ -201,7 +203,7 @@ test('Scan tab manual, voice, email, currency, and cleanup flows', async ({ page
   const timeBox = await editor.locator('input[type="time"]').boundingBox();
   expect(Math.abs(dateBox.y - timeBox.y)).toBeLessThan(4);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await editor.getByRole('button', { name: '×' }).click();
+  await editor.getByRole('button', { name: '關閉記帳視窗' }).click();
 
   await nav.getByRole('button', { name: '紀錄', exact: true }).click();
   await page.getByPlaceholder(/搜尋店名|搜尋店家/).fill('M5 Email');

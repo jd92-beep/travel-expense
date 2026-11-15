@@ -1,7 +1,7 @@
 import { Plane, RotateCcw, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { AccordionCard } from '../../components/AccordionCard';
-import { parseTripParagraph } from '../../lib/ai';
+import { hasUsefulTripItinerary, parseTripParagraph } from '../../lib/ai';
 import { DEFAULT_TRIP_UPDATE_MODEL_ID } from '../../lib/constants';
 import {
   redactedError,
@@ -25,7 +25,7 @@ export function TripUpdateSection({ ctx, tripDraft, setTripDraft, setTripDraftMo
   return (
     <>
     <AccordionCard id="settings-trip-update" eyebrow="AI" title="AI 行程更新" icon={<Sparkles />} defaultOpen={false}>
-      <p className="muted">目前 primary：{tripUpdateModelName}。貼入長行程後，AI 會先分析日程、景點、酒店、餐廳同重要細節；確認後先會更新本機 trip，同步時會建立/更新 Notion trip note。</p>
+      <p className="muted">使用 {tripUpdateModelName}。貼上行程、預訂同要帶嘅用品。確認後，每日時間、地點、航班、住宿、清單及行程小測驗會套用到目前旅程。</p>
       <textarea
         rows={10}
         value={tripParagraph}
@@ -40,8 +40,7 @@ export function TripUpdateSection({ ctx, tripDraft, setTripDraft, setTripDraftMo
           onClick={() => run('分析行程', async () => {
             try {
               const draft = await parseTripParagraph(tripParagraph, state);
-              const hasSpots = draft && draft.trip && Array.isArray(draft.trip.itinerary) &&
-                draft.trip.itinerary.some((day) => Array.isArray(day.spots) && day.spots.length > 0);
+              const hasSpots = hasUsefulTripItinerary(draft);
               if (!hasSpots) {
                 const warningMsg = (draft && draft.warnings && draft.warnings.join(' | ')) || '';
                 throw new Error(warningMsg || 'AI 智能解析未成功提取任何日程景點，請檢查貼入嘅文字內容。');

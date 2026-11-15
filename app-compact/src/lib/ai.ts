@@ -1,3 +1,4 @@
+import { packingSuggestions, dayQuestions } from './journeyActivities';
 import { buildReceiptPrompt, buildTextReceiptPrompt, translationGuidance } from './aiPrompts';
 import { activeTrip, normalizeItinerary, normalizeTripIntelligence, tripFromLegacyState } from '../domain/trip/normalize';
 import { resolveTripContext } from '../domain/trip/context';
@@ -413,9 +414,9 @@ function isBrokerRouteUnavailable(error: unknown): boolean {
   return /(?:\b404\b|not found|route|endpoint|Network error)/i.test(message);
 }
 
-function hasUsefulTripItinerary(draft: TripDraft): boolean {
+export function hasUsefulTripItinerary(draft: TripDraft): boolean {
   return Array.isArray(draft.trip.itinerary)
-    && draft.trip.itinerary.some((day) => (day.spots || []).some((spot) => String(spot.name || '').trim()));
+    && draft.trip.itinerary.some(day => day.lodging?.name?.trim() || day.spots.some(spot => String(spot.name || '').trim()) || day.packing?.length || day.quiz?.length);
 }
 
 function configuredTripAttemptTimeoutMs(): number | null {
@@ -520,8 +521,6 @@ function normalizeTripTime(hour: string, minute: string, meridiem = ''): string 
   const suffix = String(meridiem || '').toLowerCase().replace(/\./g, '');
   if ((suffix === 'pm' || suffix === 'p') && h < 12) h += 12;
   if ((suffix === 'am' || suffix === 'a') && h === 12) h = 0;
-  // Keep 24–30 as next-day spill for overnight flights; only wrap a true 24.
-  if (h === 24) h = 24;
   return `${String(h).padStart(2, '0')}:${String(minute || '00').padStart(2, '0')}`;
 }
 
@@ -831,9 +830,7 @@ function sortSpotsByTime(spots: ItineraryDay['spots']): ItineraryDay['spots'] {
     if (!t) return 99 * 60 + 59; // untimed last
     const [h, m] = t.split(':').map(Number);
     if (!Number.isFinite(h)) return 99 * 60 + 59;
-    // Overnight spill (24+) sorts after midnight slots but before untimed.
-    const hour = h >= 24 ? h - 24 + 1 : h;
-    return hour * 60 + (Number.isFinite(m) ? m : 0);
+    return h * 60 + (Number.isFinite(m) ? m : 0);
   };
   return [...spots].sort((a, b) => rank(a.time) - rank(b.time) || String(a.name).localeCompare(String(b.name)));
 }
@@ -854,6 +851,35 @@ function extractLodgingName(block: string): string | undefined {
   return undefined;
 }
 
+// The local fallback can extract an explicit list without guessing kit from a destination.
+function splitPreparation(text: string) {
+  const lines: string[] = [];
+  const items: { label: string; note: string }[] = [];
+  let list = false;
+  for (const line of text.split('\n')) {
+    const heading = line.match(/^\s*(?:攜帶用品|行李清單|行前準備|需(?:要)?攜帶|準備物品|必帶|pack(?:ing)?(?: list)?|bring)\s*[:：]\s*(.*)$/i);
+    const bullet = list && line.match(/^\s*[-*•]\s+(.+)$/);
+    if (heading || bullet) {
+      list = true;
+      const content = heading ? heading[1] : bullet ? bullet[1] : '';
+      for (const part of content.split(/[,，、;；]/)) {
+        const label = part.trim().replace(/[。；;]$/, '');
+        if (!label) continue;
+        const last = items.at(-1);
+        if (last && /^(?:放(?:入|在|於|隨身|行李)|裝入|收在|放喺|pack in\b|keep in\b)/i.test(label)) {
+          last.note = [last.note, label].filter(Boolean).join(' · ');
+        } else {
+          items.push({ label, note: '' });
+        }
+      }
+    } else {
+      if (line.trim()) list = false;
+      lines.push(line);
+    }
+  }
+  return { text: lines.join('\n'), items: packingSuggestions(items) };
+}
+
 export function localTripDraftFromParagraph(paragraph: string, state: AppState, warnings: string[] = []): TripDraft | null {
   const text = normalizeTripInputText(paragraph);
   if (!text) return null;
@@ -864,11 +890,13 @@ export function localTripDraftFromParagraph(paragraph: string, state: AppState, 
   if (!dayHeaders.length) return null;
 
   const itinerary: ItineraryDay[] = [];
+  const tripWidePacking = splitPreparation(text.slice(0, dayHeaders[0].index)).items;
   let prevLodging: ItineraryDay['lodging'] | undefined;
   for (let i = 0; i < dayHeaders.length; i += 1) {
     const header = dayHeaders[i];
     const next = dayHeaders[i + 1];
-    const block = text.slice(header.index, next?.index || text.length);
+    const prep = splitPreparation(text.slice(header.index, next?.index || text.length));
+    const block = prep.text;
     const dayNo = header.dayNo || i + 1;
     const date = header.date;
     const headerTail = String(header.tail || '').replace(/[｜|]/g, ' ').trim();
@@ -914,6 +942,7 @@ export function localTripDraftFromParagraph(paragraph: string, state: AppState, 
       timezone: context.timezone || 'Asia/Hong_Kong',
       currency,
       highlight: region,
+      packing: packingSuggestions(i === 0 ? [...tripWidePacking, ...prep.items] : prep.items),
       note: adviceLines.join('；') || noteLines.join('；') || undefined,
       lodging,
       spots,
@@ -924,7 +953,7 @@ export function localTripDraftFromParagraph(paragraph: string, state: AppState, 
   itinerary.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
   itinerary.forEach((day, idx) => { day.day = idx + 1; });
 
-  const usableDays = itinerary.filter((day) => day.spots.length || day.lodging?.name);
+  const usableDays = itinerary.filter(day => day.spots.length || day.lodging?.name || day.packing?.length);
   if (!usableDays.length) return null;
 
   // Trip name from explicit header lines like "行程：xxx" / "Trip: xxx" / first Day tail.
@@ -1219,8 +1248,9 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
   const currencies = Array.from(new Set([
     'HKD',
     ...(Array.isArray(tripValue.currencies) ? tripValue.currencies : []),
+    ...itinerary.map(day => day.currency).filter(Boolean),
     state.tripCurrency || current.currencies?.[1] || 'JPY',
-  ].map(String).filter(Boolean)));
+  ].filter(Boolean).map(code => String(code).trim().toUpperCase()).filter(isCurrencyCode)));
   const normalizedItinerary = normalizeItinerary(itinerary, tripId, currencies.find((code) => code !== 'HKD') || state.tripCurrency || 'JPY');
   const primaryCurrency = currencies.find((code) => code !== 'HKD') || state.tripCurrency || 'JPY';
   const intelligence = normalizeTripIntelligence(
@@ -1231,7 +1261,6 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
   );
   const trip: TripProfile = {
     ...current,
-    ...tripValue,
     id: tripId,
     name: String(tripValue.name || (isNewTrip ? destinationSummary : current.name) || '新旅程').slice(0, 80),
     destinationSummary,
@@ -1244,6 +1273,7 @@ function normalizeTripDraft(raw: unknown, state: AppState, paragraph: string): T
     timezones: Array.from(new Set(normalizedItinerary.map((day) => day.timezone || 'Asia/Hong_Kong'))),
     intelligence: { ...intelligence, source: tripValue.intelligence || value.intelligence ? 'ai' : intelligence.source },
     version: isNewTrip ? 1 : current.version + 1,
+    itineraryVersion: isNewTrip ? 1 : (current.itineraryVersion ?? current.version) + 1,
     active: true,
     archived: false,
     itinerary: normalizedItinerary,
@@ -1338,7 +1368,7 @@ Your job:
 1. Read the whole user text across Markdown tables, HTML-ish pasted text, plain timetables, Cantonese/Chinese/English/Korean names, duplicate lines, and mixed date formats.
 2. Preserve stated plans and flag conflicts or missing details in warnings. Do not invent activities, bookings, addresses, travel times or payment.
 3. Rewrite it into your own organizedItinerary: a clean canonical itinerary grouped day-by-day, with date, day number, lodging, transport, flights, meals, attractions, shopping, optional notes, timing, and important constraints.
-4. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
+4. Keep explicit packing lists, quantities, gear needed for activities, guide notes, named traveller requirements, stated budget/currency, check-in/out, flight dates, local zones and references. Preserve facts useful for an itinerary quiz. The organizedItinerary must be your own rewritten version. Do not copy-paste the raw input.
 ${intentInstruction}
 ${existingContext}
 
@@ -1388,7 +1418,12 @@ Current trip JSON for merge/date/year context only:
 ${JSON.stringify(currentTrip).slice(0, 12000)}
 
 Return this exact JSON object structure, replacing empty placeholders with source evidence. summary, warnings and changes are OUTSIDE trip. Ensure every opened brace/bracket is closed; validate the JSON before replying:
-{"organizedItinerary":"","trip":{"name":"","destinationSummary":"","startDate":"","endDate":"","itinerary":[{"date":"","day":0,"region":"","city":"","country":"","timezone":"","currency":"","lodging":{"name":""},"spots":[{"time":"","timeEnd":"","name":"","type":"other","note":"","address":"","bookingRef":""}]}]},"summary":"","warnings":[],"changes":[]}
+{"organizedItinerary":"","trip":{"name":"","destinationSummary":"","startDate":"","endDate":"","currencies":[],"budget":null,"itinerary":[{"date":"","day":0,"region":"","city":"","country":"","timezone":"","currency":"","highlight":"","note":"","lodging":{"name":"","address":"","checkIn":"","checkOut":"","bookingRef":""},"spots":[{"time":"","timeEnd":"","endDate":"","timezone":"","endTimezone":"","name":"","type":"other","note":"","address":"","bookingRef":""}],"packing":[{"label":"","note":"","suggested":false}],"quiz":[{"question":"","options":[],"answer":"","evidence":""}]}]},"summary":"","warnings":[],"changes":[]}
+
+Compact renders these fields in every theme. Extract the complete schedule before generating extras. Use day.highlight for the main visit and day.note for practical guide information in the text. Link each booking, address, check-in/out, both local flight times and any known arrival date/endTimezone to its actual day and spot. Use the budget only when explicitly stated in the primary trip currency, otherwise null. Put the primary trip currency first in currencies. Never create transactions from estimates or bookings.
+For day.packing, route each explicit preparation/packing item to the day it is needed (trip-wide items on the first day), preserving quantities and bag/location in note. Add a few useful activity-specific suggestions with suggested:true. Do not assume children, medicines, visa rules or weather. Packing is separate from scheduled spots.
+A single flight from A to B with an explicit arrival is ONE type:"flight" spot. Set its time and timezone to departure, timeEnd and endTimezone to arrival, and endDate to the stated arrival date ("same day" = day.date; "next day" = the following date). Retain the flight number and both airports in its name or note. When a hotel check-in or check-out time is given, set lodging.checkIn or lodging.checkOut even if there is also a timed lodging spot. Do not split the two endpoints into separate activities. An independent transfer after landing is a separate spot. Before returning, check every flight with an explicit arrival against these five fields.
+For day.quiz, design a small multiple-choice travel quiz based ONLY on the extracted day. Aim for one or two distinct questions per day, up to ten across the trip if there are enough facts. Use 2–4 distinct options. The answer must exactly match one option and be a literal part of evidence, an exact value or substring of ONE spot.name, spot.time, day.lodging.name, day.highlight or day.note in the JSON you are returning. For example if the answer is a time, copy only the HH:MM as evidence. Never combine multiple fields or rephrase the evidence. Do not use booking references or personal information. Return plain text and arrays; the app runs the game. Copy names as written without bilingual glosses unless both versions appear in the source. Keep unsupported fields empty. No invented reservations, route timings, weather observations or exchange rates.
 
 Per-day location fields: "city"/"country" are the day's primary location; "timezone" is its IANA zone (e.g. "Europe/Zurich"). "currency" is the ISO 4217 code of the LOCAL currency where that day's activities take place — infer per day from the city/country (Zürich day → "CHF", Prague day → "CZK", Paris day → "EUR", Tokyo day → "JPY"); a multi-country trip should therefore have DIFFERENT currencies on different days. Use "" only if the location is genuinely unknown.
 
@@ -1449,9 +1484,8 @@ function mergeTripDrafts(
         const llmDay = llmDays.find(d => d.date === existingDay.date);
         // Spot-level merge: keep unmatched existing spots so a partial paste never drops them.
         if (llmDay) {
-          mergedDays.push({
+          const mergedDay = {
             ...existingDay,
-            // Prefer non-empty LLM fields; never let empty strings wipe existing geography.
             region: llmDay.region || existingDay.region,
             city: llmDay.city || existingDay.city,
             country: llmDay.country || existingDay.country,
@@ -1460,9 +1494,12 @@ function mergeTripDrafts(
             day: llmDay.day || existingDay.day,
             spots: mergeDaySpots(llmDay.spots, existingDay.spots),
             lodging: llmDay.lodging?.name ? llmDay.lodging : existingDay.lodging,
+            packing: packingSuggestions([...(llmDay.packing || []), ...(existingDay.packing || [])]),
             note: llmDay.note || existingDay.note,
             highlight: llmDay.highlight || existingDay.highlight,
-          });
+            quiz: [...(llmDay.quiz || []), ...(existingDay.quiz || [])],
+          };
+          mergedDays.push({ ...mergedDay, quiz: dayQuestions(mergedDay) });
         } else {
           mergedDays.push(existingDay);
         }
@@ -1519,7 +1556,7 @@ function mergeTripDrafts(
   };
 }
 
-function clampPartialTripDraft(draft: TripDraft, current: { id: string; name: string; startDate: string; endDate: string; version: number }): TripDraft {
+function clampPartialTripDraft(draft: TripDraft, current: TripProfile): TripDraft {
   const dates = draft.trip.itinerary.map((d) => d.date).filter(Boolean).sort();
   const startDate = [current.startDate, ...dates].filter(Boolean).sort()[0] || current.startDate;
   const endDate = [current.endDate, ...dates].filter(Boolean).sort().slice(-1)[0] || current.endDate;
@@ -1528,6 +1565,8 @@ function clampPartialTripDraft(draft: TripDraft, current: { id: string; name: st
     trip: {
       ...draft.trip,
       id: current.id,
+      sourceId: current.sourceId || `trip_${current.id}`,
+      itineraryVersion: (current.itineraryVersion ?? current.version) + 1,
       name: draft.trip.name || current.name,
       startDate,
       endDate,
@@ -1577,6 +1616,7 @@ export async function parseNewTripParagraph(paragraph: string, state: AppState):
       id,
       sourceId: `trip_${id}`,
       version: 1,
+      itineraryVersion: 1,
       createdAt: now,
       itinerary: normalizeItinerary(draft.trip.itinerary.map(({ id: _id, dayId: _dayId, spots, ...day }) => ({
         ...day,
@@ -1587,6 +1627,7 @@ export async function parseNewTripParagraph(paragraph: string, state: AppState):
 }
 
 export async function parseTripParagraph(paragraph: string, state: AppState): Promise<TripDraft> {
+  if (paragraph.length > 28_000) throw new Error('每次可分析 28,000 字。請按日期分段貼上，再逐段套用。');
   const current = activeTrip(state);
   const currentTrip = {
     id: current.id,
@@ -1660,6 +1701,13 @@ export async function parseTripParagraph(paragraph: string, state: AppState): Pr
           organizedItinerary: parsedRecord.organizedItinerary || organizedItinerary,
         }, state, organizedItinerary);
         if (hasUsefulTripItinerary(draft)) {
+          if (fastLocalDraft) {
+            const localByDate = new Map(fastLocalDraft.trip.itinerary.map(day => [day.date, day]));
+            for (const day of draft.trip.itinerary) {
+              const items = localByDate.get(day.date)?.packing;
+              if (items?.length && !day.packing?.length) day.packing = items;
+            }
+          }
           const merged = mergeTripDrafts(draft, explicitlySelected ? null : fastLocalDraft, intent, current.itinerary || []);
           const safeMerged = intent === 'partial' ? finalizePartial(merged) : merged;
           return {

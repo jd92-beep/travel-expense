@@ -1,3 +1,4 @@
+const { openTab } = require('./helpers/journey-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 
 const APP_URL = `${process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903'}/travel-expense/compact/`;
@@ -114,25 +115,25 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   await expectTouchTarget(page.getByRole('button', { name: '全部' }), 'view all records action');
 
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
-  for (const name of ['主頁', '紀錄', '行程', '記帳', '天氣', '統計', '設定']) {
+  for (const name of ['主頁', '行程', '記帳', '紀錄', '更多']) {
     await expectTouchTarget(nav.getByRole('button', { name, exact: true }), `bottom dock ${name}`);
   }
 
-  await nav.getByRole('button', { name: '設定', exact: true }).click();
+  await openTab(page, '設定');
 
   await nav.getByRole('button', { name: '記帳', exact: true }).click();
   await expect(page.getByText('掃描收據').first()).toBeVisible();
   await expect(page.getByRole('button', { name: '更多操作' })).toHaveCount(0);
   await expectTouchTarget(page.getByRole('button', { name: /貨幣計數機/ }), 'scan currency calculator', 56);
-  await expectTouchTarget(page.getByRole('button', { name: /相機/ }).first(), 'scan camera card', 80);
-  await expectTouchTarget(page.getByRole('button', { name: /相簿/ }).first(), 'scan gallery card', 80);
-  await expectTouchTarget(page.getByRole('button', { name: /匯率 Exchange Rate/ }), 'scan wide exchange action', 64);
+  await expectTouchTarget(page.getByRole('button', { name: /相機/ }).first(), 'scan camera');
+  await expectTouchTarget(page.getByRole('button', { name: /相簿/ }).first(), 'scan gallery');
+  await expectTouchTarget(page.getByRole('button', { name: /匯率 Exchange Rate/ }), 'scan exchange action');
   for (const name of ['手動', '語音', 'Email']) {
-    await expectTouchTarget(page.getByRole('button', { name, exact: true }), `scan utility ${name}`, 64);
+    await expectTouchTarget(page.getByRole('button', { name, exact: true }), `scan utility ${name}`);
   }
 
-  await nav.getByRole('button', { name: '設定', exact: true }).click();
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await openTab(page, '設定');
+  await expect(page.getByRole('banner', { name: '設定控制中心', exact: true })).toBeVisible();
   const quickControls = page.locator('.settings-preview-controls button');
   await expect(quickControls).toHaveCount(3);
   for (let i = 0; i < 3; i += 1) {
@@ -142,6 +143,12 @@ test('Compact main controls keep accessible names, touch targets, reduced motion
   const names = await visibleButtonNames(page);
   const unnamedEnabled = names.filter((item) => !item.disabled && !item.text);
   expect(unnamedEnabled, JSON.stringify(names, null, 2)).toHaveLength(0);
+
+  const skipLink = page.getByRole('link', {name: '跳至內容'});
+  await skipLink.focus();
+  await skipLink.press('Enter');
+  await expect(page.locator('#journey-main')).toBeFocused();
+  await expect(page).toHaveURL(/#settings$/);
 
   const focusedNames = [];
   for (let i = 0; i < 8; i += 1) {

@@ -34,7 +34,7 @@ test('shared trip: foreign-owned receipt badge + read-only editor', async ({ pag
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expect(page.getByRole('banner', { name: '紀錄中心', exact: true })).toBeVisible();
 
   // Badge on the friend's row
   const friendRow = page.locator('.history-ledger-row').filter({ hasText: '旅伴嘅壽司' });

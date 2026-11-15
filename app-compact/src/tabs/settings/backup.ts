@@ -12,7 +12,7 @@ export function clampFinite(value: unknown, fallback: number, min = 0, max = MAX
 }
 
 export function validateBackupSchema(payload: unknown): boolean {
-  if (!payload || typeof payload !== 'object') return false;
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
   const p = payload as Record<string, unknown>;
 
   if (p.receipts !== undefined && !Array.isArray(p.receipts)) return false;
@@ -77,11 +77,9 @@ export function sanitizeImportedReceipts(input: unknown, fallbackDate: string, a
         createdByLabel: _createdByLabel,
         ...localReceipt
       } = receipt as Partial<Receipt> & { notionDb?: unknown };
-      const totalNum = Number(receipt.total);
-      const total = Number.isFinite(totalNum) && totalNum >= 0 ? Math.min(MAX_SAFE_AMOUNT, totalNum) : 0;
-
-      const origNum = receipt.originalAmount !== undefined ? Number(receipt.originalAmount) : total;
-      const originalAmount = Number.isFinite(origNum) && origNum >= 0 ? Math.min(MAX_SAFE_AMOUNT, origNum) : total;
+      // Portable backups include signed refund rows, even though new expense entry is non-negative.
+      const total = clampFinite(receipt.total, 0, -MAX_SAFE_AMOUNT);
+      const originalAmount = clampFinite(receipt.originalAmount ?? total, total, -MAX_SAFE_AMOUNT);
 
       return {
         ...localReceipt,
@@ -110,6 +108,7 @@ export function sanitizeImportedTrips(input: unknown): TripProfile[] | undefined
         notionPageId: _notionPageId,
         sourceId: _sourceId,
         notionDb: _notionDb,
+        sharing: _sharing,
         ...localTrip
       } = trip;
       return localTrip as TripProfile;
@@ -156,9 +155,10 @@ export function buildBackupImportPreview(fileName: string, payload: Partial<AppS
   const requestedActiveTripId = typeof payload.activeTripId === 'string' && allowedTripIds.has(payload.activeTripId)
     ? payload.activeTripId
     : undefined;
-  const fallbackTripId = requestedActiveTripId || currentTrip.id || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
-  const receipts = sanitizeImportedReceipts(payload.receipts, currentTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
+  const fallbackTripId = requestedActiveTripId || (allowedTripIds.has(currentTrip.id) ? currentTrip.id : undefined)
+    || nextTrips.find((trip) => !trip.archived)?.id || nextTrips[0]?.id;
   const targetTrip = nextTrips.find((trip) => trip.id === fallbackTripId) || currentTrip;
+  const receipts = sanitizeImportedReceipts(payload.receipts, targetTrip.startDate || state.tripDateRange.start, allowedTripIds, fallbackTripId);
   // Per-trip maps from another device/account must not reference trips this restore doesn't
   // know about — keep only keys for trips that will exist after the import.
   if (safePayload.peopleByTripId) {

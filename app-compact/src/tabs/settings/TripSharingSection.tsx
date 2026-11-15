@@ -292,7 +292,7 @@ export function TripSharingSection({ ctx, sharingSession }: { ctx: SettingsConte
     <AccordionCard
       id="settings-trip-sharing"
       eyebrow="共享"
-      title="旅程共享 👥"
+      title="旅程共享"
       icon={<Users />}
       defaultOpen={false}
       meta={<span className="pill">{tripSharing.isShared ? `${tripSharing.memberCount} members` : '只限自己'}{tripSharing.pendingInviteCount ? ` · ${tripSharing.pendingInviteCount} pending` : ''}</span>}

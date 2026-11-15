@@ -1,5 +1,5 @@
 import {
-  BedDouble,
+  Hotel,
   Camera,
   CircleHelp,
   CloudSun,
@@ -25,6 +25,7 @@ import type { ComponentType, CSSProperties } from 'react';
 import { VISUAL_ICON_META, type VisualIconId } from '../lib/iconManifest';
 import { cn } from '../lib/cn';
 import { useTripTheme } from '../theme/tripTheme';
+import lodgeArt from '../assets/journey/postcard-lodge.webp';
 import { KitCategoryIcon } from '../theme/kit/KitIcons';
 
 const icons: Record<VisualIconId, ComponentType<{ size?: number; strokeWidth?: number }>> = {
@@ -32,7 +33,7 @@ const icons: Record<VisualIconId, ComponentType<{ size?: number; strokeWidth?: n
   transport: TrainFront,
   food: Soup,
   shopping: ShoppingBag,
-  lodging: BedDouble,
+  lodging: Hotel,
   ticket: Ticket,
   localtour: MapPinned,
   medicine: Pill,
@@ -53,6 +54,13 @@ const icons: Record<VisualIconId, ComponentType<{ size?: number; strokeWidth?: n
   scan: ScanLine,
   receipt: ReceiptText,
 };
+
+export function CategoryGlyph({ category, size }: { category?: string; size: number }) {
+  const Icon = category && Object.prototype.hasOwnProperty.call(icons, category)
+    ? icons[category as VisualIconId]
+    : MapPinned;
+  return <Icon size={size} strokeWidth={1.8} aria-hidden="true" />;
+}
 
 export function VisualIcon({
   id,
@@ -76,7 +84,9 @@ export function VisualIcon({
       aria-label={label || meta.label}
       title={label || meta.label}
     >
-      {theme.kit
+      {id === 'lodging' && theme.id === 'alpine_postcard'
+        ? <img className="postcard-lodging-icon" src={lodgeArt} alt="" width={glyphSize} height={glyphSize} />
+        : theme.kit
         ? <KitCategoryIcon kit={theme.kit.style} id={id} size={glyphSize} />
         : <Icon size={glyphSize} strokeWidth={2.4} />}
     </span>

@@ -111,6 +111,7 @@ test('data-only ZIP contains organized current-trip files, no image requests, an
   const restored = await page.evaluate(() => JSON.parse(localStorage.getItem('boss-japan-tracker')));
   expect(restored.receipts).toHaveLength(7);
   expect(restored.receipts.find((r) => r.id === 'r1').lineItems[0].desc).toBe('咖啡');
+  expect(restored.receipts.find((r) => r.id === 'r6')).toMatchObject({ total: -200, originalAmount: -200, hkdAmount: -10 });
   expect(restored.receipts.every((r) => !r.photoUrl && !r.photoThumb && !r.supabaseId)).toBe(true);
 });
 

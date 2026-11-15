@@ -2515,6 +2515,48 @@ input:focus-visible, select:focus-visible, textarea:focus-visible {
 .receipt-editor-actions {
   flex-wrap: nowrap;
 }
+.modal.receipt-editor-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+  padding: 0;
+}
+.receipt-editor-sheet > .modal-head,
+.receipt-editor-sheet > .receipt-editor-actions {
+  flex: none;
+  padding: 12px 16px;
+  margin: 0;
+  background: var(--card);
+}
+.receipt-editor-sheet > .receipt-editor-actions {
+  border-color: var(--hairline);
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+.receipt-editor-fields {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 16px 16px;
+  scroll-padding-block: 12px;
+}
+.receipt-editor-fields :is(input:not([type="file"]), select) {
+  min-height: 44px;
+  font-size: 16px;
+}
+.receipt-editor-fields .form-grid--pair {
+  align-items: start;
+}
+.receipt-editor-fields [aria-invalid="true"] {
+  border-color: var(--red);
+}
+.receipt-field-error {
+  display: block;
+  margin-top: 6px;
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 600;
+}
 .receipt-delete-slot {
   display: flex;
   justify-content: flex-start;

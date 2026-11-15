@@ -26,6 +26,11 @@ export const STYLE_THEME_KEYS: StyleThemeKey[] = [
   'pixel_quest',
   'japan_ukiyoe',
   'korea_dancheong',
+  'night_ledger',
+  'harbor_blueprint',
+  'sunset_terrace',
+  'pocket_planner',
+  'alpine_postcard',
 ];
 
 type DestinationContext = Pick<TripIntelligence, 'countryCode' | 'countryName' | 'primaryCurrency' | 'themeKey' | 'locale'> & {

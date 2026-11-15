@@ -1,3 +1,4 @@
+const { openTab } = require('./helpers/journey-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
@@ -99,9 +100,9 @@ test('Dashboard keeps Home simple without travel-day diagnostic cards', async ({
 
 test('Dashboard trip name opens the trip dropdown menu', async ({ page }) => {
   await openDashboard(page, false);
-  await page.locator('.compact-mobile-heading').getByRole('button', { name: /Dashboard Test/ }).click();
-  await expect(page.getByText('切換旅程 (Switch Trip)')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Dashboard Test.*Dashboard Test/ })).toBeVisible();
+  await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
+  await expect(page.getByText('我的旅程', {exact:true}).filter({visible:true}).last()).toBeVisible();
+  await expect(page.locator('.journey-trip-menu').getByRole('button', { name: /Dashboard Test/ })).toBeVisible();
 });
 
 test('Dashboard budget currency toggle follows active Korea trip currency', async ({ page }) => {
@@ -261,7 +262,7 @@ Day 2 (2026-05-09): Jeju City.`,
     credentialSession: 'wizard-trip-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
+  await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
 
@@ -331,7 +332,7 @@ Day 2 (2026-05-09): Jeju City.`,
 
   await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
   await expect(page.getByText('城山日出峰').first()).toBeVisible();
-  await page.getByLabel('主要分頁').getByRole('button', { name: '天氣', exact: true }).click();
+  await openTab(page, '天氣');
   await expect(page.getByText(/城山日出峰|濟州東部|Jeju/).first()).toBeVisible();
 });
 
@@ -407,7 +408,7 @@ Day 2 (2026-05-09): Jeju City.`,
     credentialSession: 'wizard-fallback-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
+  await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
   await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');
@@ -449,7 +450,7 @@ test('Dashboard new trip wizard uses destination suggestions after non-quota mod
     credentialSession: 'wizard-quota-session',
     credentialSessionExpiresAt: new Date('2026-05-08T10:00:00+08:00').valueOf() + 60_000,
   });
-  await page.getByRole('banner', { name: /Dashboard Test header/ }).locator('button').first().click();
+  await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
   await page.getByRole('button', { name: /建立新旅程/ }).click();
   await page.getByPlaceholder('例如：名古屋櫻花祭 2026').fill('濟州2026');
   await page.getByPlaceholder('例如：濟州、首爾、名古屋、東京').fill('濟州');

@@ -1,10 +1,15 @@
-import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Archive } from 'lucide-react';
+import { BarChart3, CalendarDays, CloudSun, Home, List, ScanLine, Settings, ChevronDown, RefreshCw, Wifi, WifiOff, Smartphone, Archive, MoreHorizontal, Plus, X, ArrowRight } from 'lucide-react';
 import { KitTabIcon } from '../theme/kit/KitIcons';
 import { KitMascot } from '../theme/kit/KitMascot';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { JourneyMark } from './journey/JourneyCover';
+import { useModalAccessibility } from '../lib/useModalAccessibility';
+import { useModalOpenClass } from '../lib/useModalOpenClass';
+import { APP_VERSION } from '../lib/constants';
 import { useReducedMotion } from 'motion/react';
-import { TAB_MANIFEST } from '../lib/tabs';
+import { MOBILE_PRIMARY_TABS, TAB_MANIFEST } from '../lib/tabs';
 import type { SyncEngineState, TabId, AppState, TripProfile } from '../lib/types';
 import { FloatingDock } from './ui/floating-dock';
 import { NoiseTexture } from './ui/noise-texture';
@@ -43,76 +48,27 @@ function TripDropdown({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
+  const id = useId();
   useEffect(() => {
     if (!open) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    const closeOutside = (event: MouseEvent) => { if (!ref.current?.contains(event.target as Node)) setOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setOpen(false); ref.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('mousedown', closeOutside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('mousedown', closeOutside); document.removeEventListener('keydown', escape); };
   }, [open]);
-
-  return (
-    <div className={`relative ${className}`} ref={ref}>
-      <button
-        type="button"
-        className={buttonClassName || 'flex items-center gap-1.5 text-left border-none bg-transparent p-0 focus:outline-none cursor-pointer active:scale-98 transition-all'}
-        aria-label={children ? undefined : label}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        onClick={() => setOpen(!open)}
-      >
-        {children && <span className="shell-trip-trigger-content">{children}</span>}
-        <ChevronDown size={18} className="text-[var(--theme-accent)] shrink-0" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
-      </button>
-      {open && (
-        <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} mt-2 w-64 bg-[var(--theme-card)] backdrop-blur-md rounded-2xl border border-[var(--theme-border)] shadow-2xl p-2 z-50 flex flex-col gap-1 text-[var(--theme-text)]`}>
-          <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            {label}
-          </div>
-          <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-            {trips.filter((t) => !t.archived).map((t) => {
-              const isActive = t.id === activeTripId;
-              return (
-                <button
-                  key={t.id}
-                  className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none cursor-pointer ${
-                    isActive
-                      ? activeItemClassName || 'bg-[var(--theme-surface)] text-[var(--theme-text)] font-bold'
-                      : itemClassName || 'hover:bg-[var(--theme-surface)] text-[var(--theme-text)] bg-transparent'
-                  }`}
-                  onClick={() => { setOpen(false); onSelect(t.id); }}
-                >
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-sm truncate">{t.name}</span>
-                    <span className="text-[10px] text-slate-400 truncate">
-                      {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
-                    </span>
-                  </div>
-                  {isActive && (
-                    <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 ml-2" />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {onCreateNew && (
-            <>
-              <div className="border-t border-slate-100 my-1" />
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#C23B5E] hover:bg-[#A83030] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
-                onClick={() => { setOpen(false); onCreateNew(); }}
-              >
-                <span>➕ ⛩️ 建立新旅程</span>
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
+  return <div className={`journey-trip-switch ${className}`} ref={ref}>
+    <button type="button" className={buttonClassName || 'journey-trip-trigger'} aria-label={label} aria-expanded={open} aria-controls={id} onClick={() => setOpen(value => !value)}>
+      {children || <span>切換旅程</span>}<ChevronDown size={17} />
+    </button>
+    {open && <div id={id} className={`journey-trip-menu is-${align}`} aria-label="可選旅程">
+      <p>我的旅程</p>
+      <div>{trips.filter(trip => !trip.archived).map(trip => <button type="button" key={trip.id} aria-pressed={trip.id === activeTripId} onClick={() => { setOpen(false); onSelect(trip.id); }}>
+        <strong>{trip.name}</strong><small>{trip.startDate} · {trip.destinationSummary || '未設定目的地'}</small>
+      </button>)}</div>
+      {onCreateNew && <button type="button" className="journey-new-trip" onClick={() => { setOpen(false); onCreateNew(); }}><Plus size={16} /> 建立新旅程</button>}
+    </div>}
+  </div>;
 }
 
 
@@ -139,11 +95,12 @@ const shellCopy: Record<TabId, { title: string; mobileTitle: string; subtitle: s
   settings: { title: 'Secure Controls', mobileTitle: '設定控制中心', subtitle: 'Secure Controls', status: '系統狀態' },
 };
 
-const COMPACT_RELEASE_NOTE_ID = 'compact-2026-06-09-record-declutter';
+const COMPACT_RELEASE_NOTE_ID = 'compact-0.33.0-journey';
 const COMPACT_RELEASE_NOTES = [
-  { title: 'Compact Home and Timeline', detail: 'Home and Timeline keep current-day itinerary detail without extra diagnostic control strips.' },
-  { title: 'Attachment checks', detail: 'Settings Trip Doctor summarizes photo issues while Record rows keep small photo markers.' },
-  { title: 'Offline conflict resolver', detail: 'History can review failed local/cloud receipt conflicts without exposing provider payloads.' },
+  { title: '沿途新面貌', detail: '風景插畫、清晰日程與更易按的導航，套用到所有主要畫面。' },
+  { title: '行程工具', detail: '加入多日日曆、路線預覽、航班及住宿整理，可匯出日曆。' },
+  { title: '出發準備', detail: '每趟旅程有獨立裝置清單，可勾選、編輯及匯入匯出。' },
+  { title: '旅途翻翻卡', detail: '候機等車時，可以離線玩旅行用品配對。' },
 ];
 const COMPACT_RELEASE_NOTES_SEEN_KEY = 'travel-expense-compact:release-notes-seen';
 const DEPLOYMENT_CHECK_INTERVAL_MS = 5 * 60 * 1000;
@@ -180,6 +137,10 @@ export function Shell({
 }) {
   const { theme } = useTripTheme();
   const tabIcon = (id: TabId) => (theme.kit ? <KitTabIcon kit={theme.kit.style} tab={id} /> : icons[id]);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useModalAccessibility(moreOpen, () => setMoreOpen(false));
+  useModalOpenClass(moreOpen);
+  useEffect(() => { setMoreOpen(false); }, [active]);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [updateReady, setUpdateReady] = useState(false);
   const [installReady, setInstallReady] = useState(false);
@@ -189,6 +150,7 @@ export function Shell({
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const raf = useRef<number | null>(null);
   const installPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+  const deploymentCheckRef = useRef({ inFlight: false, lastCheckedAt: null as number | null });
   const prefersReducedMotion = useReducedMotion();
   // Desktop-class effects (rAF canvas particles, full-screen mix-blend noise): full tier only.
   const richVisualEffects = theme.id === 'japan_washi' && !prefersReducedMotion && fxTier === 'full';
@@ -210,7 +172,7 @@ export function Shell({
   };
 
   const trip = state ? activeTrip(state) : null;
-  const activeTripName = trip ? trip.name : '我的旅程 🧳';
+  const activeTripName = trip ? trip.name : '我的旅程';
   const activeTripDates = trip ? `${trip.startDate} - ${trip.endDate}` : '尚未設定日期';
 
   const handleSwitchTrip = (tripId: string) => {
@@ -242,12 +204,16 @@ export function Shell({
         setReleaseNotesOpen(true);
       }
     };
-    let deploymentCheckInFlight = false;
     const checkForDeploymentUpdate = async () => {
-      if (deploymentCheckInFlight || !navigator.onLine) return;
+      const check = deploymentCheckRef.current;
+      if (check.inFlight || document.hidden || !navigator.onLine) return;
+      const now = Date.now();
+      if (check.lastCheckedAt !== null && now - check.lastCheckedAt < DEPLOYMENT_CHECK_INTERVAL_MS) return;
       const loadedScript = document.querySelector<HTMLScriptElement>('script[type="module"][src]')?.src;
       if (!loadedScript) return;
-      deploymentCheckInFlight = true;
+      // Focus/visibility events and StrictMode remounts share the same advisory check budget.
+      check.inFlight = true;
+      check.lastCheckedAt = now;
       try {
         const indexUrl = new URL(import.meta.env.BASE_URL || '/', window.location.origin);
         indexUrl.searchParams.set(DEPLOYMENT_CHECK_QUERY, String(Date.now()));
@@ -266,7 +232,7 @@ export function Shell({
       } catch {
         // Version discovery is advisory and must never affect offline or sync state.
       } finally {
-        deploymentCheckInFlight = false;
+        check.inFlight = false;
       }
     };
     const onFocus = () => void checkForDeploymentUpdate();
@@ -415,304 +381,40 @@ export function Shell({
     };
   }, [motionOk]);
 
+  const primaryTabs = MOBILE_PRIMARY_TABS.map(id => TAB_MANIFEST.find(tab => tab.id === id)!);
+  const secondaryTabs = TAB_MANIFEST.filter(tab => ['weather', 'stats', 'settings'].includes(tab.id));
+  const moreActive = secondaryTabs.some(tab => tab.id === active);
   return (
-    <div className={`app-shell app-shell--${active}`} data-active-tab={active}>
-      {/* Japanese particle background — washi paper warmth with floating motes */}
-      {richVisualEffects && (
-        <Particles
-          className="pointer-events-none fixed inset-0 -z-20"
-          quantity={35}
-          ease={80}
-          color="#d4a574"
-          staticity={40}
-          size={0.6}
-          aria-hidden="true"
-        />
-      )}
-      {richVisualEffects && (
-        <NoiseTexture
-          aria-hidden="true"
-          focusable="false"
-          className="pointer-events-none fixed inset-0 -z-10 opacity-[0.08] mix-blend-soft-light"
-        />
-      )}
-      <nav className="compact-desktop-rail" aria-label="主要分頁">
-        <div className="rail-brand">
-          {theme.id === 'japan_washi' && <img className="compact-rail-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
-          {theme.kit && <span className="compact-rail-mark kit-mascot-slot" aria-hidden="true"><KitMascot kit={theme.kit.style} /></span>}
-          <div className="rail-brand-copy">
-            <strong>Travel Ledger</strong>
-            <span>旅行 · 記帳</span>
-          </div>
-        </div>
-        {state && (
-          <div className="rail-trip">
-            <TripDropdown
-              trips={state.trips || []}
-              activeTripId={trip?.id || ''}
-              onSelect={handleSwitchTrip}
-              onCreateNew={onOpenNewTripWizard}
-              align="left"
-              buttonClassName="rail-trip-trigger"
-            >
-              <span className="rail-trip-card">
-                <span className="rail-trip-label">目前旅程</span>
-                <span className="rail-trip-name">{activeTripName}</span>
-                <span className="rail-trip-dates">{activeTripDates}</span>
-              </span>
-            </TripDropdown>
-          </div>
-        )}
-        <div className="compact-rail-items">
-          {TAB_MANIFEST.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              className={`compact-rail-button ${active === tab.id ? 'active' : ''}`}
-              aria-label={tab.label}
-              aria-current={active === tab.id ? 'page' : undefined}
-              onClick={() => onTab(tab.id)}
-            >
-              <span className="compact-rail-icon">{tabIcon(tab.id)}</span>
-              <span className="compact-rail-label">{tab.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="rail-footer">
-          {syncState && !isMobile && (
-            <div className={`rail-sync ${hasSyncProblem ? 'has-error' : ''}`}>
-              <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
-            </div>
-          )}
-          <span className={`rail-net ${online ? 'is-online' : 'is-offline'}`}>
-            {online ? <Wifi size={13} aria-hidden="true" /> : <WifiOff size={13} aria-hidden="true" />}
-            <span className="rail-net-label">{online ? '已連線' : '離線'}</span>
-          </span>
-        </div>
+    <div className={`app-shell journey-shell app-shell--${active}`} data-active-tab={active}>
+      <a className="journey-skip-link" href="#journey-main" onClick={event => { event.preventDefault(); document.getElementById('journey-main')?.focus(); }}>跳至內容</a>
+      <nav className="compact-desktop-rail journey-desktop-rail" aria-label="主要分頁">
+        <div className="journey-brand"><JourneyMark /><div><strong>Travel Ledger</strong><span>每一程，都記得</span></div></div>
+        {state && <TripDropdown trips={state.trips || []} activeTripId={trip?.id || ''} onSelect={handleSwitchTrip} onCreateNew={onOpenNewTripWizard} buttonClassName="journey-rail-trip"><span><small>目前旅程</small><strong>{activeTripName}</strong><em>{activeTripDates}</em></span></TripDropdown>}
+        <div className="journey-rail-items">{TAB_MANIFEST.map(tab => <button key={tab.id} type="button" className={active === tab.id ? 'active' : ''} aria-label={tab.label} aria-current={active === tab.id ? 'page' : undefined} onClick={() => onTab(tab.id)}>{tabIcon(tab.id)}<span>{tab.label}</span>{active === tab.id && <ArrowRight size={15} />}</button>)}</div>
+        <div className="journey-rail-bottom">{onOpenNewTripWizard && <button type="button" className="secondary" onClick={onOpenNewTripWizard}><Plus size={17} /> 建立新旅程</button>}<p>Travel Ledger <span>v{APP_VERSION}</span></p>{syncState && !isMobile && <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />}<span className="journey-online">{online ? <Wifi size={14} /> : <WifiOff size={14} />}{online ? '已連線' : '離線儲存中'}</span></div>
       </nav>
       {!online && <div className="top-notice offline">離線模式：資料會繼續保存在本機</div>}
-      {updateReady && (
-        <div className="top-notice update">
-          發現新版本
-          <button type="button" onClick={() => location.reload()}>立即更新</button>
+      {updateReady && <div className="top-notice update">發現新版本<button type="button" onClick={() => location.reload()}>立即更新</button></div>}
+      {hasSyncProblem && !updateReady && <div className="top-notice sync-problem-notice"><span>{/存取權|permission denied|row-level security|\bRLS\b|42501/i.test(syncState?.error || '') ? `有記帳因為權限問題未能同步。${failedSyncCount ? `${failedSyncCount} 筆受影響。` : ''}${syncState?.error ? `(${syncState.error})` : ''}` : `有資料同步失敗，請檢查連線或設定。${failedSyncCount ? `${failedSyncCount} 筆待重試。` : ''}`}</span>{onRetryFailed && <button type="button" onClick={onRetryFailed}>手動重試</button>}</div>}
+      <header className="journey-topbar" aria-labelledby="journey-page-heading">
+        <div className="journey-topbar-brand"><JourneyMark /><span>Travel Ledger</span></div>
+        <div className="journey-page-title"><h1 id="journey-page-heading">{active === 'dashboard' ? '我的旅程' : shellCopy[active].mobileTitle}</h1></div>
+        <div className="journey-topbar-actions">
+          {state && <TripDropdown trips={state.trips || []} activeTripId={trip?.id || ''} onSelect={handleSwitchTrip} onCreateNew={onOpenNewTripWizard} align="right"><span>{activeTripName}</span></TripDropdown>}
+          {active === 'history' && onPull && <button className="journey-icon-button" type="button" disabled={pulling} onClick={handlePullClick} aria-label="重新同步"><RefreshCw size={18} className={pulling ? 'spin' : undefined} /></button>}
+          {syncState && isMobile && <div className="journey-sync-slot"><SyncStatusIndicator state={syncState} onRetry={onRetryFailed} /></div>}
         </div>
-      )}
-      {hasSyncProblem && !updateReady && (
-        <div className="top-notice sync-problem-notice backdrop-blur-md flex items-center justify-between gap-4 w-full">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-            </span>
-            <span className="truncate max-w-[200px] xs:max-w-xs md:max-w-md font-semibold">
-              {/* An access/permission failure is NOT a connectivity problem — telling the user to
-                  "check the connection" sends them chasing the wrong cause (observed live). */}
-              {/存取權|permission denied|row-level security|\bRLS\b|42501/i.test(syncState?.error || '')
-                ? `有記帳因為權限問題未能同步。${failedSyncCount ? `${failedSyncCount} 筆受影響。` : ''}${syncState?.error ? `(${syncState.error})` : ''}`
-                : `有資料同步失敗，請檢查連線或設定。${failedSyncCount ? `${failedSyncCount} 筆待重試。` : ''}`}
-            </span>
-          </div>
-          {onRetryFailed && (
-            <button
-              type="button"
-              onClick={onRetryFailed}
-              className="compact-touch-action px-3 py-1 text-xs font-semibold rounded-full transition-all duration-200 active:scale-95 shadow-sm shrink-0"
-              style={{ border: 0, padding: '4px 12px', height: 'auto', background: 'var(--theme-accent)', color: 'var(--theme-on-accent)' }}
-            >
-              手動重試
-            </button>
-          )}
-        </div>
-      )}
-      <header className="topbar topbar-canva relative overflow-hidden">
-        {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-4 bottom-0 opacity-15 pointer-events-none h-full w-48 text-[var(--theme-chart-3)] z-0" viewBox="0 0 120 40" fill="none" stroke="currentColor">
-            <path d="M10,40 Q40,12 60,5 Q80,12 110,40 Z" strokeWidth="1" />
-            <path d="M48,15 L60,5 L72,15 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M85,40 L85,25 M95,40 L95,25 M81,23 L99,23 M83,27 L97,27 M82,20 L98,20" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
-          </svg>
-        )}
-        <div className="topbar-title-block relative z-10">
-          {theme.id === 'japan_washi' && <img className="compact-topbar-mark" src={compactJapanMark} alt="" aria-hidden="true" />}
-          {active === 'dashboard' && state ? (
-            <div className="flex items-center gap-2">
-              <TripDropdown
-                trips={state.trips || []}
-                activeTripId={trip?.id || ''}
-                onSelect={handleSwitchTrip}
-                onCreateNew={onOpenNewTripWizard}
-                align="right"
-                buttonClassName="shell-trip-trigger topbar-trip-trigger"
-              >
-                <span className="topbar-trip-trigger-title" role="heading" aria-level={1}>
-                  {motionOk
-                    ? <AuroraText colors={SHELL_TITLE_INK} speed={1.2}>{activeTripName}</AuroraText>
-                    : activeTripName}
-                </span>
-              </TripDropdown>
-            </div>
-          ) : (
-            <h1>
-              {motionOk
-                ? <AuroraText colors={SHELL_TITLE_INK} speed={1.2}>{activeCopy.title}</AuroraText>
-                : activeCopy.title}
-            </h1>
-          )}
-        </div>
-        <div className="compact-desktop-actions relative z-10" aria-label="Dashboard controls">
-          {active === 'history' && state ? (
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <button
-                  className="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-3 py-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95 text-xs"
-                  type="button"
-                >
-                  <CalendarDays size={14} aria-hidden="true" />
-                  <span>{activeTripName}</span>
-                </button>
-                <TripDropdown
-                  trips={state.trips || []}
-                  activeTripId={trip?.id || ''}
-                  onSelect={handleSwitchTrip}
-                  label="選擇旅程 (Select Trip)"
-                  align="right"
-                  className="inline-block"
-                  buttonClassName="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-3 py-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-1.5 cursor-pointer focus:outline-none active:scale-95 text-xs"
-                />
-              </div>
-
-              <button
-                className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full p-2 font-semibold text-blue-900 transition-all shadow-sm flex items-center justify-center cursor-pointer active:scale-95"
-                type="button"
-                disabled={pulling}
-                onClick={handlePullClick}
-                aria-label="重新同步"
-                title="重新同步"
-              >
-                <RefreshCw size={14} className={pulling ? 'spin' : undefined} />
-              </button>
-            </div>
-          ) : state ? (
-            <span className="text-xs text-slate-500 font-medium">{activeCopy.subtitle}</span>
-          ) : null}
-        </div>
-        {syncState && isMobile && (
-          <div className={`compact-sync-slot relative z-10 ${hasSyncProblem ? 'has-error' : 'is-quiet'}`}>
-            <SyncStatusIndicator state={syncState} onRetry={onRetryFailed} />
-          </div>
-        )}
       </header>
-      <header className="compact-mobile-header relative overflow-hidden" aria-label={`${activeCopy.mobileTitle} header`}>
-        {theme.id === 'japan_washi' && active === 'dashboard' && (
-          <svg className="absolute right-12 bottom-0 opacity-15 pointer-events-none h-14 w-36 text-[var(--theme-chart-3)] z-0" viewBox="0 0 100 40" fill="none" stroke="currentColor">
-            <path d="M5,40 Q30,15 50,5 Q70,15 95,40 Z" strokeWidth="1" />
-            <path d="M38,12 L50,5 L62,12 Z" fill="currentColor" opacity="0.3" stroke="none" />
-            <path d="M72,40 L72,24 M82,40 L82,24 M68,22 L86,22 M70,26 L84,26 M69,19 L85,19" strokeWidth="1.5" style={{ stroke: 'var(--theme-chart-2)' }} />
-          </svg>
-        )}
-        {theme.id === 'japan_washi' && <span className="compact-mobile-mark relative z-10" aria-hidden="true">
-          <img src={compactJapanMark} alt="" />
-        </span>}
-        {theme.kit && <span className="compact-mobile-mark kit-mascot-slot relative z-10" aria-hidden="true">
-          <KitMascot kit={theme.kit.style} />
-        </span>}
-        <div className="compact-mobile-heading relative z-10">
-          {active === 'dashboard' && state ? (
-            <div className="flex items-center gap-1.5">
-              <TripDropdown
-                trips={state.trips || []}
-                activeTripId={trip?.id || ''}
-                onSelect={handleSwitchTrip}
-                onCreateNew={onOpenNewTripWizard}
-                buttonClassName="shell-trip-trigger compact-mobile-trip-trigger"
-              >
-                <span className="compact-mobile-title-art" data-title={activeTripName}>{activeTripName}</span>
-              </TripDropdown>
-            </div>
-          ) : (
-            <h1><span className="compact-mobile-title-art" data-title={activeCopy.mobileTitle}>{isMobile ? activeCopy.mobileTitle : ''}</span></h1>
-          )}
-          <p>{activeCopy.subtitle}</p>
-        </div>
-        <span className="compact-mobile-status relative z-10">{activeCopy.status}</span>
-        {active === 'history' && state ? (
-          <div className="compact-mobile-action-history flex items-center gap-1.5 relative z-20" style={{ marginRight: '4px' }}>
-            <TripDropdown
-              trips={state.trips || []}
-              activeTripId={trip?.id || ''}
-              onSelect={handleSwitchTrip}
-              label="選擇旅程 (Select Trip)"
-              align="right"
-              buttonClassName="secondary history-trip-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full px-2 py-1 font-semibold text-blue-900 transition-all shadow-sm flex items-center gap-0.5 cursor-pointer focus:outline-none active:scale-95 text-[10px]"
-            />
-
-            <button
-              className="secondary history-refresh-button bg-white/60 hover:bg-white/80 border border-[#C23B5E]/30 backdrop-blur-md rounded-full p-1.5 font-semibold text-blue-900 transition-all shadow-sm flex items-center justify-center cursor-pointer active:scale-95"
-              type="button"
-              disabled={pulling}
-              onClick={handlePullClick}
-              aria-label="重新同步"
-              title="重新同步"
-            >
-              <RefreshCw size={11} className={pulling ? 'spin' : undefined} />
-            </button>
-          </div>
-        ) : null}
-      </header>
-      {active === 'settings' && (
-        <section className="compact-pwa-readiness" aria-label="Compact travel readiness">
-          <span className={`pwa-chip ${online ? 'ok' : 'warning'}`}>
-            {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-            Network · {online ? 'online' : 'offline'}
-          </span>
-          <span className={`pwa-chip ${failedSyncCount ? 'danger' : pendingSyncCount ? 'warning' : syncState?.status === 'error' ? 'danger' : 'ok'}`}>
-            <Archive size={13} />
-            Queue · {queueLabel}
-          </span>
-          {installReady && (
-            <button className="pwa-chip install" type="button" onClick={handleInstallClick}>
-              <Smartphone size={13} />
-              Install
-            </button>
-          )}
-        </section>
-      )}
-      {active === 'settings' && updateReady && releaseNotesOpen && (
-        <section className="compact-release-notes" aria-label="Compact release notes">
-          <div className="compact-release-notes-head">
-            <div>
-              <span>Compact release notes</span>
-              <strong>Now vs previous</strong>
-            </div>
-            <button type="button" onClick={handleReleaseNotesDismiss}>Done</button>
-          </div>
-          <div className="compact-release-note-list">
-            {COMPACT_RELEASE_NOTES.map((note) => (
-              <article key={note.title}>
-                <b>{note.title}</b>
-                <small>{note.detail}</small>
-              </article>
-            ))}
-          </div>
-          <p>No external calls · local summary only</p>
-        </section>
-      )}
-      <main className="content">{children}</main>
-
-      {/* Fixed bottom tab bar — never scrolls away */}
-      <div className={`fixed-tab-bar${keyboardOpen ? ' is-keyboard-open' : ''}`}>
-        <FloatingDock
-          desktopClassName="app-floating-dock-desktop"
-          mobileClassName="app-floating-dock-mobile"
-          items={TAB_MANIFEST.map((tab) => ({
-            id: tab.id,
-            title: tab.label,
-            icon: tabIcon(tab.id),
-            active: active === tab.id,
-            onSelect: () => onTab(tab.id),
-          }))}
-        />
+      {active === 'settings' && <section className="compact-pwa-readiness" aria-label="Compact travel readiness"><span className={`pwa-chip ${online ? 'ok' : 'warning'}`}>{online ? <Wifi size={13} /> : <WifiOff size={13} />}{online ? '已連線' : '離線'}</span><span className="pwa-chip"><Archive size={13} />同步佇列 · {queueLabel}</span>{installReady && <button className="pwa-chip install" type="button" onClick={handleInstallClick}><Smartphone size={13} /> 安裝到主畫面</button>}</section>}
+      {active === 'settings' && updateReady && releaseNotesOpen && <section className="compact-release-notes" aria-label="Compact release notes"><div className="compact-release-notes-head"><strong>這次更新</strong><button type="button" onClick={handleReleaseNotesDismiss}>知道了</button></div><div className="compact-release-note-list">{COMPACT_RELEASE_NOTES.map(note => <article key={note.title}><b>{note.title}</b><small>{note.detail}</small></article>)}</div></section>}
+      <main id="journey-main" className="content" tabIndex={-1}>{children}</main>
+      <div className={`fixed-tab-bar journey-dock${keyboardOpen ? ' is-keyboard-open' : ''}`}>
+        <nav className="app-floating-dock-mobile journey-mobile-nav" aria-label="主要分頁">
+          {primaryTabs.map(tab => <button key={tab.id} type="button" aria-label={tab.label} aria-current={active === tab.id ? 'page' : undefined} className={active === tab.id ? 'active' : ''} onClick={() => onTab(tab.id)}>{tabIcon(tab.id)}<span>{tab.label}</span></button>)}
+          <button type="button" aria-label="更多" aria-expanded={moreOpen} aria-current={moreActive ? 'page' : undefined} className={moreActive ? 'active' : ''} onClick={() => setMoreOpen(true)}><MoreHorizontal size={22} /><span>{moreActive ? TAB_MANIFEST.find(tab => tab.id === active)?.label : '更多'}</span></button>
+        </nav>
       </div>
+      {moreOpen && createPortal(<div className="modal-backdrop journey-more-backdrop" onClick={() => setMoreOpen(false)}><section ref={moreRef} className="journey-more-sheet" role="dialog" aria-modal="true" aria-label="更多旅程工具" onClick={event => event.stopPropagation()}><div className="journey-sheet-handle" /><header><h2>旅程工具</h2><button className="journey-icon-button" type="button" aria-label="關閉更多工具" onClick={() => setMoreOpen(false)}><X size={20} /></button></header><nav aria-label="其他分頁">{secondaryTabs.map(tab => <button key={tab.id} type="button" onClick={() => { setMoreOpen(false); onTab(tab.id); }}>{tabIcon(tab.id)}<span>{tab.label}<small>{tab.id === 'weather' ? '看看沿途天氣' : tab.id === 'stats' ? '預算、分帳與花費分析' : '旅程、主題與帳號管理'}</small></span><ChevronDown size={18} className="journey-chevron-right" /></button>)}</nav>{onOpenNewTripWizard && <button className="secondary" type="button" onClick={() => { setMoreOpen(false); onOpenNewTripWizard(); }}><Plus size={17} /> 建立新旅程</button>}</section></div>, document.body)}
     </div>
   );
 }

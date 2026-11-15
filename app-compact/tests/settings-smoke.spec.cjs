@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { openTab, expectCurrentTab } = require('./helpers/journey-navigation.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -17,7 +18,7 @@ async function setTripManagerPanel(page, title, expanded = true) {
 }
 
 async function expectSettingsReady(page) {
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '設定控制中心');
+  await expectCurrentTab(page, 'settings');
   await expect(page.locator('.settings-preview-controls')).toBeVisible();
   await expect(page.locator('.settings-preview-controls button')).toHaveCount(3);
 }
@@ -361,8 +362,8 @@ test('Settings expandable cards, safe broker actions, backup, restore, and trust
   await expect(tripConfirm).toContainText('Hongdae Stay');
   await expect(tripConfirm).toContainText('Seoul BBQ');
   await expect(tripConfirm).toContainText('需要留意');
-  await expect(tripConfirm.locator('.trip-review-notices')).toContainText('Hongdae Stay address/mapUrl');
-  await expect(tripConfirm.locator('.trip-review-notices')).toContainText('Hongdae arrival time was treated as Day 1 evening');
+  await expect(tripConfirm.locator('.trip-review-notices').filter({ hasText: '需要留意' })).toContainText('Hongdae Stay address/mapUrl');
+  await expect(tripConfirm.locator('.trip-review-notices').filter({ hasText: '需要留意' })).toContainText('Hongdae arrival time was treated as Day 1 evening');
   await expect(tripConfirm).not.toContainText('模型假設：');
   await expect(tripConfirm).not.toContainText('Warning:');
   await tripConfirm.getByRole('button', { name: '返回修改文字' }).click();
@@ -788,8 +789,8 @@ test('Settings Trip Doctor summarizes compact data quality and opens repair pane
   await expect(doctor).toContainText('Current-trip only');
 
   await doctor.getByRole('button', { name: /Review records/ }).click();
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await expectCurrentTab(page, 'history');
+  await openTab(page, '設定');
   await expectSettingsReady(page);
 
   await page.getByLabel('Compact Trip Doctor').getByRole('button', { name: /Data safety/ }).click();
@@ -971,8 +972,8 @@ test.skip('Settings sync readiness dry run summarizes offline queue without prov
 
   await dryRun.getByRole('button', { name: /Review records/ }).click();
   await expect(page).toHaveURL(/#history/);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await expectCurrentTab(page, 'history');
+  await openTab(page, '設定');
   await expectSettingsReady(page);
   await setAccordion(page, 'Notion Sync');
   await page.getByLabel('Sync readiness dry run').getByRole('button', { name: /Backup first/ }).click();
@@ -1105,12 +1106,12 @@ test('Settings trip scope audit flags active trip boundaries without provider ca
 
   await audit.getByRole('button', { name: /Repair first issue/ }).click();
   await expect(page).toHaveURL(/#history/);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
   await expect(page.getByLabel('店名 / 項目')).toHaveValue('Scope Early Train');
-  await page.getByRole('button', { name: '×' }).click();
+  await page.getByRole('button', { name: '關閉記帳視窗' }).click();
   await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeHidden();
-  await page.getByRole('button', { name: '設定', exact: true }).click();
+  await openTab(page, '設定');
   await expectSettingsReady(page);
   await page.getByLabel('Trip scope audit').getByRole('button', { name: /Data safety/ }).click();
   await expect(page.locator('[aria-controls="settings-data-panel"]')).toHaveAttribute('aria-expanded', 'true');
@@ -1375,7 +1376,7 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   await expect(modal).not.toContainText('AI 重整行程');
   await expect(modal).not.toContainText('Warning:');
   await expect(modal.locator('.trip-review-day-tabs').getByRole('tab', { name: /Day 3/ })).toBeVisible();
-  const noticeBox = modal.locator('.trip-review-notices');
+  const noticeBox = modal.locator('.trip-review-notices').filter({ hasText: '需要留意' });
   await expect(noticeBox).toBeVisible();
   expect(await noticeBox.evaluate((node) => node.hasAttribute('open'))).toBe(false);
   await noticeBox.locator('summary').click();
@@ -1406,10 +1407,12 @@ test('Trip update AI opens a day-by-day confirmation modal and applies a long Je
   expect(stored.syncQueue.some((item) => item.type === 'settings' && item.entityId === 'app-settings')).toBe(true);
 
   await page.getByLabel('主要分頁').getByRole('button', { name: '行程', exact: true }).click();
-  await expect(page.locator('.timeline-trip-days')).toContainText('8日');
+  await expect(page.getByLabel('選擇行程日子').getByRole('button')).toHaveCount(8);
+  await page.getByRole('button', { name: '顯示全部日子', exact: true }).click();
   const editedTimelineSpot = page.locator('.timeline-event').filter({ hasText: '城山日出峰 Sunset' });
   await expect(editedTimelineSpot).toBeVisible();
-  await expect(editedTimelineSpot.locator('.timeline-time')).toContainText('18:00 – 19:15');
+  await expect(editedTimelineSpot.locator('.timeline-time')).toContainText('18:00');
+  await expect(editedTimelineSpot.locator('.schedule-time-detail')).toContainText('19:15');
 });
 
 test('Trip update AI falls back to local parser and still opens confirmation modal', async ({ page }) => {
@@ -1496,7 +1499,7 @@ test('Trip update AI falls back to local parser and still opens confirmation mod
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#settings`);
   await expectSettingsReady(page);
   await setAccordion(page, 'AI 行程更新');
-  await expect(page.locator('#settings-trip-update-panel')).toContainText('目前 primary：NVIDIA: Nemotron 3 Super');
+  await expect(page.locator('#settings-trip-update-panel')).toContainText('使用 NVIDIA: Nemotron 3 Super');
   await page.getByPlaceholder(/下次/).fill(longJeju);
   await page.getByRole('button', { name: /用已選模型分析/ }).click();
 
@@ -1753,7 +1756,7 @@ test('Exchange settings are independently collapsed and apply fixed/live rates o
   await panel.getByRole('tab', { name: '固定匯率', exact: true }).click();
   await input.fill('0');
   await panel.getByRole('button', { name: '確認採用固定匯率', exact: true }).click();
-  await expect(panel.getByRole('alert')).toContainText('0.01');
+  await expect(panel.getByRole('alert')).toContainText('必須大於 0');
   expect((await storedExchangeState(page)).rateMode).toBe('live');
   await input.fill('19.5');
   await panel.getByRole('button', { name: '確認採用固定匯率', exact: true }).click();

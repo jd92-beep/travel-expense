@@ -21,13 +21,13 @@ export type ThemeDefinition = {
     | 'neon-grid' | 'confetti-radial' | 'union-stripe' | 'aurora-bands' | 'papel-picado'
     | 'pigment-splash' | 'parade-float'
     | 'notebook-ruled' | 'cloud-puff' | 'toy-room' | 'polka-sticker' | 'hud-scan' | 'pixel-field'
-    | 'seigaiha-print' | 'hanok-lattice';
+    | 'seigaiha-print' | 'hanok-lattice' | 'ledger' | 'blueprint' | 'terrace' | 'pocket_planner' | 'alpine_postcard';
   /** Functional accents: Scan CTA, Weather sky, Timeline rail, Stats emphasis. */
   functional: { scan: string; weather: string; timeline: string; stats: string };
   motion: { ambient: boolean; duration: string };
   chrome: { themeColor: string; statusBarStyle: 'light' | 'dark' };
   /** Style themes: `html[data-app-style]` swaps component shapes, layout and type (styles/style-themes.css). */
-  kit?: { style: StyleThemeKey; fonts: string };
+  kit?: { style: StyleThemeKey; fonts?: string };
 };
 
 const gf = (families: string) => `https://fonts.googleapis.com/css2?${families}&display=swap`;
@@ -148,7 +148,7 @@ export const TRIP_THEMES: Record<AppThemeKey, ThemeDefinition> = {
   brazil_carnival: {
     id: 'brazil_carnival', label: 'Brazil Carnival', selectorLabel: '巴西嘉年華', scheme: 'dark',
     typography: { body: '"Avenir Next", "Noto Sans", ui-sans-serif, system-ui, sans-serif', display: 'Georgia, "Palatino", serif' },
-    colors: { canvas: '#06281E', canvasMid: '#0A3D2A', canvasEnd: '#041C16', surface: '#0E3328', card: '#145C42', text: '#F0FFF4', muted: '#8FBFA8', border: 'rgba(255, 209, 0, .28)', focus: '#FFD100', accent: '#FFD100', onAccent: '#06281E', red: '#FD0E56', blue: '#4CC9F0', gold: '#FFD100', green: '#00C853', brown: '#D7A86E' },
+    colors: { canvas: '#06281E', canvasMid: '#0A3D2A', canvasEnd: '#041C16', surface: '#0E3328', card: '#145C42', text: '#F0FFF4', muted: '#ABD6C0', border: 'rgba(255, 209, 0, .28)', focus: '#FFD100', accent: '#FFD100', onAccent: '#06281E', red: '#FD0E56', blue: '#4CC9F0', gold: '#FFD100', green: '#00C853', brown: '#D7A86E' },
     status: { info: '#BAE6FD', success: '#86EFAC', warning: '#FDE68A', danger: '#FFD0D8' },
     chart: ['#00A859', '#FFD100', '#0057B8', '#FD0E56'], art: 'parade-float',
     region: { label: '巴西', motif: '嘉年華 · 森綠 · 金陽' },
@@ -170,7 +170,7 @@ export const TRIP_THEMES: Record<AppThemeKey, ThemeDefinition> = {
     id: 'marshmallow_cloud', label: 'Marshmallow Cloud', selectorLabel: '棉花糖雲', scheme: 'light',
     typography: { body: '"Huninn", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Fredoka", "Huninn", "Noto Sans TC", ui-rounded, sans-serif' },
     colors: { canvas: '#FFF4F8', canvasMid: '#F4F0FF', canvasEnd: '#EAF6FF', surface: '#FBF8FF', card: '#FFFFFF', text: '#4B3D63', muted: '#74679A', border: 'rgba(155, 134, 214, .18)', focus: '#7461E0', accent: '#C2457F', onAccent: '#FFFFFF', red: '#D24F7B', blue: '#5E7FE6', gold: '#E9A84C', green: '#3F9E7C', brown: '#A88A7A' },
-    status: { info: '#5A62C8', success: '#2F8466', warning: '#8A5B00', danger: '#C23C68' },
+    status: { info: '#5A62C8', success: '#287B5E', warning: '#8A5B00', danger: '#C23C68' },
     chart: ['#9B8CF2', '#F39AC0', '#7CC8F0', '#8EDDBA'], art: 'cloud-puff',
     region: { label: '風格', motif: '棉花糖 · 粉彩 · 軟綿綿' },
     functional: { scan: '#C2457F', weather: '#5E7FE6', timeline: '#9B8CF2', stats: '#7461E0' },
@@ -192,7 +192,7 @@ export const TRIP_THEMES: Record<AppThemeKey, ThemeDefinition> = {
     id: 'kawaii_sticker', label: 'Kawaii Sticker', selectorLabel: '可愛貼紙', scheme: 'light',
     typography: { body: '"Iansui", "Noto Sans TC", ui-rounded, system-ui, sans-serif', display: '"Cherry Bomb One", "Iansui", "Noto Sans TC", ui-rounded, sans-serif' },
     colors: { canvas: '#FFEFF5', canvasMid: '#FFF3F8', canvasEnd: '#FCE8F3', surface: '#FFF8FB', card: '#FFFFFF', text: '#5A2F52', muted: '#86597D', border: 'rgba(232, 140, 182, .45)', focus: '#8A5CD6', accent: '#C93A76', onAccent: '#FFFFFF', red: '#D63F7A', blue: '#5F98DC', gold: '#F5B83D', green: '#3FA684', brown: '#A9786B' },
-    status: { info: '#5B6FC9', success: '#2E8566', warning: '#875A00', danger: '#C2335F' },
+    status: { info: '#5264BC', success: '#287B5E', warning: '#875A00', danger: '#C2335F' },
     chart: ['#F48FB8', '#B79CF0', '#7FCFE8', '#FFD36E'], art: 'polka-sticker',
     region: { label: '風格', motif: '貼紙 · 波點 · 縫線' },
     functional: { scan: '#C93A76', weather: '#5F98DC', timeline: '#D63F7A', stats: '#8A5CD6' },
@@ -242,6 +242,61 @@ export const TRIP_THEMES: Record<AppThemeKey, ThemeDefinition> = {
     functional: { scan: '#C8323C', weather: '#1E5AA8', timeline: '#1F7A60', stats: '#1E5AA8' },
     motion: { ambient: false, duration: '24s' }, chrome: { themeColor: '#f6f1e6', statusBarStyle: 'dark' },
     kit: { style: 'korea_dancheong', fonts: gf('family=Gowun+Batang:wght@400;700&family=Cactus+Classical+Serif&family=Noto+Sans+TC:wght@400;500;700') },
+  },
+  night_ledger: {
+    id: 'night_ledger', label: 'Night Ledger', selectorLabel: '深夜帳本', scheme: 'dark',
+    typography: { body: 'system-ui, "Noto Sans TC", sans-serif', display: 'system-ui, "Noto Sans TC", sans-serif' },
+    colors: { canvas: '#0E1823', canvasMid: '#132130', canvasEnd: '#0E1823', surface: '#122131', card: '#172637', text: '#EDF4F8', muted: '#A5B8C9', border: 'rgba(165, 184, 201, .28)', focus: '#8ECFFF', accent: '#8ECFFF', onAccent: '#0E1823', red: '#FFAD9C', blue: '#8ECFFF', gold: '#EBC785', green: '#A1D8B1', brown: '#D4B9A4' },
+    status: { info: '#8ECFFF', success: '#A1D8B1', warning: '#EBC785', danger: '#FFAD9C' },
+    chart: ['#8ECFFF', '#EBC785', '#A1D8B1', '#FFAD9C'], art: 'ledger',
+    region: { label: '風格', motif: '深色 · 清晰分隔 · 靜態' },
+    functional: { scan: '#8ECFFF', weather: '#8ECFFF', timeline: '#EBC785', stats: '#A1D8B1' },
+    motion: { ambient: false, duration: '0s' }, chrome: { themeColor: '#0e1823', statusBarStyle: 'light' },
+    kit: { style: 'night_ledger' },
+  },
+  harbor_blueprint: {
+    id: 'harbor_blueprint', label: 'Harbor Blueprint', selectorLabel: '海港藍圖', scheme: 'light',
+    typography: { body: 'system-ui, "Noto Sans TC", sans-serif', display: 'system-ui, "Noto Sans TC", sans-serif' },
+    colors: { canvas: '#EDF4F8', canvasMid: '#E6F0F5', canvasEnd: '#DFECF2', surface: '#F6FAFC', card: '#FFFFFF', text: '#173447', muted: '#526A7A', border: 'rgba(23, 52, 71, .28)', focus: '#136184', accent: '#136184', onAccent: '#FFFFFF', red: '#AD3E3E', blue: '#136184', gold: '#8C6418', green: '#27634A', brown: '#715642' },
+    status: { info: '#136184', success: '#27634A', warning: '#80590D', danger: '#AD3E3E' },
+    chart: ['#136184', '#AD3E3E', '#8C6418', '#27634A'], art: 'blueprint',
+    region: { label: '風格', motif: '方角 · 格線 · 海港藍' },
+    functional: { scan: '#136184', weather: '#136184', timeline: '#AD3E3E', stats: '#27634A' },
+    motion: { ambient: false, duration: '0s' }, chrome: { themeColor: '#edf4f8', statusBarStyle: 'dark' },
+    kit: { style: 'harbor_blueprint' },
+  },
+  sunset_terrace: {
+    id: 'sunset_terrace', label: 'Sunset Terrace', selectorLabel: '日落露台', scheme: 'light',
+    typography: { body: 'system-ui, "Noto Sans TC", sans-serif', display: 'Georgia, "Noto Serif TC", serif' },
+    colors: { canvas: '#F8EDE2', canvasMid: '#F3E5D9', canvasEnd: '#EBDBCD', surface: '#FFFAF3', card: '#FFFDF9', text: '#422921', muted: '#77584D', border: 'rgba(119, 88, 77, .3)', focus: '#644B86', accent: '#A44028', onAccent: '#FFFFFF', red: '#A44028', blue: '#36627A', gold: '#8A6118', green: '#416447', brown: '#77584D' },
+    status: { info: '#36627A', success: '#416447', warning: '#80570B', danger: '#A44028' },
+    chart: ['#A44028', '#36627A', '#8A6118', '#416447'], art: 'terrace',
+    region: { label: '風格', motif: '拱角 · 雙線框 · 陶土色' },
+    functional: { scan: '#A44028', weather: '#36627A', timeline: '#A44028', stats: '#644B86' },
+    motion: { ambient: false, duration: '0s' }, chrome: { themeColor: '#f8ede2', statusBarStyle: 'dark' },
+    kit: { style: 'sunset_terrace' },
+  },
+  pocket_planner: {
+    id: 'pocket_planner', label: 'Pocket Planner', selectorLabel: '口袋行事曆', scheme: 'light',
+    typography: { body: 'system-ui, "PingFang TC", sans-serif', display: 'system-ui, "PingFang TC", sans-serif' },
+    colors: { canvas: '#FCF9F4', canvasMid: '#FBF8F3', canvasEnd: '#F7F3EB', surface: '#FBF9F4', card: '#FFFDFC', text: '#343033', muted: '#575750', border: '#BCB6A6', focus: '#305748', accent: '#305748', onAccent: '#FFFFFF', red: '#AE4746', blue: '#39728A', gold: '#815907', green: '#34624A', brown: '#655443' },
+    status: { info: '#39728A', success: '#34624A', warning: '#815907', danger: '#AE4746' },
+    chart: ['#39728A', '#815907', '#34624A', '#AE4746'], art: 'pocket_planner',
+    region: { label: '風格', motif: '影片一 · 黃色行事曆、時間軸與工具抽屜' },
+    functional: { scan: '#305748', weather: '#39728A', timeline: '#34624A', stats: '#815907' },
+    motion: { ambient: false, duration: '0s' }, chrome: { themeColor: '#fcf9f4', statusBarStyle: 'dark' },
+    kit: { style: 'pocket_planner' },
+  },
+  alpine_postcard: {
+    id: 'alpine_postcard', label: 'Alpine Postcard', selectorLabel: '南島旅行手帳', scheme: 'light',
+    typography: { body: 'system-ui, "PingFang TC", sans-serif', display: 'system-ui, "PingFang TC", sans-serif' },
+    colors: { canvas: '#F7FAFA', canvasMid: '#ECF3F5', canvasEnd: '#FFFFFF', surface: '#EDF4F0', card: '#FFFFFF', text: '#354959', muted: '#526673', border: '#C4D2D3', focus: '#3F697A', accent: '#426F81', onAccent: '#FFFFFF', red: '#9B4749', blue: '#416C82', gold: '#7B5C22', green: '#416848', brown: '#645846' },
+    status: { info: '#416C82', success: '#416848', warning: '#7B5C22', danger: '#9B4749' },
+    chart: ['#416C82', '#7B5C22', '#416848', '#9B4749'], art: 'alpine_postcard',
+    region: { label: '風格', motif: '影片二 · 南島山景、湖藍導航與旅程手帳' },
+    functional: { scan: '#426F81', weather: '#416C82', timeline: '#416848', stats: '#7B5C22' },
+    motion: { ambient: false, duration: '0s' }, chrome: { themeColor: '#f7fafa', statusBarStyle: 'dark' },
+    kit: { style: 'alpine_postcard' },
   },
 };
 
@@ -302,9 +357,10 @@ export function TripThemeProvider({ state, ready = true, children }: { state: Ap
     else delete root.dataset.appStyle;
     syncStyleFonts(theme.kit?.fonts);
     // Brief class so CSS can ease color/background/border without animating every keystroke.
-    if (previousTheme && previousTheme !== theme.id) {
+    let transitionTimer: number | undefined;
+    if (previousTheme && previousTheme !== theme.id && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
       root.classList.add('theme-switching');
-      window.setTimeout(() => root.classList.remove('theme-switching'), 420);
+      transitionTimer = window.setTimeout(() => root.classList.remove('theme-switching'), 420);
     }
     meta?.setAttribute('content', theme.chrome.themeColor);
     try { localStorage.setItem('boss-japan-tracker:theme:v1', theme.id); } catch { /* hint is optional */ }
@@ -329,6 +385,10 @@ export function TripThemeProvider({ state, ready = true, children }: { state: Ap
       '--shadow-glass': `0 20px 56px color-mix(in srgb, ${colors.text} 12%, transparent), inset 0 1px 1px ${theme.scheme === 'dark' ? 'rgba(255, 255, 255, .12)' : 'rgba(255, 255, 255, .88)'}`,
     };
     Object.entries(vars).forEach(([name, value]) => root.style.setProperty(name, value));
+    return () => {
+      if (transitionTimer !== undefined) window.clearTimeout(transitionTimer);
+      root.classList.remove('theme-switching');
+    };
   }, [intelligence.countryCode, intelligence.themeKey, source, theme, ready]);
 
   const contextValue = useMemo<ThemeContextValue>(

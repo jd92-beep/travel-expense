@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { ErrorBoundary } from './app/ErrorBoundary';
 import { ReceiptEditor } from './components/ReceiptEditor';
@@ -13,7 +13,7 @@ import { useAppState } from './lib/useAppState';
 import { useSyncEngine } from './lib/useSyncEngine';
 import { clearCredentialSession, clearStoredState } from './lib/storage';
 import type { AppState, Person, Receipt, SyncQueueItem, TabId, TripInviteSummary, TripProfile, TripSharingInviteDraft } from './lib/types';
-import { TAB_MANIFEST } from './lib/tabs';
+import { TAB_MANIFEST, tabDirection } from './lib/tabs';
 import { isBoss } from './lib/constants';
 import { AuthGate } from './security/AuthGate';
 import { HyperframeBackground } from './components/HyperframeBackground';
@@ -30,6 +30,7 @@ import { upsertSupabaseTrip } from './lib/supabase';
 import { clearDeviceTrust } from './security/deviceTrust';
 import { clearTrustedDevice } from './security/trustedDevice';
 import { TripThemeProvider } from './theme/tripTheme';
+import type { PlannerView } from './components/journey/JourneyPlanner';
 
 // Trigger Vercel build
 
@@ -122,6 +123,10 @@ export function App() {
   const bootSyncKeys = useRef(new Set<string>());
   const stateRef = useRef(state);
   stateRef.current = state;
+  const scanTripId = activeTrip(state).id;
+  const scanScopeRef = useRef({ tripId: scanTripId });
+  if (scanScopeRef.current.tripId !== scanTripId) scanScopeRef.current = { tripId: scanTripId };
+  const scanScope = scanScopeRef.current;
 
   // Client-side invite options the RPC does not own: `createAccountingPerson` adds the invitee
   // to the split list (equal-proportion default), `displayName` labels the pending invite row.
@@ -294,14 +299,35 @@ export function App() {
   const syncEngine = useSyncEngine(state, setState, effectiveSupabaseSession);
   const { pull, sync } = syncEngine;
   const [tab, setTab] = useState<TabId>(() => safeTabId((typeof window !== 'undefined' && window.location.hash.slice(1)) || DEFAULT_LAUNCH_TAB));
+  const [settingsSection, setSettingsSection] = useState('');
+  const [plannerView, setPlannerView] = useState<PlannerView>('schedule');
   const [direction, setDirection] = useState<number>(0);
   const [editing, setEditing] = useState<Receipt | null | undefined>(undefined);
+  useLayoutEffect(() => {
+    setEditing(undefined);
+    setBatch([]);
+    setGlobalOcrBusy('');
+  }, [scanScope]);
+  // Background extraction may finish after Scan unmounts, but never after leaving its trip.
+  const acceptScanDraft = useCallback((receipt: Receipt) => {
+    if (scanScopeRef.current === scanScope) setEditing(receipt);
+  }, [scanScope]);
+  const acceptScanBatch = useCallback((next: Parameters<typeof setBatch>[0]) => {
+    if (scanScopeRef.current === scanScope) setBatch(next);
+  }, [scanScope]);
+  const acceptScanBusy = useCallback((busy: string) => {
+    if (scanScopeRef.current === scanScope) setGlobalOcrBusy(busy);
+  }, [scanScope]);
   const bootSyncScheduledKey = useRef('');
   const bootSyncInitiated = useRef(false);
   const didHydrateTab = useRef(false);
   const receiptCountRef = useRef(state.receipts.length);
   receiptCountRef.current = state.receipts.length;
   const safeTab = safeTabId(tab);
+  useLayoutEffect(() => {
+    // A new task starts at its heading, not at the previous tab's deep scroll position.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [safeTab]);
   const clearSupabaseDeviceData = async () => {
     const scope = hasSupabaseSession(effectiveSupabaseSession) ? `supabase:${effectiveSupabaseSession.user.id}` : storageScope;
     clearStoredState(scope);
@@ -390,11 +416,7 @@ export function App() {
         window.history.replaceState(null, '', `#${next}`);
       }
       setTab((prev) => {
-        const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === prev);
-        const nextIndex = TAB_MANIFEST.findIndex((t) => t.id === next);
-        if (currentIndex !== -1 && nextIndex !== -1 && currentIndex !== nextIndex) {
-          setDirection(nextIndex > currentIndex ? 1 : -1);
-        }
+        if (prev !== next) setDirection(tabDirection(prev, next));
         return next;
       });
       updateState({ lastTab: next });
@@ -516,11 +538,7 @@ export function App() {
 
   const changeTab = useCallback((next: TabId) => {
     const normalized = safeTabId(next);
-    const currentIndex = TAB_MANIFEST.findIndex((t) => t.id === safeTab);
-    const nextIndex = TAB_MANIFEST.findIndex((t) => t.id === normalized);
-    if (currentIndex !== -1 && nextIndex !== -1 && currentIndex !== nextIndex) {
-      setDirection(nextIndex > currentIndex ? 1 : -1);
-    }
+    if (safeTab !== normalized) setDirection(tabDirection(safeTab, normalized));
     setTab(normalized);
     updateState({ lastTab: normalized });
     const hash = `#${normalized}`;
@@ -530,6 +548,7 @@ export function App() {
   }, [safeTab, updateState]);
 
   const importReceipts = (receipts: Receipt[]) => {
+    if (scanScopeRef.current !== scanScope) return;
     for (const receipt of receipts) {
       upsertReceipt(stampReceiptForTrip(state, receipt));
     }
@@ -546,35 +565,18 @@ export function App() {
 
   const fxTier = useEffectsTier();
 
-  // Windmill Motion Layer: page content swings like a windmill blade / pendulum around a
-  // hub anchored below the screen (transformOrigin '50% 130%' on the motion.div). Rotation
-  // alone (no x translation) produces the horizontal travel feel, and stays compositor-only
-  // (rotate + opacity), which is why this replaced the old x-slide. full = desktop ±18deg
-  // spring; balanced (phones) = ±14deg shorter spring (≤250ms perceived); lite = instant swap.
-  const windmillAngle = fxTier === 'full' ? 18 : 14;
-  const windmillVariants = {
-    enter: (dir: number) => ({
-      rotate: dir > 0 ? windmillAngle : dir < 0 ? -windmillAngle : 0,
-      opacity: 0,
-    }),
-    center: {
-      rotate: 0,
-      opacity: 1,
-    },
-    exit: (dir: number) => ({
-      rotate: dir > 0 ? -windmillAngle : dir < 0 ? windmillAngle : 0,
-      opacity: 0,
+  const tabDistance = fxTier === 'lite' ? 0 : 22;
+  const tabVariants = {
+    enter: (direction: number) => ({ x: direction * tabDistance, opacity: tabDistance ? 0.4 : 1 }),
+    center: { x: 0, opacity: 1 },
+    exit: (direction: number) => ({
+      x: -direction * tabDistance / 2,
+      opacity: tabDistance ? 0.4 : 1,
+      transition: { duration: tabDistance ? 0.09 : 0 },
     }),
   };
-  const windmillTransition = fxTier === 'full'
-    ? { rotate: { type: 'spring' as const, stiffness: 380, damping: 38, mass: 1 }, opacity: { duration: 0.15 } }
-    : { rotate: { type: 'spring' as const, stiffness: 420, damping: 40, mass: 0.9 }, opacity: { duration: 0.12 } };
-
   const appContent = (
     <>
-      <HyperframeBackground />
-      <TuringBackdrop />
-      <KitAmbient />
       {showGuide && (
         <Suspense fallback={null}>
           <WelcomeGuidePopup
@@ -602,22 +604,23 @@ export function App() {
               // animated and non-animated branches, which invited drift.
               const tabContent = (
                 <>
-                  {safeTab === 'dashboard' && <Dashboard state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
+                  {safeTab === 'dashboard' && <Dashboard key={`${storageScope}:${scanTripId}`} state={state} setState={setState} updateState={updateState} onOpen={setEditing} onTab={changeTab} onPlanner={(view) => { setPlannerView(view); changeTab('timeline'); }} onManual={() => setEditing(null)} isWizardOpen={isNewTripWizardOpen} setIsWizardOpen={setIsNewTripWizardOpen} />}
                   {safeTab === 'scan' && (
                     <Scan
+                      key={scanTripId}
                       state={state}
                       updateState={updateState}
                       onManual={() => setEditing(null)}
-                      onDraft={setEditing}
+                      onDraft={acceptScanDraft}
                       onImport={importReceipts}
                       onPull={syncEngine.pull}
                       cloudSyncAvailable={isCloudSyncActive}
-                      onBusyChange={setGlobalOcrBusy}
+                      onBusyChange={acceptScanBusy}
                       batch={batch}
-                      setBatch={setBatch}
+                      setBatch={acceptScanBatch}
                     />
                   )}
-                  {safeTab === 'timeline' && <Timeline state={state} setState={setState} onOpen={setEditing} />}
+                  {safeTab === 'timeline' && <Timeline key={`${storageScope}:${scanTripId}`} state={state} setState={setState} onOpen={setEditing} scope={storageScope} plannerView={plannerView} onPlannerView={setPlannerView} onExpenses={() => changeTab('stats')} syncState={syncEngine.engineState} onSettings={section => { setSettingsSection(section); changeTab('settings'); }} />}
                   {safeTab === 'history' && (
                     <History
                       state={state}
@@ -632,7 +635,7 @@ export function App() {
                   )}
                   {safeTab === 'weather' && <Weather state={state} />}
                   {safeTab === 'stats' && <Stats state={state} setState={setState} updateState={updateState} onTab={changeTab} />}
-                  {safeTab === 'settings' && <Settings state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} onReopenGuide={handleReopenGuide} />}
+                  {safeTab === 'settings' && <Settings initialSection={settingsSection} onSectionOpened={() => setSettingsSection('')} state={state} setState={setState} updateState={updateState} onReset={resetLocal} syncState={syncEngine.engineState} onPull={syncEngine.pull} onPush={syncEngine.push} cloudSyncAvailable={isCloudSyncActive} storageScope={storageScope} supabaseAccountId={effectiveSupabaseSession?.user?.id || ''} supabaseSessionExpiresAt={(effectiveSupabaseSession?.expires_at || 0) * 1000} changeTab={changeTab} updatePassword={supabaseAuth.updatePassword} userEmail={userEmail} onSignOut={supabaseAuth.signOut} onClearDeviceData={clearSupabaseDeviceData} onReopenGuide={handleReopenGuide} />}
                 </>
               );
               // The keyed ErrorBoundary must live INSIDE the motion.div: when it wrapped
@@ -644,24 +647,21 @@ export function App() {
                   <Suspense fallback={<TabSkeleton label="載入分頁" />}>{tabContent}</Suspense>
                 </ErrorBoundary>
               );
-              if (fxTier === 'lite') {
-                return <div className="w-full h-full">{bounded}</div>;
-              }
+              // Keep the same tree when motion preferences change so unsaved tab drafts survive.
               // overflow:clip (not hidden) — hidden creates a scrollport that breaks
               // position:sticky on Weather's hero card when the window scrolls.
               return (
                 <div className="w-full h-full" style={{ overflow: 'clip' }}>
-                  <AnimatePresence mode="wait" initial={false}>
+                  <AnimatePresence mode="wait" initial={false} custom={direction}>
                     <motion.div
                       key={safeTab}
                       custom={direction}
-                      variants={windmillVariants}
-                      initial="enter"
+                      variants={tabVariants}
+                      initial={fxTier === 'lite' ? false : 'enter'}
                       animate="center"
                       exit="exit"
-                      transition={windmillTransition}
-                      className="w-full h-full will-change-transform"
-                      style={{ backfaceVisibility: 'hidden', transformOrigin: '50% 130%' }}
+                      transition={{ duration: tabDistance ? .2 : 0, ease: [.16, 1, .3, 1] }}
+                      className="w-full h-full"
                     >
                       {bounded}
                     </motion.div>

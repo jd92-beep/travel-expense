@@ -46,7 +46,13 @@ test('calculator preserves signed results, operator precedence, decimals and key
   await expect(result).toContainText('—');
   await calc.getByRole('button', { name: '關閉', exact: true }).focus();
   await page.keyboard.press('Shift+Tab');
-  await expect(calc.getByRole('button', { name: '.', exact: true })).toBeFocused();
+  await expect(calc.locator('summary')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(calc.getByRole('button', { name: '關閉', exact: true })).toBeFocused();
+  await calc.locator('summary').click();
+  await calc.getByRole('button', { name: '關閉', exact: true }).focus();
+  await page.keyboard.press('Shift+Tab');
+  await expect(calc.getByRole('link', { name: '歐洲央行參考匯率' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(calc.getByRole('button', { name: '關閉', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');

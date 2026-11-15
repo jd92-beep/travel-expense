@@ -153,8 +153,15 @@ export function Weather({ state }: { state: AppState }) {
   const currentHour = report?.hourly.find((hour) => hour.time === selectedHour);
   const service = OFFICIAL_WEATHER_SERVICES[coord?.countryCode || ''];
   const geocoding = known.some((item) => item.missing) && resolved.key !== daysKey;
-  const selectDate = (next: string) => { setSelection({ tripId: trip.id, date: next, location: next === 'today' ? selection.location : '' }); setHourChoice(''); };
-  const selectLocation = (next: WeatherCoord) => { setSelection({ tripId: trip.id, date: dateChoice, location: weatherLocationKey(next) }); setHourChoice(''); };
+  function selectForecast(date: string, location: string) {
+    locationRequest.current += 1;
+    setLocating(false);
+    setLocationError('');
+    setSelection({ tripId: trip.id, date, location });
+    setHourChoice('');
+  }
+  const selectDate = (next: string) => selectForecast(next, next === 'today' ? selection.location : '');
+  const selectLocation = (next: WeatherCoord) => selectForecast(dateChoice, weatherLocationKey(next));
   const locate = async () => {
     const request = ++locationRequest.current;
     setLocating(true);

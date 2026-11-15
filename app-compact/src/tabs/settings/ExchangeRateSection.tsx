@@ -1,5 +1,6 @@
 import { ArrowRightLeft, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { RateReference } from '../../components/RateReference';
 import { AccordionCard } from '../../components/AccordionCard';
 import { SegmentedControl } from '../../components/ui';
 import { perHkdForCurrency } from '../../lib/currency';
@@ -12,7 +13,6 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
   const code = rateCurrency(state);
   const confirmedMode = state.rateMode === 'fixed' ? 'fixed' : 'live';
   const committedRate = perHkdForCurrency(state, code);
-  const liveSource = state.rateTable?.[code]?.source !== 'manual' ? state.rateTable?.[code]?.source : '';
   const [draftMode, setDraftMode] = useState<'fixed' | 'live'>(confirmedMode);
   const [draftRate, setDraftRate] = useState(String(committedRate));
   const [saving, setSaving] = useState(false);
@@ -59,7 +59,7 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
     setMessage('');
     const rate = Number(draftRate);
     if (draftMode === 'fixed' && !isValidFixedRate(rate)) {
-      setError('固定匯率必須係 0.01 至 1,000,000 之間嘅數值。');
+      setError('固定匯率必須大於 0，並且不超過 1,000,000。');
       return;
     }
     const tripId = state.activeTripId;
@@ -107,14 +107,14 @@ export function ExchangeRateSection({ ctx }: { ctx: SettingsContext }) {
       meta={<span>記錄用{confirmedMode === 'fixed' ? '固定匯率' : '即時匯率'}</span>}>
       <form className="settings-exchange-form" onSubmit={confirmRate} noValidate>
         <p className="muted">目前已確認：{confirmedMode === 'fixed' ? '固定匯率' : '即時匯率'} · 1 HKD = {committedRate} {code}</p>
-        {confirmedMode === 'live' && liveSource && <p className="muted settings-exchange-source">來源：{liveSource}</p>}
+        <RateReference state={state} currency={code} />
         <fieldset disabled={saving || !!busy}>
           <SegmentedControl ariaLabel="匯率模式" value={draftMode}
             options={[{ value: 'live', label: '即時匯率' }, { value: 'fixed', label: '固定匯率' }]}
             onChange={(mode) => { dirtyRef.current = true; setDraftMode(mode); setError(''); setMessage(''); }} />
           <label>{modeLabel}（1 HKD = {code}）
             <TripRateInput value={draftMode === 'fixed' ? draftRate : confirmedMode === 'live' ? String(committedRate) : ''}
-              readOnly={draftMode === 'live'} invalid={!!error && draftMode === 'fixed'} describedBy={error ? errorId : undefined}
+              readOnly={draftMode === 'live' || code === 'HKD'} invalid={!!error && draftMode === 'fixed'} describedBy={error ? errorId : undefined}
               onChange={(value) => { dirtyRef.current = true; setDraftRate(value); setError(''); setMessage(''); }} />
           </label>
           <div className="settings-exchange-actions">

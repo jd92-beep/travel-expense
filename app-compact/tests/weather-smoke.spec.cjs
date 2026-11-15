@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { openTab, expectCurrentTab } = require('./helpers/journey-navigation.cjs');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 const TODAY = '2026-10-03';
@@ -182,7 +183,7 @@ test('HKO daily and observation retain their sources while real model hours rema
     return (Math.max(text, surface) + 0.05) / (Math.min(text, surface) + 0.05);
   });
   expect(heroContrast).toBeGreaterThanOrEqual(4.5);
-  expect(await page.locator('.compact-mobile-title-art').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+  expect(await page.locator('.journey-topbar').evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
   if (process.env.COMPACT_CAPTURE_DIR) {
     const path = require('node:path');
     require('node:fs').mkdirSync(process.env.COMPACT_CAPTURE_DIR, { recursive: true });
@@ -351,9 +352,9 @@ test('switching trips never displays the previous trip report or legacy itinerar
   await expect(page.locator('#wx-place-heading')).toHaveText('香港');
   await expect(page.locator('.wx-temperature')).toHaveText('28°');
   await page.getByRole('button', { name: '紀錄', exact: true }).click();
-  await page.getByRole('button', { name: '選擇旅程 (Select Trip)', exact: true }).click();
+  await page.getByRole('button', { name: '切換旅程 (Switch Trip)', exact: true }).click();
   await page.getByRole('button', { name: /Nagoya trip.*名古屋/ }).click();
-  await page.getByRole('button', { name: '天氣', exact: true }).click();
+  await openTab(page, '天氣');
   await expect(page.locator('#wx-place-heading')).toHaveText('名古屋');
   await expect(page.locator('.wx-temperature')).toHaveText('27°');
   await expect(page.locator('.wx-station')).not.toContainText('香港天文台');
@@ -428,6 +429,23 @@ test('current location requests permission only on click, shows accuracy and cou
   expect(storage).not.toContain('device-location');
 });
 
+test('choosing another day dismisses a pending location request', async ({ page }) => {
+  await seed(page, [day(), { ...day('香港', 'HK', 'Asia/Hong_Kong', TOMORROW), day: 2 }]);
+  await routeHko(page);
+  await routeModel(page);
+  await page.addInitScript(() => {
+    navigator.geolocation.getCurrentPosition = (_success, failure) => { window.denyLocation = failure; };
+  });
+  await openWeather(page);
+  await page.getByRole('button', { name: '使用目前位置' }).click();
+  const tomorrow = page.getByRole('button', { name: `Day 2 ${TOMORROW}` });
+  await tomorrow.click();
+  await page.evaluate(() => window.denyLocation({code: 1, message: 'Permission denied'}));
+  await expect(tomorrow).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: '使用目前位置' })).toBeEnabled();
+  await expect(page.locator('.wx-location-message[role="alert"]')).toHaveCount(0);
+});
+
 test('denied location permission explains recovery and preserves the selected destination', async ({ page }) => {
   await seed(page);
   await routeHko(page);
@@ -472,7 +490,7 @@ for (const viewport of [{ width: 344, height: 844 }, { width: 1280, height: 900 
       const { TRIP_THEMES } = await import('/travel-expense/compact/src/theme/tripTheme.tsx');
       return Object.keys(TRIP_THEMES);
     });
-    expect(themes).toHaveLength(20);
+    expect(themes).toHaveLength(25);
     const nav = page.getByLabel('主要分頁');
     async function capture(theme, surface) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `${theme}/${surface} overflow`).toBe(true);
@@ -485,7 +503,7 @@ for (const viewport of [{ width: 344, height: 844 }, { width: 1280, height: 900 
       await page.screenshot({ path: `${output}/${viewport.width}-${theme}-${surface}.png`, animations: 'disabled' });
     }
     for (const theme of themes) {
-      await nav.getByRole('button', { name: '設定', exact: true }).click();
+      await openTab(page, '設定');
       const themeToggle = page.locator('[aria-controls="settings-theme-panel"]');
       if (await themeToggle.getAttribute('aria-expanded') !== 'true') await themeToggle.click();
       await page.locator(`input[name="app-theme"][value="${theme}"]`).check();
@@ -509,14 +527,15 @@ for (const viewport of [{ width: 344, height: 844 }, { width: 1280, height: 900 
       await page.getByRole('dialog').getByRole('button', { name: '關閉', exact: true }).click();
       await page.getByRole('button', { name: '手動', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
+      await page.getByRole('dialog').getByRole('combobox', { name: '貨幣', exact: true }).selectOption('JPY');
       await page.getByRole('tab', { name: '鎖定匯率', exact: true }).click();
       await capture(theme, 'editor');
-      await page.getByRole('dialog').getByRole('button', { name: '×', exact: true }).click();
+      await page.getByRole('dialog').getByRole('button', { name: '關閉記帳視窗', exact: true }).click();
       await nav.getByRole('button', { name: '主頁', exact: true }).click();
       await expect(page.locator('.today-verdict')).toBeVisible();
       await page.locator('.washi-today-stats-card').scrollIntoViewIfNeeded();
       await capture(theme, 'home');
-      await nav.getByRole('button', { name: '天氣', exact: true }).click();
+      await openTab(page, '天氣');
       await expect(page.locator('.wx-temperature')).toHaveText('28°');
       await expect(page.locator('.wx-hour[aria-pressed="true"]')).toContainText('10:00');
       await capture(theme, 'weather');

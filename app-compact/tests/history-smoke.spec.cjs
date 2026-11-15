@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { openTab, expectCurrentTab } = require('./helpers/journey-navigation.cjs');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
 
@@ -269,10 +270,10 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   }, receipts);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  const mobileHistoryHeader = page.getByLabel('紀錄中心 header');
+  await expectCurrentTab(page, 'history');
+  const mobileHistoryHeader = page.locator('.journey-topbar');
   await expect(mobileHistoryHeader).not.toContainText('local ready');
-  await expect(mobileHistoryHeader.locator('.history-trip-button')).toBeVisible();
+  await expect(mobileHistoryHeader.locator('.journey-trip-trigger')).toBeVisible();
   await expect(page.getByRole('button', { name: /✈️/ })).toHaveCount(0);
   const refreshButton = mobileHistoryHeader.getByRole('button', { name: '重新同步' });
   await expect(refreshButton).toBeVisible();
@@ -285,10 +286,10 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.getByLabel('Receipt health markers for M7 Cloud Only')).toContainText('cloud-only');
   await expect(page.getByLabel('Receipt health markers for M7 Pending')).toContainText('pending');
   const commandMetrics = await page.evaluate(() => {
-    const card = document.querySelector('[aria-label="紀錄中心 header"]')?.getBoundingClientRect();
-    const actions = document.querySelector('.compact-mobile-action-history')?.getBoundingClientRect();
-    const trip = document.querySelector('.compact-mobile-action-history .history-trip-button')?.getBoundingClientRect();
-    const refresh = document.querySelector('.compact-mobile-action-history .history-refresh-button')?.getBoundingClientRect();
+    const card = document.querySelector('.journey-topbar')?.getBoundingClientRect();
+    const actions = document.querySelector('.journey-topbar-actions')?.getBoundingClientRect();
+    const trip = document.querySelector('.journey-topbar-actions .journey-trip-trigger')?.getBoundingClientRect();
+    const refresh = document.querySelector('.journey-topbar-actions [aria-label="重新同步"]')?.getBoundingClientRect();
     return {
       card: card && { height: card.height, width: card.width },
       actions: actions && { top: actions.top, left: actions.left, height: actions.height },
@@ -322,11 +323,17 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await refreshButton.click();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
 
-  await page.getByPlaceholder('搜尋店家、類別、標籤、金額...').fill('Coffee');
+  await page.getByRole('searchbox', { name: '搜尋紀錄' }).fill('Coffee');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
-  await page.getByPlaceholder('搜尋店家、類別、標籤、金額...').fill('');
+  await page.getByRole('searchbox', { name: '搜尋紀錄' }).fill('');
 
+  const search = page.getByRole('searchbox', { name: '搜尋紀錄' });
+  await search.fill('222');
+  await expect(page.locator('.receipt-row')).toHaveCount(1);
+  await expect(page.locator('.receipt-row')).toContainText('M7 Train');
+  await search.fill('找不到這間店');
+  await page.getByRole('button', {name: '清除搜尋及篩選'}).click();
   await page.locator('.history-filters select').selectOption('food');
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' })).toHaveCount(1);
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Train' })).toHaveCount(0);
@@ -337,14 +344,19 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   await expect(page.locator('.receipt-row').filter({ hasText: 'M7 Pending' })).toHaveCount(1);
 
   await page.locator('.receipt-row').filter({ hasText: 'M7 Coffee' }).click();
+  await expect(page.getByRole('dialog', { name: '編輯紀錄' })).toBeVisible();
   const coffeeEditorMetrics = await page.evaluate(() => {
     const footerButtons = Array.from(document.querySelectorAll('.receipt-editor-actions button')).map((button) => ({
       text: button.textContent?.trim(),
+      top: button.getBoundingClientRect().top,
+      bottom: button.getBoundingClientRect().bottom,
       left: button.getBoundingClientRect().left,
       right: button.getBoundingClientRect().right,
     }));
     const photoButtons = Array.from(document.querySelectorAll('.photo-tools button')).map((button) => ({
       text: button.textContent?.trim(),
+      top: button.getBoundingClientRect().top,
+      bottom: button.getBoundingClientRect().bottom,
       left: button.getBoundingClientRect().left,
     }));
     return { footerButtons, photoButtons, scrollWidth: document.documentElement.scrollWidth };
@@ -357,7 +369,7 @@ test('History search, filter, pending, edit, delete, and safe pull', async ({ pa
   expect(cancelButton.right).toBeGreaterThan(saveButton.right);
   const deletePhotoButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '刪除相片');
   const itineraryButton = coffeeEditorMetrics.photoButtons.find((button) => button.text === '加入行程');
-  expect(deletePhotoButton.left).toBeLessThan(itineraryButton.left);
+  expect(deletePhotoButton.left < itineraryButton.left || deletePhotoButton.bottom <= itineraryButton.top).toBe(true);
   expect(coffeeEditorMetrics.scrollWidth).toBe(390);
   await page.getByLabel('金額', { exact: true }).fill('444');
   await page.getByRole('button', { name: '儲存' }).click();
@@ -409,7 +421,7 @@ test('History keeps record review shortcut strip removed while row markers remai
   }, receipts);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
 
   await expect(page.getByLabel('Receipt cleanup suggestions')).toHaveCount(0);
   await expect(page.getByLabel('Record review shortcuts')).toHaveCount(0);
@@ -440,7 +452,7 @@ test('History keeps itinerary review shortcuts removed without hiding records', 
   }, { seedReceipts: reconciliationReceipts, itinerary: reconciliationItinerary });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
 
   await expect(page.getByLabel('Itinerary receipt review queue')).toHaveCount(0);
   await expect(page.getByLabel('Record review shortcuts')).toHaveCount(0);
@@ -514,7 +526,7 @@ test('History offline conflict resolver reviews and resolves local/cloud receipt
   }, conflictReceipts);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
 
   const resolver = page.getByLabel('Offline conflict resolver');
   await expect(resolver).toBeVisible();
@@ -569,7 +581,7 @@ test('History attachment health surfaces large, missing, and unsynced receipt ph
   }, attachmentReceipts);
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
 
   await expect(page.getByLabel('Receipt attachment health')).toHaveCount(0);
   await expect(page.getByLabel('Receipt health markers for Large Photo Bento')).toContainText('photo large');
@@ -586,7 +598,7 @@ test('History attachment health surfaces large, missing, and unsynced receipt ph
   expect(metrics.scrollWidth).toBe(390);
   expect(metrics.rowMarkerCount).toBeGreaterThanOrEqual(4);
 
-  await page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]').getByRole('button', { name: '設定', exact: true }).click();
+  await openTab(page, '設定');
   const doctor = page.getByLabel('Compact Trip Doctor');
   await expect(doctor).toContainText('Attachments');
   await expect(doctor).toContainText('4 issues');
@@ -621,8 +633,8 @@ test('History manual pull routes through global sync engine when broker session 
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
-  await page.getByLabel('紀錄中心 header').getByRole('button', { name: '重新同步' }).click();
+  await expectCurrentTab(page, 'history');
+  await page.locator('.journey-topbar').getByRole('button', { name: '重新同步' }).click();
   await expect.poll(() => notionRequests).toBeGreaterThan(0);
 });
 
@@ -655,7 +667,7 @@ test('History relies on the single global boot pull instead of auto-pulling agai
   });
 
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#history`);
-  await expect(page.locator('.compact-mobile-title-art')).toHaveAttribute('data-title', '紀錄中心');
+  await expectCurrentTab(page, 'history');
   await expect.poll(() => notionPaths.filter((path) => path.endsWith('/query')).length, { timeout: 10000 }).toBe(3);
   await page.waitForTimeout(1200);
   expect(notionPaths.filter((path) => path.endsWith('/query'))).toHaveLength(3);

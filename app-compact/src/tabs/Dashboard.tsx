@@ -52,6 +52,8 @@ import type { AppState, ItineraryDay, ItinerarySpot, Receipt, SyncQueueItem, Tab
 import { parseTripParagraph } from '../lib/ai';
 import { enqueueChange } from '../lib/changeJournal';
 import { redactedError } from '../lib/credentialBroker';
+import { JourneyOverview } from '../components/journey/JourneyOverview';
+import type { PlannerView } from '../components/journey/JourneyPlanner';
 
 type DestinationIdea = {
   id: string;
@@ -441,6 +443,7 @@ export function Dashboard({
   updateState,
   onOpen,
   onTab,
+  onPlanner,
   onManual,
   isWizardOpen,
   setIsWizardOpen
@@ -450,6 +453,7 @@ export function Dashboard({
   updateState: (patch: Partial<AppState>) => void;
   onOpen: (receipt: Receipt) => void;
   onTab: (tab: TabId) => void;
+  onPlanner?: (view: PlannerView) => void;
   onManual: () => void;
   isWizardOpen?: boolean;
   setIsWizardOpen?: (open: boolean) => void;
@@ -949,86 +953,13 @@ export function Dashboard({
       <div className="japanese-sakura-decor" />
 
       {/* 1. Header 標題與日曆按鈕 */}
-      <div className="dashboard-trip-switcher flex justify-between items-start mb-6 z-10 relative">
-        <div className="flex flex-col relative z-30" ref={tripDropdownRef}>
-          <button
-            className="flex items-center gap-1 text-[28px] font-black text-slate-800 tracking-tight font-serif border-none bg-transparent focus:outline-none cursor-pointer min-h-[44px] py-1"
-            type="button"
-            onClick={() => setIsTripDropdownOpen(!isTripDropdownOpen)}
-          >
-            <span>{trip.name}</span>
-            <ChevronDown size={22} className="text-slate-500 mt-1" />
-          </button>
-          <p className="text-xs font-semibold text-slate-500 mt-1">
-            {displayDateRange(trip.startDate, trip.endDate)} ({length} days)
-          </p>
+      <JourneyOverview state={state} onTab={onTab} onPlanner={onPlanner} onManual={onManual} />
 
-          {isTripDropdownOpen && (
-            <div className="absolute top-12 left-0 w-64 bg-white/95 backdrop-blur-md rounded-2xl border border-white/80 shadow-2xl p-2 z-50 flex flex-col gap-1">
-              <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                選擇旅程 (Select Trip)
-              </div>
-              <div className="max-h-48 overflow-y-auto flex flex-col gap-0.5">
-                {(state.trips || []).filter((t) => !t.archived).map((t) => {
-                  const isActive = t.id === trip.id;
-                  return (
-                    <button
-                      key={t.id}
-                      className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-left transition-all border-none focus:outline-none ${
-                        isActive
-                          ? 'bg-[#6D5643]/15 text-[#6D5643] font-bold'
-                          : 'hover:bg-slate-50 text-slate-700 bg-transparent'
-                      }`}
-                      onClick={() => {
-                        setIsTripDropdownOpen(false);
-                        handleSwitchTrip(t.id);
-                      }}
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-sm truncate">{t.name}</span>
-                        <span className="text-[10px] text-slate-400 truncate">
-                          {t.destinationSummary || '未設定目的地'} ({t.itinerary?.length || 0}天)
-                        </span>
-                      </div>
-                      {isActive && (
-                        <div className="w-2 h-2 rounded-full bg-[#D94132] shrink-0 ml-2" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="border-t border-slate-100 my-1" />
-              <button
-                className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-[#6D5643] hover:bg-[#5C4837] text-white rounded-xl text-xs font-bold transition-all active:scale-95 shadow-sm border-none cursor-pointer"
-                onClick={() => {
-                  setIsTripDropdownOpen(false);
-                  activeSetIsWizardOpen(true);
-                  setWizardStep(1);
-                }}
-              >
-                <span>➕ 建立新旅程</span>
-              </button>
-            </div>
-          )}
-        </div>
-        <button
-          className="w-11 h-11 bg-white/70 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/80 shadow-sm active:scale-95 transition-all"
-          type="button"
-          aria-label="開啟行程"
-          onClick={() => onTab('timeline')}
-        >
-          <CalendarDays size={20} className="text-[#6D5643]" />
-        </button>
-      </div>
-
-
-
-      {/* 2. 預算毛玻璃卡片 (含圓形進度條與 Today Spent / Daily Avg Spending Pct) */}
       <div className="stack w-full relative z-10 preview-dashboard-grid">
       <Reveal className="dashboard-reveal">
       <GlassCard as="div" className="washi-budget-card dashboard-magic-budget preview-dashboard-budget relative overflow-hidden z-10">
         {/* Hero card gets the travelling border light — the one place it reads as premium, not noise */}
-        <BorderBeam size={64} duration={9} borderWidth={1.5} colorFrom="#C23B5E" colorTo="#D4A843" />
+
         <div className="preview-dashboard-budget-head">
           <h2>預算總覽 <Info size={20} aria-hidden="true" /></h2>
           <div className="preview-dashboard-currency" role="group" aria-label="顯示貨幣">
@@ -1358,62 +1289,10 @@ export function Dashboard({
           )}
         </div>
 
-        <button
-          className="washi-add-expense-btn washi-btn flex items-center justify-center gap-1.5 w-full bg-white border border-[#D94132] text-[#D94132] font-bold py-3.5 rounded-2xl mt-4 active:scale-98 transition-all hover:bg-red-50/20 focus:outline-none"
-          type="button"
-          onClick={onManual}
-        >
-          <Plus size={18} />
-          <span>記一筆</span>
-        </button>
+
       </GlassCard>
       </Reveal>
 
-      </div>
-
-      {/* 5. 名古屋 2026 和風 Dock Bar (懸浮底欄) */}
-      <div className="washi-floating-tabbar pointer-events-auto">
-        <button
-          className="washi-dock-item active"
-          onClick={() => onTab('dashboard')}
-        >
-          <Compass size={20} />
-          <span>Trip</span>
-        </button>
-
-        <button
-          className="washi-dock-item"
-          onClick={() => onTab('history')}
-        >
-          <BarChart3 size={20} />
-          <span>Expenses</span>
-        </button>
-
-        <div className="relative w-[60px] h-full flex items-center justify-center">
-          <button
-            className="washi-floating-add-btn"
-            onClick={onManual}
-            aria-label="記一筆"
-          >
-            <Plus size={24} />
-          </button>
-        </div>
-
-        <button
-          className="washi-dock-item"
-          onClick={() => onTab('timeline')}
-        >
-          <CalendarDays size={20} />
-          <span>Itinerary</span>
-        </button>
-
-        <button
-          className="washi-dock-item"
-          onClick={() => onTab('settings')}
-        >
-          <MoreHorizontal size={20} />
-          <span>More</span>
-        </button>
       </div>
 
       {/* 行程彈窗 Sheet */}
@@ -1806,10 +1685,7 @@ export function ReceiptRow({
   return (
     <div
       className="receipt-row flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl mb-3 shadow-sm hover:translate-y-[-1px] transition-all cursor-pointer"
-      role="button"
-      tabIndex={0}
       onClick={() => onOpen(receipt)}
-      onKeyDown={(e) => { if (e.key === 'Enter') onOpen(receipt); }}
     >
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <VisualIcon id={receipt.category as any} size="md" className="shrink-0" />
@@ -1818,11 +1694,12 @@ export function ReceiptRow({
             <span className="flex items-center gap-1 min-w-0 flex-1 flex-wrap">
               {isPendingReceipt(receipt) && <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-md shrink-0">⏳ pending</span>}
               {beneficiary && <span className="text-[10px] bg-pink-100 text-pink-800 font-bold px-1.5 py-0.5 rounded-md shrink-0">代付</span>}
-              <span className="line-clamp-2 break-all whitespace-normal">{displayStore(receipt)}</span>
+              <button type="button" className="line-clamp-2 break-all whitespace-normal text-left bg-transparent border-none p-0" aria-label={`開啟紀錄：${displayStore(receipt)}`}>{displayStore(receipt)}</button>
             </span>
             {photoSrc && (
               <button
                 type="button"
+                aria-label={`查看 ${displayStore(receipt)} 收據相片`}
                 className="flex-shrink-0 flex items-center text-[#D94132]"
                 onClick={(e) => { e.preventDefault(); e.stopPropagation(); onViewPhoto ? onViewPhoto(receipt) : window.open(photoSrc, '_blank', 'noopener,noreferrer'); }}
                 style={{ cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}

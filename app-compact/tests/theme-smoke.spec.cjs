@@ -1,3 +1,4 @@
+const { openTab } = require('./helpers/journey-navigation.cjs');
 const { test, expect } = require('@playwright/test');
 
 const APP_ORIGIN = process.env.COMPACT_TEST_ORIGIN || 'http://localhost:8903';
@@ -43,7 +44,7 @@ const exactThemeTokens = {
     scheme: 'light', canvas: '#FFF3E6', canvasMid: '#FFE0F0', canvasEnd: '#E8DFFF', surface: '#FFFCF5', card: '#FFFFFF', text: '#2D1B4E', muted: '#6B5A8A', focus: '#5B21B6', accent: '#BF360C', onAccent: '#FFFFFF', info: '#5B21B6', success: '#00695C', warning: '#92400E', danger: '#AD1457', chart1: '#E91E63', chart2: '#7C4DFF', chart3: '#FF6F00', chart4: '#00BFA5',
   },
   brazil_carnival: {
-    scheme: 'dark', canvas: '#06281E', canvasMid: '#0A3D2A', canvasEnd: '#041C16', surface: '#0E3328', card: '#145C42', text: '#F0FFF4', muted: '#8FBFA8', focus: '#FFD100', accent: '#FFD100', onAccent: '#06281E', info: '#BAE6FD', success: '#86EFAC', warning: '#FDE68A', danger: '#FFD0D8', chart1: '#00A859', chart2: '#FFD100', chart3: '#0057B8', chart4: '#FD0E56',
+    scheme: 'dark', canvas: '#06281E', canvasMid: '#0A3D2A', canvasEnd: '#041C16', surface: '#0E3328', card: '#145C42', text: '#F0FFF4', muted: '#ABD6C0', focus: '#FFD100', accent: '#FFD100', onAccent: '#06281E', info: '#BAE6FD', success: '#86EFAC', warning: '#FDE68A', danger: '#FFD0D8', chart1: '#00A859', chart2: '#FFD100', chart3: '#0057B8', chart4: '#FD0E56',
   },
 };
 
@@ -301,27 +302,25 @@ test('theme selector previews a manual Taiwan world while auto follows the activ
       body: read('body'),
       shell: read('.app-shell'),
       card: read('[aria-controls="settings-theme-panel"]'),
-      header: read('.compact-mobile-header'),
+      header: read('.journey-topbar'),
       dock: read('.app-floating-dock-mobile'),
       quickAction: read('.settings-preview-controls button'),
-      mobileStatus: read('.compact-mobile-status'),
-      pwaChip: read('.pwa-chip'),
-      mobileTitle: read('.compact-mobile-title-art'),
+      mobileTitle: read('.journey-trip-trigger'),
       form: read('.person-add input'),
       modal: read('.theme-audit-modal'),
       toast: read('.theme-audit-toast'),
       washiBefore: washiBefore ? { content: washiBefore.content, display: washiBefore.display } : null,
     };
   });
-  expect(darkSurfaces.shell.backgroundImage).not.toBe('none');
-  for (const surface of ['body', 'shell', 'card', 'header', 'dock', 'quickAction', 'mobileStatus', 'pwaChip', 'form', 'modal', 'toast']) {
+  expect(darkSurfaces.shell.backgroundImage).toBe('none');
+  for (const surface of ['body', 'shell', 'card', 'header', 'dock', 'quickAction', 'form', 'modal', 'toast']) {
     expect(contrast(darkSurfaces[surface].backgroundColor, '#FFFFFF'), `${surface} should be visibly dark`).toBeGreaterThanOrEqual(4.5);
   }
-  for (const surface of ['card', 'header', 'dock', 'quickAction', 'mobileStatus', 'pwaChip', 'form', 'modal', 'toast']) {
+  for (const surface of ['card', 'header', 'dock', 'quickAction', 'form', 'modal', 'toast']) {
     expect(darkSurfaces[surface].backgroundImage, `${surface} should not retain a light material image`).toBe('none');
   }
   expect(contrast(darkSurfaces.mobileTitle.color, darkSurfaces.header.backgroundColor)).toBeGreaterThanOrEqual(4.5);
-  expect(darkSurfaces.washiBefore && (darkSurfaces.washiBefore.display === 'none' || darkSurfaces.washiBefore.content === 'none')).toBe(true);
+  expect(!darkSurfaces.washiBefore || (darkSurfaces.washiBefore.display === 'none' || darkSurfaces.washiBefore.content === 'none')).toBe(true);
   const reflow = await page.evaluate(() => ({
     noHorizontalOverflow: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
     ambientAnimation: getComputedStyle(document.body, '::after').animationName,
@@ -426,7 +425,7 @@ test('Taiwan dark keeps operating data readable across dashboard, history, weath
     { name: 'history day subtotal', text: '.history-day-subtotal strong', surface: '.history-expandable-group' },
   ]));
 
-  await nav.getByRole('button', { name: '天氣', exact: true }).click();
+  await openTab(page, '天氣');
   await expect(page.locator('.wx-overview')).toBeVisible();
   samples.push(...await readContrastSamples(page, [
     { name: 'weather temperature', text: '.wx-temperature', surface: '.wx-overview' },
@@ -447,7 +446,7 @@ test('Taiwan dark keeps operating data readable across dashboard, history, weath
     await page.screenshot({ path: path.join(process.env.COMPACT_CAPTURE_DIR, 'weather-dark.png'), fullPage: true });
   }
 
-  await nav.getByRole('button', { name: '統計', exact: true }).click();
+  await openTab(page, '統計');
   await expect(page.locator('.preview-stats-budget')).toBeVisible();
   samples.push(...await readContrastSamples(page, [
     { name: 'stats compass heading', text: '.preview-budget-heading > span', surface: '.preview-stats-budget' },
@@ -472,20 +471,18 @@ test('Taiwan dark keeps operating data readable across dashboard, history, weath
   expect(failures, `Taiwan contrast samples:\n${JSON.stringify(samples, null, 2)}`).toEqual([]);
 });
 
-test('mobile dock reflows at 200% text without overlapping navigation labels', async ({ page }) => {
+test('mobile dock grows at 200% text without clipping navigation labels', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await seedTaiwanContrastState(page);
   await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
   const nav = page.locator('.app-floating-dock-mobile[aria-label="主要分頁"]');
   await expect(nav).toBeVisible({ timeout: 15_000 });
   await page.addStyleTag({ content: `
-    .app-floating-dock-mobile,
-    .app-floating-dock-mobile button,
-    .app-floating-dock-mobile .dock-mobile-label { font-size: 30px !important; }
+    html:root[data-app-theme] body .app-shell.journey-shell .journey-mobile-nav > button { font-size: 24px !important; }
   ` });
 
   const layout = await nav.evaluate((element) => {
-    const labels = [...element.querySelectorAll('.dock-mobile-label')].map((label) => {
+    const labels = [...element.querySelectorAll('button > span')].map((label) => {
       const rect = label.getBoundingClientRect();
       return { text: label.textContent, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
     });
@@ -501,11 +498,12 @@ test('mobile dock reflows at 200% text without overlapping navigation labels', a
     }
     const buttons = [...element.querySelectorAll('button')].map((button) => Math.round(button.getBoundingClientRect().top));
     const rect = element.getBoundingClientRect();
-    return { overlaps, rowCount: new Set(buttons).size, left: rect.left, right: rect.right, viewport: innerWidth };
+    return { overlaps, labels, clipped: labels.filter(label=>label.bottom>rect.bottom||label.top<rect.top||label.right>rect.right||label.left<rect.left), rowCount: new Set(buttons).size, left: rect.left, right: rect.right, viewport: innerWidth };
   });
 
   expect(layout.overlaps).toEqual([]);
-  expect(layout.rowCount).toBeGreaterThan(1);
+  expect(layout.labels).toHaveLength(5);
+  expect(layout.clipped).toEqual([]);
   expect(layout.left).toBeGreaterThanOrEqual(0);
   expect(layout.right).toBeLessThanOrEqual(layout.viewport);
 });
@@ -516,7 +514,7 @@ test('regional and style theme catalogs expose their choices, semantic roles, an
   await openThemeAccordion(page);
   const group = page.getByRole('radiogroup', { name: '旅程地區' });
   await expect(group.getByRole('radio')).toHaveCount(13, { timeout: 15_000 });
-  await expect(page.getByRole('radiogroup', { name: '風格主題' }).getByRole('radio')).toHaveCount(8);
+  await expect(page.getByRole('radiogroup', { name: '風格主題' }).getByRole('radio')).toHaveCount(13);
   await page.getByRole('button', { name: /旅伴 \/ 分帳比例/ }).click();
   const primaryAction = page.getByRole('button', { name: '新增', exact: true });
   await expect(primaryAction).toBeVisible();
