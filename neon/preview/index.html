@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Travel Expense sign-in test</title>
+  <link rel="stylesheet" href="/preview.css">
+  <script defer src="/browser.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Travel Expense sign-in test</h1>
+    <p>Use the Google account you already use for Travel Expense.</p>
+    <p id="status" role="status">Checking test availability…</p>
+    <button id="neon" hidden>Sign in with Neon and Google</button>
+    <button id="legacy" hidden>Confirm your existing account with Google</button>
+    <button id="signout" hidden>Sign out of this test</button>
+    <section id="ledger" hidden aria-labelledby="ledger-title">
+      <h2 id="ledger-title">Your trips</h2>
+      <ul id="trips"></ul>
+      <p id="counts"></p>
+      <button id="photo" hidden>Open one saved receipt photo</button>
+      <div id="picture"></div>
+    </section>
+  </main>
+</body>
+</html>

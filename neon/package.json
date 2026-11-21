@@ -1,0 +1,21 @@
+{
+  "name": "travel-expense-neon-bridge",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild preview/browser.mjs --bundle --minify --outfile=dist/browser.js",
+    "start": "node preview/server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@neon/auth": "0.8.2",
+    "@supabase/supabase-js": "2.110.0",
+    "aws4fetch": "1.0.20",
+    "jose": "6.2.18",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

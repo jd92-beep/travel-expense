@@ -1,0 +1,7 @@
+body { margin: 0; background: #f1f7f4; color: #143b30; font: 1rem/1.55 system-ui, sans-serif; }
+main { max-width: 36rem; margin: 2rem auto; padding: 1.5rem; }
+button { font: inherit; background: #146451; color: white; min-height: 44px; padding: .6rem .9rem; border: 0; border-radius: .4rem; margin: .25rem .25rem .25rem 0; cursor: pointer; }
+button:focus-visible { outline: 3px solid #ad4e21; outline-offset: 3px; }
+button:disabled { opacity: .65; }
+img { display: block; max-width: 100%; margin-top: 1rem; }
+[hidden] { display: none; }
