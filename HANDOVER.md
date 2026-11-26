@@ -1,10 +1,55 @@
 # Agent Handover
 
+## 2026-11-26 — Compact 0.36.7 journey visual polish (pushed as e91c0a9)
+
+- Compared the planner against both sample videos using isolated fixtures in all three video styles. Fixed day ordering: timezone abbreviations such as HKT/JST were rejected by `Intl`, so those spots sorted last; `normalizeZone` in `journeyTools.ts` now maps them, which also repairs `.ics` export. Flights tagged as transport are detected by `isFlightSpot`; tickets show IATA route codes and plane glyphs appear on the day rail, timetable and map stops.
+- Added an offline numbered route schematic to the map view (still no auto-loaded iframe), tonight's-stay line on day cards, quiet footer-style card actions with an enlarged hit area, and mobile bottom padding so the last card clears the floating tools handle.
+- Motion (all gated by `prefers-reduced-motion: no-preference`): staggered card rise on day switch, press feedback, cover blur-to-sharp fade-in, map/booking card entrance. Timings were tuned from video frames, not frame-measured.
+- Checks: typecheck, build, security scan, `test:journey-tools`, journey-planner 16, timeline 10, mobile-layout 1 (theme-quality + a11y-touch 15 passed on 0.36.6). Not added: walking/bus minutes and live flight status (no data source). Compact 0.36.7 only; React untouched.
+
+## 2026-11-21 — Hosted Neon preview
+
+- The isolated [Render preview](https://travel-expense-neon-check.onrender.com) is deployed from `codex/neon-hosted-preview`, commit `1ed1016283be249693e97e6da7cc8692a05d8513`. Render service `srv-dc0ocrrm8hqs73f533tg` uses the free Singapore plan. Production still serves `f6cf9d7` from `main`.
+- The preview links an existing user only after both Neon and Supabase sign-ins and restricts access to a single approved account. The mobile layout, gateway regression suite, and selected-account RLS fixture passed. The branch adds only `neon/` source. Staged source, outgoing objects and the browser bundle passed TruffleHog with credential verification disabled plus local literal, escape and Base64 checks.
+- The preview's approved temporary staging database and read-only photo access are configured server-side. Its exact return URL is verified in Supabase and the matching origin is trusted by Neon Auth. Earlier storage keys were revoked and the replacement retrieved an image selected through Neon RLS. Local credential handoff files were removed.
+- Render deploy `dep-dc0ol8ec6qcc73f0dai0` went live on the same source commit. The hosted browser reached Google via Neon with state and PKCE. Supabase's existing-account confirmation also reached Google, and anonymous ledger access returned HTTP 401. Boss was asked to complete both sign-ins and open one receipt photo. Actual account linking, logged-in ledger checks and hosted scheduled Notion sync remain pending.
+
+## 2026-11-21 — Neon Auth follow-up
+
+- Boss changed the target to Managed Better Auth. The disposable `travel-neon-auth-rehearsal` branch (`br-raspy-silence-b3qj2ljx`) contains synthetic accounts only and expires on November 22 at 17:48 UTC+8. Its real password login, JWKS verification and session logout passed. Google OAuth reached the provider with state and PKCE. A real existing user's OAuth completion remains pending.
+- The source has five confirmed email identities, including four Google identities and two with passwords. Neon does not import the existing password hashes. The identity bridge pairs a verified Neon subject and a verified Supabase session with the original ledger UUID. A real Neon JWT and a synthetic ledger link passed trip, receipt and photo-metadata reads and a receipt write through the preview gateway and Neon RLS. An unlinked JWT was denied. The app and a hosted gateway still need to complete real existing-account linking.
+- In the same isolated Neon branch, the gateway accepted an owner photo upload, issued a path-bound download link after the Neon RLS check, and returned the original bytes from the fixture object store. Cross-account upload, cross-account signing, unsigned access and use of an altered link were denied. The live Neon object store was checked separately during the snapshot rehearsal below.
+- The actual Credential Broker code, running locally with an isolated encrypted vault and fixture user authentication, used a temporary Notion integration to create, update and archive one item via the live Notion API. Requests outside the allowed database were rejected. The integration was deleted, the revoked credential returned HTTP 401, and the dedicated test database has no active fixture rows.
+- Render and Supabase production remain on their existing configuration. Production cutover requires an end-to-end pass from the hosted app through existing-user Neon login and linking, photo upload/download, and Notion sync through the hosted broker and worker.
+- The rehearsal branch's managed Data API setup returned `authenticator role already exists`, so the real-token rehearsal used loopback PostgREST with a separate scoped database role. Neon Auth is still disabled on the Neon production branch.
+
+## 2026-11-21 — Neon migration rehearsal
+
+- The isolated Neon `travel-migration-staging` branch has a byte-verified snapshot of 15 application relations: 5 identity records without passwords, 4 trips, 81 receipts, 66 photo metadata rows, and related application data. Its Data API is disabled. Supabase Auth and the Render production app are still serving their original targets.
+- Neon database smoke tests passed for trip and photo metadata isolation, receipt versioning, and the Notion outbox claim, retry and completion contracts. Restored the repository's receipt write restrictions and expired worker lease recovery on staging only. Staging screens and Google login against a separate synthetic Neon branch are distinct from live integration tests.
+- Verified all 66 private originals against Neon Object Storage by SHA-256 and matched every object key and length to its Neon photo metadata. Unsigned download was denied and a signed download returned matching bytes. Revoked the temporary branch storage credential and verified that it now returns InvalidAccessKeyId.
+- Used the repository's receipt-sync worker with the Neon claim and finish RPCs and a connector adapter to the temporary [Notion test database](https://app.notion.com/p/41f8d94d5f7c81e6abe4d2b827616505) under Travel Notebooks. One synthetic row was created, updated in place, verified, and moved to Trash. Removed the synthetic Neon rows. The source snapshot has no saved Notion integration or shared-ledger binding.
+- Local Compact 0.36.4 and React 0.2.13 can separate auth from the data origin on a per-session basis. The browser fixture verified Compact's photo upload, metadata write, and signing sequence with the data origin enabled. No production data origin was configured. Builds, client smokes, security scans and policy scans passed. A coordinated cutover must account for existing browser versions, the broker and Admin, preserve account lifecycle, and replace the Supabase-only Notion worker trigger.
+
 ## 2026-11-15 — Compact 0.36.3 rebuild and AI defaults
 
 - DeepSeek 1017 is the Compact default for all four AI categories; Qwen3.7 and free Ling remain manual choices. The fixed 52-item packing list is shared across themes, with AI extras last. Normalized rejection markers prevent deleted extras from returning under differently formatted names.
 - Repaired the obsolete wizard-model assertions and existing CI blockers: supported Ubuntu browser runners, patched Vite/Undici dependencies, and an integrity-locked native npm import for the same Edge Supabase version. Versions: Compact 0.36.3, React 0.2.12, Admin package 1.5.4 and Broker package 0.1.1.
 - Verification and publication scope: [rebuild report](docs/reviews/2026-11-15-compact-rebuild.md). Local browser/contract/build/audit checks are distinct from exact-SHA release receipts. Boss authorized commit/push; no manual Admin, Edge or Worker promotion is included.
+
+## 2026-11-14 — Compact 0.34.0 connected journey redesign (local only)
+
+- Re-studied the first supplied video and captured Day, hourly calendar, map and tools frames. Its compact ruler, outlined pastel panels, linked selected place and sliding tools now drive the itinerary experience; landscape artwork remains from the approved direction.
+- Added hourly multi-day layout, entered durations/free-time cues, selected-place map preview/navigation, accessible tools sheet, safe calendar/active-trip downloads and grouped searchable checklists. Scan stays in primary navigation and retains all capture paths in the same theme.
+- Version, verification, screenshots, reference comparisons and limitations: [connected planner report](docs/reviews/2026-11-14-connected-planner.md). No commit, push, workflow dispatch or deployment; unrelated dirty work preserved.
+
+## 2026-10-30 — Compact 0.32.1 evidence-led bug audit (local only)
+
+- Preserved the pre-existing uncommitted 0.32.0 rate/theme/UI work. Repaired receipt item deletion/Enter/HKD/quantity round-trips, converted-receipt currency labels, incomplete batch recovery, and trip-scoped background extraction/imports.
+- Repaired independent settings freshness, imported-trip/date selection, sharing sanitization, signed refund restore and missing-timezone hydration. Timeline and AI review now protect dirty drafts and keyboard focus; AI review uses a body portal to avoid normal-animation clipping.
+- Successful configured empty pulls now clear revoked-trip caches and stale photo flags without treating failed/unconfigured pulls as authoritative. First cloud pulls preserve resolved trip identity before local hydration; unknown-trip receipts/tombstones are ignored instead of attached to the active trip. Versioned receipt delete and per-user active-trip contracts remain intact.
+- Verification: **223 distinct enabled browser cases passed** across local/configured suites and corrective reruns, including all 23 themes at mobile/desktop sizes. Five new data-integrity cases and existing unit suites passed. Final typecheck, production build, project security scan, shared Compact/React contract, shared-ledger scan and diff check passed. One pre-existing disabled Settings dry-run remains unassessed. [Repairs, reproduction commands and limits](docs/reviews/2026-10-30-compact-bug-audit.md).
+- No commit/push/deployment, live AI/account/Notion/database request, migration or credential change. No physical-device/Safari claim. Existing production-only follow-ups below remain open.
 
 ## 2026-10-16 — Compact 0.31.1 Welcome Guide trip isolation
 
@@ -75,7 +120,7 @@
 - Single source of truth: `APP_VERSION` in `app-react/src/lib/constants.ts` and `app-compact/src/lib/constants.ts`. It renders in the Settings build label (`v<APP_VERSION> · …`).
 - Keep each app's `package.json` `"version"` in sync with its `APP_VERSION`.
 - Semver: **patch** (`0.2.0`→`0.2.1`) for bug fixes / docs / refactors; **minor** (`0.2.0`→`0.3.0`) for new features; **major** for breaking changes.
-- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web source is `0.36.3`, React source is `0.2.12`; the Android branch is `0.24.0`. Verify deployed versions separately.
+- Bump the version of whichever app(s) you touched (react and/or compact); they version independently. Compact Web source is `0.36.7`, React source is `0.2.12`; the Android branch is `0.24.0`. Verify deployed versions separately.
 - Do this in the same commit as the change — never ship code without bumping the visible build number.
 
 ## Current Open Items (LIVE — reconcile every session)
@@ -85,6 +130,8 @@ This is the ONLY live to-do list in this file. Everything under "What Was Done",
 before acting on them. Every session must reconcile this list: add items you opened, mark items
 you closed with your session number.
 
+- 🟢 **2026-10-30 Compact local 0.32.1 bug audit complete** — receipt items, batch recovery, trip isolation, portable restore, settings hydration, modal draft/focus protection and cloud cold-pull/revocation/photo recovery repaired. 223 distinct enabled browser cases plus unit/typecheck/build/security/shared-contract checks passed; [evidence and limits](docs/reviews/2026-10-30-compact-bug-audit.md). Local only; live integration follow-ups are not closed.
+- 🟢 **2026-10-24 Compact local 0.32.0 reliability/rates/themes pass complete** — corrected selected-trip receipt binding, low-rate precision/validation, stale quotes, repeated requests, draft loss, navigation/reduced-motion visibility and theme contrast. Added three themes and official FX references. 70 targeted browser cases plus typecheck/build/security/unit checks passed; [evidence and limits](docs/reviews/2026-10-24-compact-reliability-rates-themes.md). Local only, not pushed or deployed.
 - 🟡 **2026-10-10 Settings authenticated UI confirmation remains pending** — the stale-broker 404 is repaired and broker 2026.10.10.2 is live. Boss approved Muse's required 16-token health budget; its real API request passed. Five other exact-model requests passed at eight tokens. The local saved session is expired, so a retry from the logged-in Settings page remains requested; see the [rollout report](docs/ai-model-rollout-2026-10-10.md).
 - 🟠 **2026-10-10 Tommy native inference remains unverified** — config validation, all 16 live catalog entries and readiness passed, but native inference timed out during workspace-plugin runtime publication. Do not treat catalog availability as a completed inference test or retry upstream calls without checking the runtime failure.
 
