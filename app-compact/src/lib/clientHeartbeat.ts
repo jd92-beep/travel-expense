@@ -37,6 +37,8 @@ async function sha256(value: string): Promise<string> {
 
 export async function recordClientHeartbeat(session: Session | null | undefined): Promise<void> {
   if (!session?.user?.id || typeof window === 'undefined' || !crypto?.subtle) return;
+  // A cold-boot hint can hold a JWT that expired while idle; wait for the refreshed session.
+  if (session.expires_at && session.expires_at * 1000 <= Date.now()) return;
   const surface = appSurface();
   const sentKey = `travel-expense:heartbeat:${session.user.id}:${surface}:v${CLIENT_CONTRACT_VERSION}`;
   try {

@@ -123,3 +123,39 @@ test('Taiwan theme keeps the configured Supabase login on semantic dark tokens',
     privacy: 'rgb(184, 195, 211)',
   });
 });
+
+// Regression: after a long idle, the stored access_token is expired and supabase-js needs a
+// moment to refresh it. Boot sync must wait for that refresh instead of pulling with the stale
+// JWT, which PostgREST rejects ("JWT expired") and which painted the red sync banner.
+test('cold boot after long idle waits for token refresh before syncing', async ({ page }) => {
+  const staleBearers = [];
+  await page.route('https://test-travel-expense.supabase.co/auth/v1/token**', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await route.fulfill({ json: {
+      access_token: 'fresh.jwt.token', refresh_token: 'rotated_refresh_token', token_type: 'bearer',
+      expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600,
+      user: { id: 'u_idle_123', email: 'idle@example.com', aud: 'authenticated' },
+    } });
+  });
+  await page.route('https://test-travel-expense.supabase.co/rest/v1/**', (route) => {
+    if (/expired\.jwt\.token/.test(route.request().headers().authorization || '')) {
+      staleBearers.push(route.request().url());
+      return route.fulfill({ status: 401, json: { code: 'PGRST301', message: 'JWT expired' } });
+    }
+    return route.fulfill({ json: [] });
+  });
+  await page.addInitScript((key) => {
+    localStorage.clear();
+    localStorage.setItem('travel-expense-react:device-trust:v1', JSON.stringify({ ok: true, exp: Date.now() + 31_536_000_000 }));
+    localStorage.setItem(key, JSON.stringify({
+      access_token: 'expired.jwt.token', refresh_token: 'long_lived_refresh_token', token_type: 'bearer',
+      expires_at: Math.floor(Date.now() / 1000) - 3 * 86400,
+      user: { id: 'u_idle_123', email: 'idle@example.com' },
+    }));
+  }, SUPA_KEY);
+
+  await page.goto(`${APP_ORIGIN}/travel-expense/compact/#dashboard`);
+  await page.waitForTimeout(5000);
+  expect(staleBearers).toEqual([]);
+  await expect(page.locator('.sync-problem-notice')).toHaveCount(0);
+});

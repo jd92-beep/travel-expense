@@ -478,6 +478,9 @@ export function App() {
     if (bootSyncInitiated.current) return;
     if (!isStorageReady) return;
     if (!navigator.onLine) return;
+    // The stored hint may carry a JWT that expired while the app sat unused; wait for supabase-js
+    // to refresh it, or the first pull is rejected with "JWT expired" and paints the sync banner.
+    if (supabaseAuth.configured && supabaseAuth.loading) return;
     if (!hasSupabaseSession(effectiveSupabaseSession) && !canUseNotionMirror(state, false, userEmail)) return;
 
     const bootSyncKey = [
@@ -502,7 +505,7 @@ export function App() {
       window.clearTimeout(timer);
       if (!bootSyncKeys.current.has(bootSyncKey)) bootSyncScheduledKey.current = '';
     };
-  }, [isStorageReady, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, effectiveSupabaseSession, userEmail]);
+  }, [isStorageReady, state.credentialSession, state.credentialSessionExpiresAt, pull, sync, effectiveSupabaseSession, userEmail, supabaseAuth.configured, supabaseAuth.loading]);
 
   // One-shot migration: fold legacy per-spot itinerary overrides (personal memo layer)
   // into the trip itinerary so they survive AI updates and reach shared-trip members.

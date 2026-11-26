@@ -136,7 +136,7 @@ export function useSyncEngine(
 
   useEffect(() => {
     void recordClientHeartbeat(supabaseSession);
-  }, [supabaseSession?.user?.id]);
+  }, [supabaseSession?.user?.id, supabaseSession?.access_token]);
 
   useEffect(() => {
     aliveRef.current = true;
