@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { AI_CHECKLIST_GROUP, aiChecklistItems, calendarInstant, calendarTime, checklistStorageKey, defaultChecklist, pocketChecklist, reconcileChecklist, itineraryCalendar, mergeChecklist, parseChecklist, routeDirections } from '../src/lib/journeyTools.ts';
+import { dayAxisMinute, flightRoute, isFlightSpot } from '../src/lib/plannerLayout.ts';
 import type { ItineraryDay } from '../src/lib/types.ts';
 
 assert.notEqual(checklistStorageKey('account-a', 'trip-one'), checklistStorageKey('account-b', 'trip-one'));
@@ -90,3 +91,12 @@ const cameraExtra = reconcileChecklist(null,[{label:'Go Pro',note:'1 部 · 隨�
 const removedCamera = {version:1,items:cameraExtra.items.filter(item=>item.group!==AI_CHECKLIST_GROUP),seen:cameraExtra.seen};
 assert.equal(reconcileChecklist(removedCamera,[{label:'ＧＯＰＲＯ',note:'同一件用品',suggested:true}]).items.length,52,
   'deleted AI items stay deleted when the model changes case, width or whitespace');
+
+// Imported itineraries label clocks with abbreviations; they must order and export like IANA zones.
+assert.equal(calendarInstant('20261203T155000', 'JST'), calendarInstant('20261203T155000', 'Asia/Tokyo'));
+const hkDay = { date: '2026-12-03', timezone: 'Asia/Hong_Kong' };
+assert.equal(dayAxisMinute({ name: 'x', type: 'transport', time: '10:50', timezone: 'HKT' }, hkDay), 650, 'HKT on a Hong Kong day keeps its clock');
+assert.equal(dayAxisMinute({ name: 'x', type: 'transport', time: '15:50', timezone: 'JST' }, hkDay), 890, 'JST 15:50 is 14:50 in Hong Kong');
+assert.equal(isFlightSpot({ type: 'transport', name: 'UO690 離港 HKG→NGO' }), true);
+assert.equal(isFlightSpot({ type: 'transport', name: 'JR 名古屋站' }), false);
+assert.deepEqual(flightRoute('UO690 離港 HKG→NGO'), { from: 'HKG', to: 'NGO' });

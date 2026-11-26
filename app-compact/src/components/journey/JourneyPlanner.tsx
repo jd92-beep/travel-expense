@@ -11,7 +11,7 @@ import takeoff from '../../assets/journey/postcard-takeoff.gif';
 import takeoffStill from '../../assets/journey/postcard-takeoff.webp';
 import landing from '../../assets/journey/postcard-landing.gif';
 import landingStill from '../../assets/journey/postcard-landing.webp';
-import { clockLabel, endLabel } from '../../lib/plannerLayout';
+import { clockLabel, endLabel, flightRoute, isFlightSpot } from '../../lib/plannerLayout';
 import { tripPacking } from '../../lib/journeyActivities';
 import { JourneyGame } from './JourneyGame';
 
@@ -79,7 +79,7 @@ export function JourneyPlanner({ pocket, days, calendarJump, state, setState, sc
     setDraft(null); setStatus('已儲存到目前旅程的行程。');
   }
 
-  const flights = days.flatMap(day => getScheduleSpots(state, day).filter(spot => spot.type === 'flight').map(spot => ({ day, spot })));
+  const flights = days.flatMap(day => getScheduleSpots(state, day).filter(isFlightSpot).map(spot => ({ day, spot })));
   const stays = days.flatMap(day => [
     ...(day.lodging?.name ? [{ day, name: day.lodging.name, address: day.lodging.address, bookingRef: day.lodging.bookingRef, time: day.lodging.checkIn, timeEnd: day.lodging.checkOut, mapUrl: day.lodging.mapUrl, spot: null as (ItinerarySpot & { _spotIdx: number; receiptId?: string }) | null }] : []),
     ...getScheduleSpots(state, day).filter(spot => spot.type === 'lodging' && spot.name !== day.lodging?.name).map(spot => ({ day, name: spot.name, address: spot.address, bookingRef: spot.bookingRef, time: spot.time, timeEnd: spot.timeEnd, mapUrl: spot.mapUrl, spot })),
@@ -111,7 +111,7 @@ export function JourneyPlanner({ pocket, days, calendarJump, state, setState, sc
           <source media="(prefers-reduced-motion: reduce)" srcSet={i === 0 ? takeoffStill : landingStill} />
           <img src={i === 0 ? takeoff : landing} width="520" height="120" alt="" loading="lazy" />
         </picture>}
-        <header><Plane size={20} /><span>{day.date}</span><span>Day {day.day}</span></header><h3>{spot.name}</h3>
+        <header><Plane size={20} /><span>{day.date}</span><span>Day {day.day}</span></header>{(route => route && <p className="journey-flight-route" aria-hidden="true"><b>{route.from}</b><i /><b>{route.to}</b></p>)(flightRoute(spot.name))}<h3>{spot.name}</h3>
         <div className="journey-flight-times"><div><small>出發</small><strong>{clockLabel(spot.time) || '待確認'}</strong>{spot.timezone && <small>{spot.timezone}</small>}</div><span className="journey-flight-path"><Plane size={20} /></span><div><small>抵達</small><strong>{endLabel(spot, day.date, day.timezone) || '待確認'}</strong>{spot.endTimezone && <small>{spot.endTimezone}</small>}</div></div>
         {(spot.timezone || day.timezone) && <p className="journey-footnote">行程時區：{spot.timezone || day.timezone}</p>}
         {spot.note && <p className="journey-booking-note">{spot.note}</p>}{spot.bookingRef && <p className="journey-booking-reference">訂位編號 <strong>{spot.bookingRef}</strong></p>}

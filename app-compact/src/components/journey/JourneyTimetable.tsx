@@ -5,7 +5,7 @@ import { DayButton } from './DayRail';
 import { CategoryGlyph } from '../VisualIcon';
 import type { AppState, ItineraryDay, ItinerarySpot } from '../../lib/types';
 import { getScheduleSpots, categoryById } from '../../lib/domain';
-import { clockLabel, endLabel, durationLabel, placeIdentity, timetableLayout } from '../../lib/plannerLayout';
+import { clockLabel, endLabel, durationLabel, isFlightSpot, placeIdentity, timetableLayout } from '../../lib/plannerLayout';
 
 export function JourneyTimetable({ pocket, calendarJump, state, days, selectedDate, selectedPlace, onSelectDay, onSelect, onEdit }: {
   pocket: boolean; calendarJump: number; state: AppState; days: ItineraryDay[]; selectedDate?: string; selectedPlace: string;
@@ -118,13 +118,13 @@ export function JourneyTimetable({ pocket, calendarJump, state, days, selectedDa
         {layouts.map(({ day, blocks, untimed }) => <article key={day.date} className={`journey-calendar-day${selectedDate === day.date ? ' is-selected' : ''}`}>
           <header className="planner-grid-heading">{pocket
             ? <DayButton day={day} selected={day.date === selectedDate} onSelect={onSelectDay} pocket reduced={!!reduced} markerId={markerId} />
-            : <strong>Day {day.day} · {day.date.slice(5).replace('-', '/')}</strong>}<span title={day.region}>{day.region}</span>{!blocks.length && !untimed.length && <small>未有活動</small>}<small>{day.timezone || '當地時間'}</small></header>
+            : <strong>Day {day.day} · {day.date.slice(5).replace('-', '/')}</strong>}<span title={day.region}>{day.region}</span>{!blocks.length && !untimed.length && <small>未有活動</small>}<small className="planner-zone">{(day.timezone || '').split('/').pop()?.replace(/_/g, ' ') || '當地時間'}</small></header>
           <div className="planner-grid-track" style={{ height: (end - start) * scale, backgroundSize: `100% ${60 * scale}px` }}>
             {blocks.map(block => <button type="button" key={placeIdentity(block.spot, block.index)} className={`planner-time-block${selectedDate === day.date && selectedPlace === placeIdentity(block.spot, block.index) ? ' is-selected' : ''}`} data-category={block.spot.type}
               aria-pressed={selectedDate === day.date && selectedPlace === placeIdentity(block.spot, block.index)} aria-label={`${day.date} ${block.spot.time} ${block.spot.name}${block.duration ? `，${durationLabel(block.duration)}` : block.spot.timeEnd ? '，時長待定' : '，結束時間待定'}`}
               style={{ top: (block.start - start) * scale, height: (block.displayEnd - block.start) * scale - 3, left: `calc(${block.lane / block.lanes * 100}% + 3px)`, width: `calc(${100 / block.lanes}% - 6px)` }} onDoubleClick={onEdit && block.spot._spotIdx >= 0 ? () => onEdit(day.date, block.spot._spotIdx, block.spot) : undefined}
               onClick={() => onSelect(day, block.spot, block.index)}>
-              <time>{clockLabel(block.spot.time)}{block.spot.timezone && block.spot.timezone !== day.timezone && ' ' + block.spot.timezone}{block.spot.timeEnd && `–${endLabel(block.spot, day.date, day.timezone)}`}</time><strong className="planner-block-title" title={block.spot.name}><CategoryGlyph category={block.spot.type} size={13} /><span>{block.spot.name}</span></strong><small>{block.duration ? durationLabel(block.duration) : block.spot.timeEnd ? '時長待定' : '結束待定'} · {(block.spot.type === 'sightseeing' ? '景點' : categoryById(block.spot.type).name)}</small>
+              <time>{clockLabel(block.spot.time)}{block.spot.timezone && block.spot.timezone !== day.timezone && ' ' + block.spot.timezone}{block.spot.timeEnd && `–${endLabel(block.spot, day.date, day.timezone)}`}</time><strong className="planner-block-title" title={block.spot.name}><CategoryGlyph category={isFlightSpot(block.spot) ? 'flight' : block.spot.type} size={13} /><span>{block.spot.name}</span></strong><small>{block.duration ? durationLabel(block.duration) : block.spot.timeEnd ? '時長待定' : '結束待定'} · {(block.spot.type === 'sightseeing' ? '景點' : categoryById(block.spot.type).name)}</small>
             </button>)}
           </div>
           <div className="planner-untimed"><strong>時間待定</strong>{untimed.map(({ spot, index }) => <button type="button" key={placeIdentity(spot, index)} onDoubleClick={onEdit && spot._spotIdx >= 0 ? () => onEdit(day.date, spot._spotIdx, spot) : undefined} onClick={() => onSelect(day, spot, index)}>{spot.name}</button>)}{!untimed.length && <span>沒有待安排項目</span>}</div>

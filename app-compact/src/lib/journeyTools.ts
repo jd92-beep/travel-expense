@@ -135,7 +135,16 @@ export function calendarTime(date: string, time?: string) {
 // an importing calendar's TZID database or emitting incomplete VTIMEZONE blocks.
 const calendarFormatters = new Map<string, Intl.DateTimeFormat>();
 
-export function calendarInstant(local: string, timezone: string): string {
+// Imported itineraries often label clocks with abbreviations ("HKT", "JST"), which Intl rejects.
+const ZONE_ALIASES: Record<string, string> = {
+  HKT: 'Asia/Hong_Kong', JST: 'Asia/Tokyo', KST: 'Asia/Seoul', SGT: 'Asia/Singapore', ICT: 'Asia/Bangkok',
+  NZST: 'Pacific/Auckland', NZDT: 'Pacific/Auckland', NZT: 'Pacific/Auckland', AEST: 'Australia/Sydney', AEDT: 'Australia/Sydney',
+  UTC: 'UTC', GMT: 'UTC',
+};
+export const normalizeZone = (zone?: string) => (zone && ZONE_ALIASES[zone.trim().toUpperCase()]) || zone || '';
+
+export function calendarInstant(local: string, rawZone: string): string {
+  const timezone = normalizeZone(rawZone);
   if (!timezone) return local;
   let formatter = calendarFormatters.get(timezone);
   if (!formatter) {

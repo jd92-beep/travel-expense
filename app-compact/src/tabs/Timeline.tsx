@@ -396,7 +396,7 @@ export function Timeline({ state, setState, onOpen, scope = 'local', plannerView
                 {day.timezone && <small className="schedule-zone">當地時間 · {day.timezone}</small>}
                 {day.highlight && day.highlight !== day.region && <p>{day.highlight}</p>}
                 {day.note && <p className="schedule-day-note">{day.note}</p>}
-                {day.lodging?.name && <p className="muted timeline-lodging"><Home size={13} /> 住宿：{day.lodging.name}</p>}
+                {(stay => stay && <p className="muted timeline-lodging"><Home size={13} /> 今晚住：{stay}</p>)(day.lodging?.name || [...spots].reverse().find(s => s.type === 'lodging')?.name)}
               </div>
             </div>
             <div className="timeline-day-status">

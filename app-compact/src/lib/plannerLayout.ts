@@ -1,5 +1,5 @@
 // @ts-expect-error TS5097: also consumed by Node's strip-types test runner.
-import { calendarInstant, calendarTime, spotEndInstant } from './journeyTools.ts';
+import { calendarInstant, calendarTime, normalizeZone, spotEndInstant } from './journeyTools.ts';
 import type { ItineraryDay, ItinerarySpot } from './types';
 
 export function minuteOfDay(value?: string): number | null {
@@ -28,6 +28,17 @@ export function endLabel(spot: ItinerarySpot, date: string, timezone?: string) {
   return label;
 }
 
+// Imports often tag flights as plain transport; a flight code plus a depart/arrive cue is enough to tell.
+export function isFlightSpot(spot: Pick<ItinerarySpot, 'type' | 'name'>) {
+  if (spot.type === 'flight') return true;
+  return spot.type === 'transport' && (/\b[A-Z][A-Z0-9]\s?\d{2,4}\b/.test(spot.name) || /航班|flight/i.test(spot.name))
+    && /離港|抵達|起飛|降落|航班|→|flight/i.test(spot.name);
+}
+export function flightRoute(name: string) {
+  const match = /\b([A-Z]{3})\s*(?:→|->|－|-|to)\s*([A-Z]{3})\b/.exec(name);
+  return match ? { from: match[1], to: match[2] } : null;
+}
+
 type DayClock = Pick<ItineraryDay, 'date' | 'timezone'>;
 function epochMinutes(stamp: string) {
   const iso = stamp.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?$/, '$1-$2-$3T$4:$5:$6Z');
@@ -53,13 +64,13 @@ export function spotDuration(spot: ItinerarySpot, day?: DayClock): number | null
 // shows the traveller's original clock and zone when they differ.
 export function dayAxisMinute(spot: ItinerarySpot, day?: DayClock): number | null {
   const minutes = itineraryMinute(spot.time);
-  if (minutes === null || !day?.timezone || !spot.timezone || day.timezone === spot.timezone) return minutes;
+  if (minutes === null || !day?.timezone || !spot.timezone || normalizeZone(day.timezone) === normalizeZone(spot.timezone)) return minutes;
   try {
     const clock = calendarTime(day.date, spot.time);
     if (!clock) return null;
     const instant = epochMinutes(calendarInstant(clock, spot.timezone));
     const local = new Intl.DateTimeFormat('en-GB', {
-      timeZone: day.timezone, year: 'numeric', month: '2-digit', day: '2-digit',
+      timeZone: normalizeZone(day.timezone), year: 'numeric', month: '2-digit', day: '2-digit',
       hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     }).formatToParts(instant * 60000);
     const value = (type: string) => Number(local.find(part => part.type === type)?.value);

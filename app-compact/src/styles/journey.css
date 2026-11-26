@@ -794,3 +794,8 @@ html:root[data-app-style='cyberpunk_hud'][data-app-theme][data-color-scheme] bod
   .journey-page-title h1 { font-size: 16px; }
   .journey-topbar-actions { min-width: 0; }
 }
+
+/* Flight boarding-pass route: airport codes come from the itinerary name only. */
+.journey-flight-route { display: flex; align-items: center; gap: 12px; margin: 4px 0 0; font-size: 30px; letter-spacing: .04em; color: var(--journey-ink); }
+.journey-flight-route b { font-weight: 700; }
+.journey-flight-route i { flex: 1; height: 0; border-top: 2px dashed var(--journey-rule); }

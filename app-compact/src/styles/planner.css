@@ -332,3 +332,56 @@ html:root[data-app-theme] .journey-shell .planner-stop-group .timeline-time span
 .planner-live-stop > div { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
 .planner-live-stop small, .planner-live-stop span { color: var(--journey-muted); font-size: 13px; }
 .planner-live-stop button { flex-shrink: 0; }
+
+/* Multi-day blocks wrap long names (video 1) instead of truncating after one line. */
+.planner-time-block .planner-block-title { align-items: flex-start; }
+.planner-time-block .planner-block-title span { white-space: normal; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.planner-grid-heading .planner-zone { font-weight: 500; opacity: .75; }
+
+/* Route sketch (offline) */
+.planner-route-sketch { margin: 0; padding: 10px 12px 8px; border-radius: 14px; background: color-mix(in srgb, var(--journey-tint) 70%, var(--journey-surface)); }
+.planner-route-sketch svg { width: 100%; height: auto; display: block; overflow: visible; }
+.planner-route-line { fill: none; stroke: var(--journey-accent); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+.planner-route-sketch g { cursor: pointer; }
+.planner-route-dot { fill: var(--journey-surface); stroke: var(--journey-accent); stroke-width: 2; transition: fill .2s, transform .2s; }
+.planner-route-sketch text { font-size: 12px; font-weight: 700; fill: var(--journey-ink); pointer-events: none; }
+.planner-route-halo { fill: var(--journey-accent); opacity: 0; transition: opacity .2s; }
+.planner-route-sketch .is-selected .planner-route-dot { fill: var(--journey-accent); }
+.planner-route-sketch .is-selected text { fill: var(--journey-on-accent, #fff); }
+.planner-route-sketch .is-selected .planner-route-halo { opacity: .18; animation: planner-route-pulse 2s ease-in-out infinite; }
+.planner-route-sketch figcaption { margin-top: 4px; font-size: 11px; color: var(--journey-muted); text-align: center; }
+@keyframes planner-route-pulse { 50% { opacity: .05; } }
+@media (prefers-reduced-motion: reduce) { .planner-route-halo { animation: none !important; } }
+
+/* Card actions: quiet footer links (the reference cards carry no button chrome); hit area stays generous. */
+html:root[data-app-theme] .journey-shell .timeline-event .timeline-route-actions { margin-top: 8px; padding-top: 4px; border-top: 1px dashed var(--journey-rule); }
+html:root[data-app-theme] .journey-shell .timeline-event .action-sheet { gap: 2px; }
+html:root[data-app-theme] .journey-shell .timeline-event .mini { position: relative; min-height: 32px; padding: 4px 10px 4px 6px !important; border: 0 !important; border-radius: 999px; background: transparent !important; box-shadow: none !important; color: var(--journey-accent); font-size: 13px; font-weight: 600; transition: background-color .18s, transform .18s; }
+html:root[data-app-theme] .journey-shell .timeline-event .mini::before { content: ''; position: absolute; inset: -6px -2px; }
+html:root[data-app-theme] .journey-shell .timeline-event .mini:is(:hover, :focus-visible) { background: var(--journey-tint) !important; }
+html:root[data-app-theme] .journey-shell .timeline-event .mini:active { transform: scale(.94); }
+
+/* Motion (video 1/2): cards rise in sequence when a day mounts, press feedback, cover/map settle in. */
+.journey-cover img { transition: opacity .6s ease, filter .7s ease; }
+.journey-cover img:not(.is-loaded) { opacity: 0; filter: blur(10px); }
+.journey-cover { background: color-mix(in srgb, var(--journey-tint) 80%, var(--journey-surface)); }
+@media (prefers-reduced-motion: no-preference) {
+  .planner-day-enter .planner-stop-group { animation: planner-card-rise 460ms cubic-bezier(.16,1,.3,1) both; }
+  .planner-day-enter .planner-stop-group:nth-child(2) { animation-delay: 50ms; }
+  .planner-day-enter .planner-stop-group:nth-child(3) { animation-delay: 100ms; }
+  .planner-day-enter .planner-stop-group:nth-child(4) { animation-delay: 150ms; }
+  .planner-day-enter .planner-stop-group:nth-child(5) { animation-delay: 200ms; }
+  .planner-day-enter .planner-stop-group:nth-child(n+6) { animation-delay: 250ms; }
+  .journey-booking-grid > * { animation: planner-card-rise 460ms cubic-bezier(.16,1,.3,1) both; }
+  .journey-booking-grid > :nth-child(2) { animation-delay: 70ms; }
+  .journey-booking-grid > :nth-child(n+3) { animation-delay: 140ms; }
+  .planner-map { animation: planner-day-enter 300ms cubic-bezier(.16,1,.3,1); }
+  .timeline-event, .journey-day { transition: transform .16s ease, box-shadow .25s ease; }
+  .timeline-event:active { transform: scale(.985); }
+  .journey-day:active { transform: scale(.94); }
+  .timeline-event.is-selected { box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--journey-accent) 55%, transparent); }
+}
+@keyframes planner-card-rise { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+
+/* Let the last card scroll clear of the floating tools handle (mobile; desktop parks it in the corner). */
+@media (max-width: 999px) { html:root[data-app-theme] .journey-shell .timeline-screen { padding-bottom: calc(64px + env(safe-area-inset-bottom)); } }
